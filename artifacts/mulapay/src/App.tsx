@@ -1,6 +1,6 @@
 import { createContext, type FormEvent, type ReactNode, useContext, useEffect, useState } from 'react';
 import {
-  Activity, ArrowDownLeft, ArrowRightLeft, ArrowUpRight, Banknote, Bell, Check, CheckCircle2,
+  Activity, ArrowDownLeft, ArrowLeft, ArrowRightLeft, ArrowRight, ArrowUpRight, Banknote, Bell, Check, CheckCircle2,
   ChevronRight, CircleAlert, Clock3, Copy, Download, Eye, FileCheck2, Globe2, Info, LayoutDashboard,
   Link2, ListFilter, LockKeyhole, LogOut, Menu, MoreHorizontal, Plus, QrCode, RefreshCw, Search,
   Send, Settings2, ShieldCheck, WalletCards, X
@@ -257,6 +257,13 @@ function Shell({ children, admin = false, onNotifications }: { children: ReactNo
   useEffect(() => {
     setMobileMenuOpen(false);
   }, [location, admin]);
+  const goBack = () => {
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      setLocation(admin ? '/admin' : '/app');
+    }
+  };
   return <div className="app-shell">
     <aside id="mobile-navigation" className={`side-rail ${mobileMenuOpen ? 'mobile-open' : ''}`} onClick={event => {
       if ((event.target as HTMLElement).closest('a')) setMobileMenuOpen(false);
@@ -271,7 +278,7 @@ function Shell({ children, admin = false, onNotifications }: { children: ReactNo
     <div className="main-pane">
       <div className="mobile-top"><Link href={admin ? '/admin' : '/app'}><Logo light /></Link><div className="mobile-menu"><button className="icon-button" style={{ background: 'transparent', color: 'inherit', borderColor: 'hsl(205 30% 25%)' }} onClick={() => setLocation(admin ? '/app' : '/admin')} data-testid="button-switch-area"><ArrowRightLeft size={16} /></button><button className="icon-button" style={{ background: 'transparent', color: 'inherit', borderColor: 'hsl(205 30% 25%)' }} aria-label={mobileMenuOpen ? 'Fermer le menu' : 'Ouvrir le menu'} aria-expanded={mobileMenuOpen} aria-controls="mobile-navigation" onClick={() => setMobileMenuOpen(open => !open)} data-testid="button-mobile-menu"><Menu size={17} /></button></div></div>
        {admin && <div className="admin-bar"><span><CircleAlert size={13} style={{ verticalAlign: 'middle', marginRight: 6 }} />Vue opérations · chaque action sensible est journalisée.</span><Link href="/app">Retour à l’espace utilisateur</Link></div>}
-      <header className="topbar"><div className="crumb">{admin ? 'Opérations / ' : 'Espace / '}{current}</div><div className="top-actions"><Link href="/app" className="icon-button" title="Espace utilisateur" data-testid="link-top-user-app"><Globe2 size={16} /></Link><button className="icon-button" title="Notifications" onClick={onNotifications} data-testid="button-notifications"><Bell size={16} />{unread > 0 && <span className="notification-dot" />}</button><div className="avatar" data-testid="text-user-avatar">{useStore().profile.firstName.slice(0, 1)}{useStore().profile.lastName.slice(0, 1)}</div></div></header>
+       <header className="topbar"><div className="topbar-leading"><button className="back-button" onClick={goBack} title="Retour à la page précédente" aria-label="Retour à la page précédente" data-testid="button-back"><ArrowLeft size={16} /><span>Retour</span></button><div className="crumb">{admin ? 'Opérations / ' : 'Espace / '}{current}</div></div><div className="top-actions"><Link href="/app" className="icon-button" title="Espace utilisateur" data-testid="link-top-user-app"><Globe2 size={16} /></Link><button className="icon-button" title="Notifications" onClick={onNotifications} data-testid="button-notifications"><Bell size={16} />{unread > 0 && <span className="notification-dot" />}</button><div className="avatar" data-testid="text-user-avatar">{useStore().profile.firstName.slice(0, 1)}{useStore().profile.lastName.slice(0, 1)}</div></div></header>
       {children}
     </div>
   </div>;
