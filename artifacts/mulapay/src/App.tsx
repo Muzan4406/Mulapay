@@ -73,7 +73,7 @@ function Landing() {
   return <div className="landing">
     <nav className="landing-nav">
       <Logo />
-      <div className="landing-actions"><Link href="/app" data-testid="link-landing-login">Sign in</Link><Link href="/app" className="button button-primary button-sm" data-testid="link-landing-demo">Open demo <ChevronRight size={14} /></Link></div>
+      <div className="landing-actions"><Link href="/connexion" data-testid="link-landing-login">Sign in</Link><Link href="/connexion" className="button button-primary button-sm" data-testid="link-landing-demo">Open demo <ChevronRight size={14} /></Link></div>
     </nav>
     <main>
       <section className="landing-hero">
@@ -93,6 +93,54 @@ function Landing() {
       <section className="landing-section muted"><div className="landing-section-inner"><div className="eyebrow">one account, locally fluent</div><h2 className="page-title" style={{ maxWidth: 600 }}>A calmer way to see<br />the whole picture.</h2><div className="feature-grid"><div className="feature card"><Globe2 className="feature-icon" size={20} /><h3>Seven markets, one rhythm.</h3><p>Keep your Togo, Benin, Côte d’Ivoire, Burkina Faso, Senegal, Mali and Niger wallets close — without spreadsheets or guesswork.</p></div><div className="feature card"><ArrowRightLeft className="feature-icon" size={20} /><h3>Move with context.</h3><p>See the rate, fee and arrival wallet before you confirm an exchange.</p></div><div className="feature card"><ShieldCheck className="feature-icon" size={20} /><h3>Control by design.</h3><p>Every action is clear, traceable and reviewed where it should be.</p></div></div></div></section>
     </main>
     <footer className="landing-footer"><Logo /><span>© 2024 Mulapay · Prototype for demonstration only</span><span>Made for connected markets</span></footer>
+  </div>;
+}
+
+const demoAdmin = {
+  email: 'admin@mulapay.demo',
+  password: 'MulapayAdmin2026',
+};
+
+function Login() {
+  const [, setLocation] = useLocation();
+  const [email, setEmail] = useState(demoAdmin.email);
+  const [password, setPassword] = useState(demoAdmin.password);
+  const [error, setError] = useState('');
+
+  const handleSubmit = (event: FormEvent) => {
+    event.preventDefault();
+    if (email.trim().toLowerCase() !== demoAdmin.email || password !== demoAdmin.password) {
+      setError('Les identifiants de démonstration ne correspondent pas.');
+      return;
+    }
+    sessionStorage.setItem('mulapay-demo-role', 'admin');
+    setLocation('/admin');
+  };
+
+  return <div className="auth-page">
+    <div className="auth-orbit auth-orbit-one" />
+    <div className="auth-orbit auth-orbit-two" />
+    <div className="auth-card">
+      <div className="auth-brand"><Logo /><span className="auth-mode">Admin access</span></div>
+      <div className="auth-heading">
+        <div className="eyebrow"><ShieldCheck size={13} style={{ verticalAlign: 'middle', marginRight: 6 }} /> Secure operations access</div>
+        <h1>Welcome back.</h1>
+        <p>Connectez-vous à l’espace opérations Mulapay pour gérer les vérifications et les échanges en attente.</p>
+      </div>
+      <div className="demo-credentials">
+        <div className="demo-credentials-label"><CircleAlert size={13} /> Compte admin de démonstration</div>
+        <div className="demo-credentials-row"><span>Email</span><strong>{demoAdmin.email}</strong></div>
+        <div className="demo-credentials-row"><span>Mot de passe</span><strong>{demoAdmin.password}</strong></div>
+      </div>
+      <form className="auth-form" onSubmit={handleSubmit}>
+        <label>Email professionnel<input type="email" value={email} onChange={event => { setEmail(event.target.value); setError(''); }} autoComplete="username" required data-testid="input-admin-email" /></label>
+        <label>Mot de passe<input type="password" value={password} onChange={event => { setPassword(event.target.value); setError(''); }} autoComplete="current-password" required data-testid="input-admin-password" /></label>
+        {error && <div className="auth-error" role="alert">{error}</div>}
+        <button className="button button-primary auth-submit" type="submit" data-testid="button-admin-login"><LockKeyhole size={15} /> Se connecter à l’admin <ChevronRight size={14} /></button>
+      </form>
+      <div className="auth-footer"><Link href="/">Retour à l’accueil</Link><Link href="/app">Ouvrir le dashboard utilisateur</Link></div>
+      <div className="auth-notice"><CircleAlert size={14} /><span>Accès local de démonstration. Aucun mot de passe réel ni donnée sensible n’est utilisé.</span></div>
+    </div>
   </div>;
 }
 
@@ -250,7 +298,7 @@ function RoutedApp() {
 }
 
 function Router() {
-  return <Switch><Route path="/" component={Landing} /><Route path="/app" component={RoutedApp} /><Route path="/app/:rest*" component={RoutedApp} /><Route path="/admin" component={RoutedApp} /><Route path="/admin/:rest*" component={RoutedApp} /><Route component={NotFound} /></Switch>;
+  return <Switch><Route path="/" component={Landing} /><Route path="/connexion" component={Login} /><Route path="/app" component={RoutedApp} /><Route path="/app/:rest*" component={RoutedApp} /><Route path="/admin" component={RoutedApp} /><Route path="/admin/:rest*" component={RoutedApp} /><Route component={NotFound} /></Switch>;
 }
 
 function App() {
