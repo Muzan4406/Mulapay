@@ -117,13 +117,13 @@ const landingCountries = [
 ];
 
 const mobileMoneyCountryOptions = [
-  { country: 'Togo', flag: '🇹🇬', dialCode: '+228', operators: [{ name: 'Mixx by Yas', src: 'mixx_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }] },
-  { country: 'Bénin', flag: '🇧🇯', dialCode: '+229', operators: [{ name: 'MTN MoMo', src: 'mtn-momo_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }] },
-  { country: 'Côte d’Ivoire', flag: '🇨🇮', dialCode: '+225', operators: [{ name: 'Orange Money', src: 'orange-money_no_bg.png' }, { name: 'MTN MoMo', src: 'mtn-momo_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }, { name: 'Wave', src: 'wave_no_bg.png' }] },
-  { country: 'Burkina Faso', flag: '🇧🇫', dialCode: '+226', operators: [{ name: 'Orange Money', src: 'orange-money_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }, { name: 'Airtel Money', src: 'airtel-money_no_bg.png' }] },
-  { country: 'Sénégal', flag: '🇸🇳', dialCode: '+221', operators: [{ name: 'Wave', src: 'wave_no_bg.png' }, { name: 'Orange Money', src: 'orange-money_no_bg.png' }] },
-  { country: 'Mali', flag: '🇲🇱', dialCode: '+223', operators: [{ name: 'Orange Money', src: 'orange-money_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }, { name: 'Airtel Money', src: 'airtel-money_no_bg.png' }] },
-  { country: 'Niger', flag: '🇳🇪', dialCode: '+227', operators: [{ name: 'Airtel Money', src: 'airtel-money_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }, { name: 'Orange Money', src: 'orange-money_no_bg.png' }] },
+  { country: 'Togo', flagSrc: 'togo.png', dialCode: '+228', operators: [{ name: 'Mixx by Yas', src: 'mixx_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }] },
+  { country: 'Bénin', flagSrc: 'benin.png', dialCode: '+229', operators: [{ name: 'MTN MoMo', src: 'mtn-momo_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }] },
+  { country: 'Côte d’Ivoire', flagSrc: 'cote-divoire.png', dialCode: '+225', operators: [{ name: 'Orange Money', src: 'orange-money_no_bg.png' }, { name: 'MTN MoMo', src: 'mtn-momo_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }, { name: 'Wave', src: 'wave_no_bg.png' }] },
+  { country: 'Burkina Faso', flagSrc: 'burkina-faso.png', dialCode: '+226', operators: [{ name: 'Orange Money', src: 'orange-money_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }, { name: 'Airtel Money', src: 'airtel-money_no_bg.png' }] },
+  { country: 'Sénégal', flagSrc: 'senegal.png', dialCode: '+221', operators: [{ name: 'Wave', src: 'wave_no_bg.png' }, { name: 'Orange Money', src: 'orange-money_no_bg.png' }] },
+  { country: 'Mali', flagSrc: 'mali.png', dialCode: '+223', operators: [{ name: 'Orange Money', src: 'orange-money_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }, { name: 'Airtel Money', src: 'airtel-money_no_bg.png' }] },
+  { country: 'Niger', flagSrc: 'niger.png', dialCode: '+227', operators: [{ name: 'Airtel Money', src: 'airtel-money_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }, { name: 'Orange Money', src: 'orange-money_no_bg.png' }] },
 ];
 
 const landingFeatures = [
@@ -370,9 +370,13 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
       <form className="card card-pad deposit-form" onSubmit={submit}>
         <div className="field">
           <label htmlFor="deposit-country">Pays</label>
-          <select id="deposit-country" value={country} onChange={event => setCountry(event.target.value)} required>
-            {mobileMoneyCountryOptions.map(option => <option key={option.country} value={option.country}>{option.flag} {option.country}</option>)}
-          </select>
+          <div className="country-options" role="radiogroup" aria-label="Choisir un pays">
+            {mobileMoneyCountryOptions.map(option => <label className={`country-option ${country === option.country ? 'selected' : ''}`} key={option.country}>
+              <input type="radio" name="deposit-country" value={option.country} checked={country === option.country} onChange={event => setCountry(event.target.value)} required />
+              <img src={`${import.meta.env.BASE_URL}countries/${option.flagSrc}`} alt="" />
+              <span>{option.country}</span>
+            </label>)}
+          </div>
         </div>
         <div className="field">
           <label>Opérateur Mobile Money</label>

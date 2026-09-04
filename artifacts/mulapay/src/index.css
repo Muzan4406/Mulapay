@@ -177,6 +177,13 @@ h1,h2,h3,p { margin:0; }
 .phone-prefix { display:flex; align-items:center; padding:0 14px; border:1px solid hsl(var(--input)); border-right:0; border-radius:9px 0 0 9px; background:hsl(var(--muted)); color:hsl(var(--foreground)); font-size:13px; font-weight:700; }
 .phone-input input { min-width:0; border-radius:0 9px 9px 0; }
 .static-field { width:100%; border:1px solid hsl(var(--input)); background:hsl(var(--muted)); border-radius:9px; color:hsl(var(--foreground)); padding:11px 12px; font-size:13px; }
+.country-options { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:9px; }
+.country-option { min-height:82px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:7px; padding:9px 7px; border:1px solid hsl(var(--border)); border-radius:10px; background:hsl(42 44% 99%); cursor:pointer; text-align:center; transition:border .2s, background .2s, box-shadow .2s; }
+.country-option:hover { border-color:hsl(var(--primary) / .55); }
+.country-option.selected { border-color:hsl(var(--primary)); background:hsl(160 42% 38% / .07); box-shadow:0 0 0 2px hsl(var(--primary) / .12); }
+.country-option input { position:absolute; opacity:0; pointer-events:none; }
+.country-option img { width:38px; height:38px; border-radius:50%; object-fit:cover; }
+.country-option span { font-size:10px; font-weight:700; line-height:1.2; }
 .mobile-money-options { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:9px; }
 .mobile-money-option { min-height:74px; display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid hsl(var(--border)); border-radius:10px; background:hsl(42 44% 99%); cursor:pointer; transition:border .2s, background .2s, box-shadow .2s; }
 .mobile-money-option:hover { border-color:hsl(var(--primary) / .55); }
@@ -352,6 +359,7 @@ h1,h2,h3,p { margin:0; }
   .back-button { padding:7px 9px 7px 7px; }
   .page-wrap { padding:23px 17px 42px; }
   .dashboard-grid,.form-layout { grid-template-columns:1fr; }
+  .country-options { grid-template-columns:repeat(2, minmax(0, 1fr)); }
   .metric-grid { grid-template-columns:1fr 1fr; }
   .wallet-grid { grid-template-columns:1fr 1fr; }
   .admin-grid { grid-template-columns:1fr 1fr; }
