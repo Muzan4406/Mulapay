@@ -146,7 +146,7 @@ function Landing() {
       <section className="landing-hero landing-hero-rich">
         <div className="landing-hero-copy">
           <div className="landing-kicker"><span className="kicker-line" /> la finance régionale, simplifiée</div>
-          <h1 className="landing-title">Votre argent.<br /><em>Vos paiements.</em><br />Une seule plateforme.</h1>
+          <h1 className="landing-title">Simplifiez vos paiements<br /><em>en Afrique de l’Ouest.</em></h1>
           <p className="landing-copy">Envoyez, recevez, payez et gérez votre argent simplement à travers l’Afrique de l’Ouest.</p>
           <div className="landing-cta"><Link href="/sign-up" className="button button-primary" data-testid="link-landing-open-app">Créer mon compte <ArrowRightLeft size={15} /></Link><Link href="/sign-in" className="button button-ghost" data-testid="link-landing-admin">Se connecter <Activity size={15} /></Link></div>
           <div className="landing-proof"><span><LockKeyhole size={13} /> Sécurisé</span><span><Activity size={13} /> Rapide</span><span><Globe2 size={13} /> Afrique de l’Ouest</span></div>
@@ -173,7 +173,7 @@ function Landing() {
       </section>
       <section className="landing-provider-strip" aria-label="Réseaux Mobile Money disponibles dans la région">
         <div className="landing-provider-heading"><span className="eyebrow">un écosystème connecté</span><strong>Vos moyens de paiement, dans un seul espace.</strong></div>
-        <div className="landing-provider-logos">{mobileMoneyProviders.map(provider => <div className="provider-logo-card" key={provider.name}><img src={assetUrl(provider.src)} alt={provider.name} /><span>{provider.name}</span></div>)}</div>
+        <div className="landing-provider-marquee" aria-hidden="true"><div className="landing-provider-track">{mobileMoneyProviders.concat(mobileMoneyProviders).map((provider, index) => <div className="provider-logo-card" key={`${provider.name}-${index}`} aria-label={provider.name}><img src={assetUrl(provider.src)} alt="" /></div>)}</div></div>
       </section>
       <section className="landing-section landing-countries" id="pays">
         <div className="landing-section-heading"><div><div className="eyebrow">une présence régionale</div><h2>MULAPAY en Afrique de l’Ouest</h2></div><p>Une expérience financière pensée pour les réalités de notre région.</p></div>
