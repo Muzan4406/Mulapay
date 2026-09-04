@@ -162,7 +162,7 @@ function Landing() {
       <section className="landing-hero landing-hero-rich">
         <div className="landing-hero-copy">
           <div className="landing-kicker"><span className="kicker-line" /> la finance régionale, simplifiée</div>
-          <h1 className="landing-title">Simplifiez vos paiements<br /><em>en Afrique de l’Ouest.</em></h1>
+          <h1 className="landing-title">Simplifiez vos<span className="hero-mobile-break"><br /></span> paiements<br /><em>en Afrique de l’Ouest.</em></h1>
           <p className="landing-copy">Envoyez, recevez, payez et gérez votre argent simplement à travers l’Afrique de l’Ouest.</p>
           <div className="landing-cta"><Link href="/sign-up" className="button button-primary" data-testid="link-landing-open-app">Créer mon compte <ArrowRightLeft size={15} /></Link><Link href="/sign-in" className="button button-ghost" data-testid="link-landing-admin">Se connecter <Activity size={15} /></Link></div>
           <div className="landing-proof"><span><LockKeyhole size={13} /> Sécurisé</span><span><Activity size={13} /> Rapide</span><span><Globe2 size={13} /> Afrique de l’Ouest</span></div>
