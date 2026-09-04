@@ -171,6 +171,19 @@ h1,h2,h3,p { margin:0; }
 .input-prefix { position:relative; }
 .input-prefix span { position:absolute; left:12px; top:11px; color:hsl(var(--muted-foreground)); font-size:12px; }
 .input-prefix input { padding-left:42px; }
+.deposit-page .section-head { margin-bottom:0; }
+.deposit-form { max-width:680px; margin:25px auto 0; }
+.phone-input { display:flex; align-items:stretch; }
+.phone-prefix { display:flex; align-items:center; padding:0 14px; border:1px solid hsl(var(--input)); border-right:0; border-radius:9px 0 0 9px; background:hsl(var(--muted)); color:hsl(var(--foreground)); font-size:13px; font-weight:700; }
+.phone-input input { min-width:0; border-radius:0 9px 9px 0; }
+.static-field { width:100%; border:1px solid hsl(var(--input)); background:hsl(var(--muted)); border-radius:9px; color:hsl(var(--foreground)); padding:11px 12px; font-size:13px; }
+.mobile-money-options { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:9px; }
+.mobile-money-option { min-height:74px; display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid hsl(var(--border)); border-radius:10px; background:hsl(42 44% 99%); cursor:pointer; transition:border .2s, background .2s, box-shadow .2s; }
+.mobile-money-option:hover { border-color:hsl(var(--primary) / .55); }
+.mobile-money-option.selected { border-color:hsl(var(--primary)); background:hsl(160 42% 38% / .07); box-shadow:0 0 0 2px hsl(var(--primary) / .12); }
+.mobile-money-option input { position:absolute; opacity:0; pointer-events:none; }
+.mobile-money-option img { width:40px; height:40px; object-fit:contain; flex:0 0 auto; }
+.mobile-money-option span { font-size:12px; font-weight:700; line-height:1.25; }
 .summary-box { background:hsl(var(--muted)); border-radius:12px; padding:15px; display:grid; gap:11px; }
 .summary-line { display:flex; justify-content:space-between; gap:10px; font-size:12px; }
 .summary-line span:first-child { color:hsl(var(--muted-foreground)); }

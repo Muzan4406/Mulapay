@@ -116,6 +116,16 @@ const landingCountries = [
   { code: 'NE', name: 'Niger', detail: 'Wallet XOF' },
 ];
 
+const mobileMoneyCountryOptions = [
+  { country: 'Togo', flag: '🇹🇬', dialCode: '+228', operators: [{ name: 'Mixx by Yas', src: 'mixx.png' }, { name: 'Moov Money', src: 'moov-money.png' }] },
+  { country: 'Bénin', flag: '🇧🇯', dialCode: '+229', operators: [{ name: 'MTN MoMo', src: 'mtn-momo.png' }, { name: 'Moov Money', src: 'moov-money.png' }] },
+  { country: 'Côte d’Ivoire', flag: '🇨🇮', dialCode: '+225', operators: [{ name: 'Orange Money', src: 'orange-money.png' }, { name: 'MTN MoMo', src: 'mtn-momo.png' }, { name: 'Moov Money', src: 'moov-money.png' }, { name: 'Wave', src: 'wave.png' }] },
+  { country: 'Burkina Faso', flag: '🇧🇫', dialCode: '+226', operators: [{ name: 'Orange Money', src: 'orange-money.png' }, { name: 'Moov Money', src: 'moov-money.png' }, { name: 'Airtel Money', src: 'airtel-money.png' }] },
+  { country: 'Sénégal', flag: '🇸🇳', dialCode: '+221', operators: [{ name: 'Wave', src: 'wave.png' }, { name: 'Orange Money', src: 'orange-money.png' }] },
+  { country: 'Mali', flag: '🇲🇱', dialCode: '+223', operators: [{ name: 'Orange Money', src: 'orange-money.png' }, { name: 'Moov Money', src: 'moov-money.png' }, { name: 'Airtel Money', src: 'airtel-money.png' }] },
+  { country: 'Niger', flag: '🇳🇪', dialCode: '+227', operators: [{ name: 'Airtel Money', src: 'airtel-money.png' }, { name: 'Moov Money', src: 'moov-money.png' }, { name: 'Orange Money', src: 'orange-money.png' }] },
+];
+
 const landingFeatures = [
   { icon: ArrowDownLeft, eyebrow: '01', title: 'Dépôt', copy: 'Ajoutez de l’argent facilement avec les moyens de paiement disponibles.' },
   { icon: ArrowUpRight, eyebrow: '02', title: 'Retrait', copy: 'Retirez vos fonds simplement et rapidement, quand vous en avez besoin.' },
@@ -312,11 +322,21 @@ function Wallets() {
 function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
   const { wallets, toast } = useStore();
   const [walletId, setWalletId] = useState(wallets[0]?.id ?? '');
+  const [country, setCountry] = useState(wallets[0]?.country ?? mobileMoneyCountryOptions[0].country);
   const [amount, setAmount] = useState('');
-  const [method, setMethod] = useState('mobile_money');
   const [phone, setPhone] = useState('');
+  const [operator, setOperator] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const isDeposit = kind === 'deposit';
+  const selectedCountry = mobileMoneyCountryOptions.find(option => option.country === country) ?? mobileMoneyCountryOptions[0];
+
+  useEffect(() => {
+    const selectedWallet = wallets.find(wallet => wallet.country === country) ?? wallets[0];
+    if (selectedWallet && selectedWallet.id !== walletId) setWalletId(selectedWallet.id);
+    const nextOperator = selectedCountry.operators[0]?.name ?? '';
+    if (operator !== nextOperator) setOperator(nextOperator);
+  }, [country, operator, selectedCountry, walletId, wallets]);
+
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setSubmitting(true);
@@ -324,7 +344,14 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
       const response = await fetch(`/api/v1/${isDeposit ? 'deposits' : 'withdrawals'}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Idempotency-Key': crypto.randomUUID() },
-        body: JSON.stringify({ walletId, amount: Number(amount), method, phone }),
+        body: JSON.stringify({
+          walletId,
+          amount: Number(amount),
+          method: 'mobile_money',
+          country,
+          operator,
+          phone: `${selectedCountry.dialCode}${phone.replace(/\D/g, '')}`,
+        }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error ?? 'Opération impossible.');
@@ -337,7 +364,48 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
       setSubmitting(false);
     }
   };
-  return <main className="page-wrap"><PageIntro eyebrow={isDeposit ? 'Alimenter un wallet' : 'Sortir des fonds'} title={isDeposit ? 'Dépôt' : 'Retrait'} subtitle={isDeposit ? 'Choisissez le wallet à créditer et confirmez le paiement auprès du prestataire.' : 'Choisissez le wallet source et le compte bénéficiaire. Les contrôles sont exécutés côté serveur.'} /><div className="form-layout"><form className="card card-pad" onSubmit={submit}><div className="field"><label>Wallet {isDeposit ? 'à créditer' : 'source'}</label><select value={walletId} onChange={event => setWalletId(event.target.value)} required>{wallets.map(wallet => <option key={wallet.id} value={wallet.id}>{countryLabel(wallet.country)} · {wallet.currency}</option>)}</select></div><div className="field"><label>Moyen de paiement</label><select value={method} onChange={event => setMethod(event.target.value)}><option value="mobile_money">Mobile Money</option><option value="bank_transfer">Virement bancaire</option></select></div><div className="field"><label>Numéro du bénéficiaire</label><input value={phone} onChange={event => setPhone(event.target.value)} placeholder="+228..." required /></div><div className="field"><label>Montant</label><div className="input-prefix"><span>XOF</span><input type="number" min="1" value={amount} onChange={event => setAmount(event.target.value)} placeholder="0" required /></div></div><div className="notice"><ShieldCheck size={15} /><span>La confirmation finale vient du serveur et du webhook PSP. Une redirection seule ne crédite jamais le wallet.</span></div><button className="button button-primary button-wide" type="submit" disabled={submitting}>{submitting ? 'Traitement…' : isDeposit ? 'Continuer vers le paiement' : 'Confirmer le retrait'} <ChevronRight size={15} /></button></form><div><div className="card card-pad"><div className="section-title">Traitement sécurisé</div><p className="section-note" style={{ marginTop: 8 }}>Les frais, limites, contrôles KYC et statut du prestataire seront affichés avant confirmation.</p><div className="step-list" style={{ marginTop: 18 }}><div className="step"><div className="step-number">1</div><div><div className="step-title">Validation du compte</div><div className="step-copy">Le wallet, le KYC et les limites sont vérifiés.</div></div></div><div className="step"><div className="step-number">2</div><div><div className="step-title">Confirmation PSP</div><div className="step-copy">La transaction est confirmée par webhook signé.</div></div></div><div className="step"><div className="step-number">3</div><div><div className="step-title">Ledger et notification</div><div className="step-copy">Le solde et l’historique sont mis à jour atomiquement.</div></div></div></div></div></div></div></main>;
+  if (isDeposit) {
+    return <main className="page-wrap deposit-page">
+      <PageIntro eyebrow="Mobile Money" title="Dépôt" />
+      <form className="card card-pad deposit-form" onSubmit={submit}>
+        <div className="field">
+          <label htmlFor="deposit-country">Pays</label>
+          <select id="deposit-country" value={country} onChange={event => setCountry(event.target.value)} required>
+            {mobileMoneyCountryOptions.map(option => <option key={option.country} value={option.country}>{option.flag} {option.country}</option>)}
+          </select>
+        </div>
+        <div className="field">
+          <label>Opérateur Mobile Money</label>
+          <div className="mobile-money-options" role="radiogroup" aria-label="Choisir un opérateur Mobile Money">
+            {selectedCountry.operators.map(option => <label className={`mobile-money-option ${operator === option.name ? 'selected' : ''}`} key={option.name}>
+              <input type="radio" name="deposit-operator" value={option.name} checked={operator === option.name} onChange={event => setOperator(event.target.value)} required />
+              <img src={`${import.meta.env.BASE_URL}mobile-money/${option.src}`} alt="" />
+              <span>{option.name}</span>
+            </label>)}
+          </div>
+        </div>
+        <div className="field">
+          <label htmlFor="deposit-phone">Numéro de téléphone</label>
+          <div className="phone-input">
+            <span className="phone-prefix" aria-label={`Indicatif ${selectedCountry.dialCode}`}>{selectedCountry.dialCode}</span>
+            <input id="deposit-phone" type="tel" inputMode="numeric" value={phone} onChange={event => setPhone(event.target.value.replace(/\D/g, ''))} placeholder="90 00 00 00" autoComplete="tel-national" required />
+          </div>
+        </div>
+        <div className="field">
+          <label htmlFor="deposit-amount">Montant</label>
+          <div className="input-prefix">
+            <span>XOF</span>
+            <input id="deposit-amount" type="number" min="1" value={amount} onChange={event => setAmount(event.target.value)} placeholder="0" required />
+          </div>
+        </div>
+        <button className="button button-primary button-wide" type="submit" disabled={submitting}>
+          {submitting ? 'Traitement…' : 'Déposer maintenant'} <ChevronRight size={15} />
+        </button>
+      </form>
+    </main>;
+  }
+
+  return <main className="page-wrap"><PageIntro eyebrow="Sortir des fonds" title="Retrait" /><div className="form-layout"><form className="card card-pad" onSubmit={submit}><div className="field"><label>Wallet source</label><select value={walletId} onChange={event => setWalletId(event.target.value)} required>{wallets.map(wallet => <option key={wallet.id} value={wallet.id}>{countryLabel(wallet.country)} · {wallet.currency}</option>)}</select></div><div className="field"><label>Moyen de paiement</label><div className="static-field">Mobile Money</div></div><div className="field"><label>Numéro du bénéficiaire</label><input value={phone} onChange={event => setPhone(event.target.value)} placeholder="Numéro de téléphone" required /></div><div className="field"><label>Montant</label><div className="input-prefix"><span>XOF</span><input type="number" min="1" value={amount} onChange={event => setAmount(event.target.value)} placeholder="0" required /></div></div><button className="button button-primary button-wide" type="submit" disabled={submitting}>{submitting ? 'Traitement…' : 'Confirmer le retrait'} <ChevronRight size={15} /></button></form><div><div className="card card-pad"><div className="section-title">Traitement sécurisé</div><p className="section-note" style={{ marginTop: 8 }}>Les frais, limites, contrôles KYC et statut du prestataire seront affichés avant confirmation.</p><div className="step-list" style={{ marginTop: 18 }}><div className="step"><div className="step-number">1</div><div><div className="step-title">Validation du compte</div><div className="step-copy">Le wallet, le KYC et les limites sont vérifiés.</div></div></div><div className="step"><div className="step-number">2</div><div><div className="step-title">Confirmation PSP</div><div className="step-copy">La transaction est confirmée par webhook signé.</div></div></div><div className="step"><div className="step-number">3</div><div><div className="step-title">Ledger et notification</div><div className="step-copy">Le solde et l’historique sont mis à jour atomiquement.</div></div></div></div></div></div></div></main>;
 }
 
 function Deposit() { return <ProviderOperationForm kind="deposit" />; }
