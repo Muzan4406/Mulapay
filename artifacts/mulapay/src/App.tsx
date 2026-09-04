@@ -97,6 +97,14 @@ function Logo({ light = false }: { light?: boolean }) {
   </div>;
 }
 
+const mobileMoneyProviders = [
+  { name: 'TMoney', country: 'Togo', mark: 'TM', tone: 'tmoney' },
+  { name: 'Moov Money', country: 'Afrique de l’Ouest', mark: 'M', tone: 'moov' },
+  { name: 'MTN MoMo', country: 'Régional', mark: 'MTN', tone: 'mtn' },
+  { name: 'Orange Money', country: 'Régional', mark: 'OM', tone: 'orange' },
+  { name: 'Wave', country: 'Régional', mark: 'W', tone: 'wave' },
+];
+
 function Landing() {
   return <div className="landing">
     <nav className="landing-nav">
@@ -106,18 +114,27 @@ function Landing() {
     <main>
       <section className="landing-hero">
         <div>
-          <div className="landing-kicker"><span className="kicker-line" /> conçu pour l’Afrique de l’Ouest</div>
-          <h1 className="landing-title">Votre argent avance<br /><em>à votre rythme.</em></h1>
-          <p className="landing-copy">Mulapay réunit vos wallets par pays dans un compte clair — pour envoyer, recevoir et gérer votre argent dans toute la région avec simplicité.</p>
+          <div className="landing-kicker"><span className="kicker-line" /> bienvenue chez Mulapay</div>
+          <h1 className="landing-title">Tout votre argent,<br /><em>au même endroit.</em></h1>
+          <p className="landing-copy">Un seul compte pour piloter vos wallets, envoyer, recevoir et suivre vos opérations dans toute l’Afrique de l’Ouest — avec une vue claire dès la première connexion.</p>
            <div className="landing-cta"><Link href="/sign-up" className="button button-primary" data-testid="link-landing-open-app">Créer un compte <ArrowRightLeft size={15} /></Link><Link href="/sign-in" className="button button-ghost" data-testid="link-landing-admin">Se connecter <Activity size={15} /></Link></div>
            <div className="landing-proof"><span><span className="proof-mark" /> Authentification sécurisée</span><span><ShieldCheck size={13} /> Transactions vérifiées côté serveur</span></div>
         </div>
-        <div className="cockpit-visual" aria-label="Mulapay product preview">
+         <div className="cockpit-visual" aria-label="Aperçu du dashboard Mulapay">
           <div className="visual-orbit" />
-           <div className="visual-card"><div className="visual-label">tous les wallets · solde disponible</div><div className="visual-total">•••••• <span style={{ fontSize: 12, color: 'hsl(160 25% 72%)' }}>XOF</span></div><div className="visual-lines"><div className="visual-line" /><div className="visual-line" /><div className="visual-line" /></div><div style={{ marginTop: 28, color: 'hsl(160 42% 64%)', fontSize: 11 }}>Vos soldes protégés en un coup d’œil</div></div>
+            <div className="dashboard-preview">
+              <div className="preview-topline"><span className="preview-window-dots"><i /><i /><i /></span><span className="preview-label">aperçu du dashboard</span><span className="preview-status"><i /> sécurisé</span></div>
+              <div className="preview-heading"><div><span className="preview-overline">vue d’ensemble</span><strong>Bonjour, votre espace.</strong></div><span className="preview-avatar">M</span></div>
+              <div className="preview-balance"><div><span className="preview-overline">solde consolidé</span><strong>•••••• <small>XOF</small></strong></div><span className="preview-balance-note">7 wallets · multi-pays</span></div>
+              <div className="preview-columns"><div className="preview-chart"><div className="preview-overline">activité récente</div><div className="preview-bars"><i /><i /><i /><i /><i /><i /><i /></div><div className="preview-chart-footer"><span>Derniers mouvements</span><span>Voir tout →</span></div></div><div className="preview-wallet-stack"><span className="preview-overline">wallets actifs</span><div><span className="operator-mark tmoney">TM</span><span>Togo</span><strong>•••• XOF</strong></div><div><span className="operator-mark moov">M</span><span>Bénin</span><strong>•••• XOF</strong></div><div><span className="operator-mark orange">OM</span><span>Sénégal</span><strong>•••• XOF</strong></div></div></div>
+            </div>
            <div className="visual-mini"><div className="eyebrow">suivi en temps réel</div><div style={{ fontWeight: 700, fontSize: 13, marginTop: 12 }}>Chaque opération est tracée</div><div style={{ color: 'hsl(160 42% 38%)', fontFamily: 'var(--font-mono)', fontSize: 17, marginTop: 9 }}>Ledger</div><div style={{ color: 'hsl(203 18% 46%)', fontSize: 10, marginTop: 5 }}>Confirmation serveur</div></div>
         </div>
       </section>
+        <section className="landing-network" aria-label="Écosystème Mobile Money">
+          <div className="landing-network-copy"><div className="eyebrow">pensé pour vos usages</div><strong>Vos moyens de paiement, sans friction.</strong><span>Un espace conçu pour les réseaux Mobile Money que vous utilisez déjà.</span></div>
+          <div className="operator-list">{mobileMoneyProviders.map(provider => <div className="operator-pill" key={provider.name}><span className={`operator-mark ${provider.tone}`}>{provider.mark}</span><span><strong>{provider.name}</strong><small>{provider.country}</small></span></div>)}</div>
+        </section>
        <section className="landing-section muted"><div className="landing-section-inner"><div className="eyebrow">un compte, pensé pour la région</div><h2 className="page-title" style={{ maxWidth: 600 }}>Une vue plus sereine<br />sur tout votre argent.</h2><div className="feature-grid"><div className="feature card"><Globe2 className="feature-icon" size={20} /><h3>Sept marchés, un même rythme.</h3><p>Gardez vos wallets du Togo, du Bénin, de Côte d’Ivoire, du Burkina Faso, du Sénégal, du Mali et du Niger à portée de main — sans tableurs ni approximations.</p></div><div className="feature card"><ArrowRightLeft className="feature-icon" size={20} /><h3>Chaque mouvement est contextualisé.</h3><p>Consultez le taux, les frais et le wallet destinataire avant de confirmer un échange.</p></div><div className="feature card"><ShieldCheck className="feature-icon" size={20} /><h3>La maîtrise, par conception.</h3><p>Chaque action est claire, traçable et vérifiée au bon endroit.</p></div></div></div></section>
     </main>
      <footer className="landing-footer"><Logo /><span>© 2026 Mulapay · Plateforme financière</span><span>Pour des marchés connectés</span></footer>
