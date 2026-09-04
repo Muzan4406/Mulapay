@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Mulapay"
+description = "A West African multi-country wallet platform prototype for managing country wallets, transfers, exchanges, payment links, KYC and operations without a PSP connection."
+version = "1.0.0"
+id = "artifacts/mulapay"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 21727
+
+[services.development]
+run = "pnpm --filter @workspace/mulapay run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/mulapay", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/mulapay/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21727"
+BASE_PATH = "/"
