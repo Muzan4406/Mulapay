@@ -1,1 +1,2 @@
 - [Mulapay auth and ledger](auth-and-ledger.md) — Clerk sessions front a persisted Drizzle wallet/ledger; development fallback must not reach production.
+- [Clerk custom flows](clerk-custom-flows.md) — the current Clerk React SDK uses Future resources and verification methods for custom auth screens.

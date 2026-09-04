@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { Link, Redirect, Route, Router as WouterRouter, Switch, useLocation } from 'wouter';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ClerkProvider, SignIn, SignUp, useAuth, useClerk, useUser } from '@clerk/react';
+import { ClerkProvider, useAuth, useClerk, useSignIn, useSignUp, useUser } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
 import { frFR } from '@clerk/localizations';
@@ -434,12 +434,165 @@ const clerkAppearance = {
   },
 };
 
+const COUNTRY_OPTIONS = ['Togo', 'Bénin', 'Côte d’Ivoire', 'Burkina Faso', 'Sénégal', 'Mali', 'Niger'];
+
+function authErrorMessage(error: unknown) {
+  const value = error as { errors?: Array<{ longMessage?: string; message?: string }>; message?: string };
+  const issue = value?.errors?.[0];
+  return issue?.longMessage ?? issue?.message ?? value?.message ?? 'La demande n’a pas pu être traitée. Vérifiez les informations saisies.';
+}
+
+function AuthFrame({ eyebrow, title, subtitle, children, footer }: { eyebrow: string; title: string; subtitle: string; children: ReactNode; footer?: ReactNode }) {
+  return <div className="auth-page"><div className="auth-orbit auth-orbit-one" /><div className="auth-orbit auth-orbit-two" /><div className="auth-card"><div className="auth-brand"><Logo /><span className="auth-mode">Accès sécurisé</span></div><div className="auth-heading"><div className="eyebrow">{eyebrow}</div><h1>{title}</h1><p>{subtitle}</p></div>{children}{footer && <div className="auth-footer">{footer}</div>}<div className="auth-notice"><ShieldCheck size={14} /><span>Votre identité est gérée par Clerk. Les données financières Mulapay restent protégées côté serveur.</span></div></div></div>;
+}
+
+function PasswordInput({ value, onChange, placeholder, autoComplete, show, onToggle }: { value: string; onChange: (value: string) => void; placeholder: string; autoComplete: string; show: boolean; onToggle: () => void }) {
+  return <div className="auth-password-wrap"><input type={show ? 'text' : 'password'} value={value} onChange={event => onChange(event.target.value)} placeholder={placeholder} autoComplete={autoComplete} required /><button type="button" className="auth-eye" onClick={onToggle} aria-label={show ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}>{show ? 'Masquer' : 'Afficher'}</button></div>;
+}
+
 function SignInPage() {
-  return <div className="auth-clerk-page"><SignIn routing="path" path={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} /></div>;
+  const { signIn } = useSignIn();
+  const [, setLocation] = useLocation();
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setError('');
+    setSubmitting(true);
+    try {
+      const created = await (signIn as any).create({ identifier });
+      if (created.error) throw created.error;
+      const completed = await (signIn as any).password({ password });
+      if (completed.error) throw completed.error;
+      if ((signIn as any).status !== 'complete') {
+        setError('Une étape supplémentaire de vérification est requise. Recommencez depuis votre e-mail.');
+        return;
+      }
+      const finalized = await (signIn as any).finalize();
+      if (finalized.error) throw finalized.error;
+      setLocation('/app');
+    } catch (authError) {
+      setError(authErrorMessage(authError));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+  return <AuthFrame eyebrow="Espace membre" title="Se connecter" subtitle="Accédez à vos wallets, vos opérations et votre historique Mulapay." footer={<><span>Pas encore de compte ?</span><Link href="/sign-up">Créer un compte</Link></>}><form className="auth-form" onSubmit={submit}>{error && <div className="auth-error">{error}</div>}<label>Adresse e-mail ou numéro de téléphone<input value={identifier} onChange={event => setIdentifier(event.target.value)} placeholder="vous@exemple.com ou +228…" autoComplete="username" required /></label><label>Mot de passe<PasswordInput value={password} onChange={setPassword} placeholder="Votre mot de passe" autoComplete="current-password" show={showPassword} onToggle={() => setShowPassword(value => !value)} /></label><Link href="/forgot-password" className="auth-forgot">Mot de passe oublié ?</Link><button className="button button-primary auth-submit" type="submit" disabled={submitting}>{submitting ? 'Connexion…' : 'Se connecter'} <ChevronRight size={15} /></button></form></AuthFrame>;
 }
 
 function SignUpPage() {
-  return <div className="auth-clerk-page"><SignUp routing="path" path={`${basePath}/sign-up`} signInUrl={`${basePath}/sign-in`} /></div>;
+  const { signUp } = useSignUp();
+  const [, setLocation] = useLocation();
+  const [step, setStep] = useState<'form' | 'verification'>('form');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [country, setCountry] = useState('Togo');
+  const [password, setPassword] = useState('');
+  const [confirmation, setConfirmation] = useState('');
+  const [code, setCode] = useState('');
+  const [terms, setTerms] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (password !== confirmation) { setError('Les deux mots de passe doivent être identiques.'); return; }
+    if (!terms) { setError('Veuillez accepter les Conditions d’utilisation et la Politique de confidentialité.'); return; }
+    setError('');
+    setSubmitting(true);
+    try {
+      const created = await (signUp as any).create({ firstName, lastName, emailAddress: email, legalAccepted: true, unsafeMetadata: { phone, country, acceptedTermsAt: new Date().toISOString() } });
+      if (created.error) throw created.error;
+      const passwordSet = await (signUp as any).password({ password });
+      if (passwordSet.error) throw passwordSet.error;
+      const verification = await (signUp as any).verifications.sendEmailCode();
+      if (verification.error) throw verification.error;
+      setStep('verification');
+    } catch (authError) {
+      setError(authErrorMessage(authError));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+  const verify = async (event: FormEvent) => {
+    event.preventDefault();
+    setError('');
+    setSubmitting(true);
+    try {
+      const verification = await (signUp as any).verifications.verifyEmailCode({ code });
+      if (verification.error) throw verification.error;
+      if ((signUp as any).status !== 'complete') { setError('Le code n’a pas encore terminé l’inscription.'); return; }
+      const finalized = await (signUp as any).finalize();
+      if (finalized.error) throw finalized.error;
+      setLocation('/app/kyc');
+    } catch (authError) {
+      setError(authErrorMessage(authError));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+  if (step === 'verification') return <AuthFrame eyebrow="Vérification obligatoire" title="Confirmez votre adresse" subtitle={`Saisissez le code reçu à ${email} pour terminer votre inscription.`} footer={<><span>Vous avez déjà un compte ?</span><Link href="/sign-in">Se connecter</Link></>}><form className="auth-form" onSubmit={verify}>{error && <div className="auth-error">{error}</div>}<label>Code de vérification OTP<input value={code} onChange={event => setCode(event.target.value)} placeholder="123456" inputMode="numeric" autoComplete="one-time-code" required /></label><button className="button button-primary auth-submit" type="submit" disabled={submitting}>{submitting ? 'Vérification…' : 'Vérifier et continuer'} <ChevronRight size={15} /></button><button type="button" className="button button-ghost auth-submit" onClick={() => setStep('form')}>Modifier mes informations</button></form></AuthFrame>;
+  return <AuthFrame eyebrow="Nouveau membre" title="Créer votre compte" subtitle="Un compte unique pour gérer vos wallets dans toute l’Afrique de l’Ouest." footer={<><span>Déjà un compte ?</span><Link href="/sign-in">Se connecter</Link></>}><form className="auth-form" onSubmit={submit}>{error && <div className="auth-error">{error}</div>}<div className="auth-field-grid"><label>Prénom<input value={firstName} onChange={event => setFirstName(event.target.value)} placeholder="Votre prénom" autoComplete="given-name" required /></label><label>Nom<input value={lastName} onChange={event => setLastName(event.target.value)} placeholder="Votre nom" autoComplete="family-name" required /></label></div><label>Adresse e-mail<input type="email" value={email} onChange={event => setEmail(event.target.value)} placeholder="vous@exemple.com" autoComplete="email" required /></label><label>Numéro de téléphone<input type="tel" value={phone} onChange={event => setPhone(event.target.value)} placeholder="+228…" autoComplete="tel" required /></label><label>Pays de résidence<select value={country} onChange={event => setCountry(event.target.value)}>{COUNTRY_OPTIONS.map(option => <option key={option}>{option}</option>)}</select></label><label>Mot de passe<PasswordInput value={password} onChange={setPassword} placeholder="Créer un mot de passe" autoComplete="new-password" show={showPassword} onToggle={() => setShowPassword(value => !value)} /></label><label>Confirmation du mot de passe<PasswordInput value={confirmation} onChange={setConfirmation} placeholder="Confirmer le mot de passe" autoComplete="new-password" show={showPassword} onToggle={() => setShowPassword(value => !value)} /></label><label className="auth-checkbox"><input type="checkbox" checked={terms} onChange={event => setTerms(event.target.checked)} required /><span>J’accepte les <Link href="/terms">Conditions d’utilisation</Link> et la <Link href="/privacy">Politique de confidentialité</Link>.</span></label><button className="button button-primary auth-submit" type="submit" disabled={submitting}>{submitting ? 'Création…' : 'Créer mon compte'} <ChevronRight size={15} /></button></form></AuthFrame>;
+}
+
+function ForgotPasswordPage() {
+  const { signIn } = useSignIn();
+  const [, setLocation] = useLocation();
+  const [step, setStep] = useState<'identify' | 'code' | 'password'>('identify');
+  const [identifier, setIdentifier] = useState('');
+  const [code, setCode] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const requestCode = async (event: FormEvent) => {
+    event.preventDefault();
+    setError('');
+    setSubmitting(true);
+    try {
+      const created = await (signIn as any).create({ identifier });
+      if (created.error) throw created.error;
+      const sent = await (signIn as any).resetPasswordEmailCode.sendCode();
+      if (sent.error) throw sent.error;
+      setStep('code');
+    } catch (authError) { setError(authErrorMessage(authError)); } finally { setSubmitting(false); }
+  };
+  const verifyCode = async (event: FormEvent) => {
+    event.preventDefault();
+    setError('');
+    setSubmitting(true);
+    try {
+      const verification = await (signIn as any).resetPasswordEmailCode.verifyCode({ code });
+      if (verification.error) throw verification.error;
+      setStep('password');
+    } catch (authError) { setError(authErrorMessage(authError)); } finally { setSubmitting(false); }
+  };
+  const reset = async (event: FormEvent) => {
+    event.preventDefault();
+    setError('');
+    setSubmitting(true);
+    try {
+      const result = await (signIn as any).resetPasswordEmailCode.submitPassword({ password });
+      if (result.error) throw result.error;
+      if ((signIn as any).status === 'complete') {
+        const finalized = await (signIn as any).finalize();
+        if (finalized.error) throw finalized.error;
+        setLocation('/app');
+      } else setLocation('/sign-in');
+    } catch (authError) { setError(authErrorMessage(authError)); } finally { setSubmitting(false); }
+  };
+  const title = step === 'identify' ? 'Réinitialiser le mot de passe' : step === 'code' ? 'Vérifier votre adresse' : 'Créer un nouveau mot de passe';
+  const subtitle = step === 'identify' ? 'Recevez un code sécurisé pour récupérer votre accès.' : step === 'code' ? `Saisissez le code reçu à ${identifier}.` : 'Choisissez un nouveau mot de passe pour votre compte.';
+  return <AuthFrame eyebrow="Récupération du compte" title={title} subtitle={subtitle}>{error && <div className="auth-error">{error}</div>}{step === 'identify' && <form className="auth-form" onSubmit={requestCode}><label>Adresse e-mail<input type="email" value={identifier} onChange={event => setIdentifier(event.target.value)} placeholder="vous@exemple.com" autoComplete="email" required /></label><button className="button button-primary auth-submit" type="submit" disabled={submitting}>{submitting ? 'Envoi…' : 'Recevoir le code'} <ChevronRight size={15} /></button></form>}{step === 'code' && <form className="auth-form" onSubmit={verifyCode}><label>Code OTP<input value={code} onChange={event => setCode(event.target.value)} placeholder="123456" inputMode="numeric" autoComplete="one-time-code" required /></label><button className="button button-primary auth-submit" type="submit" disabled={submitting}>{submitting ? 'Vérification…' : 'Vérifier le code'} <ChevronRight size={15} /></button></form>}{step === 'password' && <form className="auth-form" onSubmit={reset}><label>Nouveau mot de passe<input type="password" value={password} onChange={event => setPassword(event.target.value)} placeholder="Nouveau mot de passe" autoComplete="new-password" required /></label><button className="button button-primary auth-submit" type="submit" disabled={submitting}>{submitting ? 'Enregistrement…' : 'Enregistrer le mot de passe'} <ChevronRight size={15} /></button></form>}<div className="auth-back"><Link href="/sign-in">Retour à la connexion</Link></div></AuthFrame>;
+}
+
+function LegalPage({ kind }: { kind: 'terms' | 'privacy' }) {
+  const isTerms = kind === 'terms';
+  return <main className="page-wrap legal-page"><Link href="/sign-up" className="eyebrow">← Retour à l’inscription</Link><h1 className="page-title">{isTerms ? 'Conditions d’utilisation' : 'Politique de confidentialité'}</h1><p className="page-subtitle">{isTerms ? 'Les règles qui encadrent l’utilisation responsable de Mulapay.' : 'Les principes appliqués pour protéger vos données personnelles et financières.'}</p><div className="card card-pad legal-card"><h2>{isTerms ? 'Utilisation du service' : 'Données collectées'}</h2><p>{isTerms ? 'Mulapay fournit une interface de gestion de wallets et d’opérations financières soumises aux contrôles de compte, KYC, limites et prestataires autorisés.' : 'Mulapay traite les informations nécessaires à l’authentification, à la vérification KYC, à la sécurité et à l’exécution des opérations demandées.'}</p><h2>{isTerms ? 'Responsabilités' : 'Vos droits'}</h2><p>{isTerms ? 'Vous devez protéger vos moyens d’accès et fournir des informations exactes. Les opérations peuvent être suspendues pour des raisons de sécurité ou de conformité.' : 'Vous pouvez demander l’accès, la rectification ou la suppression des données selon les obligations légales applicables.'}</p></div></main>;
 }
 
 function HomeRedirect() {
@@ -449,7 +602,7 @@ function HomeRedirect() {
 }
 
 function Router() {
-  return <Switch><Route path="/" component={HomeRedirect} /><Route path="/sign-in/*?" component={SignInPage} /><Route path="/sign-up/*?" component={SignUpPage} /><Route path="/app" component={RoutedApp} /><Route path="/app/:rest*" component={RoutedApp} /><Route path="/admin" component={RoutedApp} /><Route path="/admin/:rest*" component={RoutedApp} /><Route component={NotFound} /></Switch>;
+  return <Switch><Route path="/" component={HomeRedirect} /><Route path="/sign-in/*?" component={SignInPage} /><Route path="/sign-up/*?" component={SignUpPage} /><Route path="/forgot-password" component={ForgotPasswordPage} /><Route path="/terms" component={() => <LegalPage kind="terms" />} /><Route path="/privacy" component={() => <LegalPage kind="privacy" />} /><Route path="/app" component={RoutedApp} /><Route path="/app/:rest*" component={RoutedApp} /><Route path="/admin" component={RoutedApp} /><Route path="/admin/:rest*" component={RoutedApp} /><Route component={NotFound} /></Switch>;
 }
 
 function App() {
