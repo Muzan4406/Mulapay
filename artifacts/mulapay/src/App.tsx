@@ -144,6 +144,9 @@ const landingSecurityItems = [
   { icon: ListFilter, title: 'Journalisation des opérations', copy: 'Un historique pour garder le contexte.' },
 ];
 
+const dashboardIcon = (name: string) => `${import.meta.env.BASE_URL}dashboard-icons/${name}`;
+type NavItem = { href: string; label: string; icon: typeof LayoutDashboard; image?: string };
+
 const backgroundLogoPositions = [
   ['3%', '5%'], ['16%', '8%'], ['32%', '4%'], ['51%', '7%'], ['73%', '5%'], ['91%', '10%'],
   ['8%', '18%'], ['23%', '22%'], ['42%', '17%'], ['66%', '20%'], ['84%', '24%'], ['97%', '18%'],
@@ -238,24 +241,23 @@ function Landing() {
   </div>;
 }
 
-const userNav = [
+const userNav: NavItem[] = [
   { href: '/app', label: 'Vue d’ensemble', icon: LayoutDashboard },
-  { href: '/app/wallets', label: 'Wallets', icon: WalletCards },
-  { href: '/app/deposit', label: 'Dépôt', icon: ArrowDownLeft },
-  { href: '/app/withdrawal', label: 'Retrait', icon: ArrowUpRight },
-  { href: '/app/transactions', label: 'Transactions', icon: ListFilter },
+  { href: '/app/wallets', label: 'Wallets', icon: WalletCards, image: 'wallet.png' },
+  { href: '/app/deposit', label: 'Dépôt', icon: ArrowDownLeft, image: 'deposit.png' },
+  { href: '/app/withdrawal', label: 'Retrait', icon: ArrowUpRight, image: 'wallet.png' },
+  { href: '/app/transactions', label: 'Transactions', icon: ListFilter, image: 'transactions.png' },
   { href: '/app/transfer', label: 'Envoyer de l’argent', icon: Send },
-  { href: '/app/receive', label: 'Recevoir', icon: ArrowDownLeft },
   { href: '/app/exchange', label: 'Échanger', icon: RefreshCw },
-  { href: '/app/payments', label: 'Paiements', icon: Banknote },
-  { href: '/app/payment-links', label: 'Liens de paiement', icon: Link2 },
+  { href: '/app/payments', label: 'Paiements', icon: Banknote, image: 'wallet.png' },
+  { href: '/app/payment-links', label: 'Liens de paiement', icon: Link2, image: 'payment-links.png' },
   { href: '/app/qr', label: 'QR Code', icon: QrCode },
 ];
-const adminNav = [
+const adminNav: NavItem[] = [
   { href: '/admin', label: 'Opérations', icon: LayoutDashboard },
-  { href: '/admin/kyc', label: 'Revue KYC', icon: FileCheck2 },
+  { href: '/admin/kyc', label: 'Revue KYC', icon: FileCheck2, image: 'kyc.png' },
   { href: '/admin/exchanges', label: 'File des échanges', icon: RefreshCw },
-  { href: '/admin/transactions', label: 'Transactions', icon: ListFilter },
+  { href: '/admin/transactions', label: 'Transactions', icon: ListFilter, image: 'transactions.png' },
 ];
 
 function Shell({ children, admin = false, onNotifications }: { children: ReactNode; admin?: boolean; onNotifications: () => void }) {
@@ -280,8 +282,8 @@ function Shell({ children, admin = false, onNotifications }: { children: ReactNo
     }}>
       <Link href={admin ? '/admin' : '/app'}><Logo light /></Link>
       <div className="side-label">{admin ? 'Bureau des opérations' : 'Votre Mulapay'}</div>
-      <nav className="nav-list">{nav.map(item => { const Icon = item.icon; return <Link key={item.href} href={item.href} className={`nav-link ${location === item.href ? 'active' : ''}`} data-testid={`link-nav-${item.label.toLowerCase().replaceAll(' ', '-')}`}><Icon className="nav-icon" /><span>{item.label}</span></Link>; })}</nav>
-      {!admin && <><div className="side-label" style={{ marginTop: 30 }}>Compte</div><nav className="nav-list"><Link href="/app/api" className={`nav-link ${location === '/app/api' ? 'active' : ''}`} data-testid="link-nav-api"><Settings2 className="nav-icon" /><span>API partenaire</span></Link><Link href="/app/documents" className={`nav-link ${location === '/app/documents' ? 'active' : ''}`} data-testid="link-nav-documents"><FileCheck2 className="nav-icon" /><span>Documents</span></Link><Link href="/app/notifications" className={`nav-link ${location === '/app/notifications' ? 'active' : ''}`} data-testid="link-nav-notifications"><Bell className="nav-icon" /><span>Notifications</span></Link><Link href="/app/kyc" className={`nav-link ${location === '/app/kyc' ? 'active' : ''}`} data-testid="link-nav-verification"><ShieldCheck className="nav-icon" /><span>Vérification KYC</span></Link><Link href="/app/security" className={`nav-link ${location === '/app/security' ? 'active' : ''}`} data-testid="link-nav-security"><LockKeyhole className="nav-icon" /><span>Sécurité</span></Link><Link href="/app/settings" className={`nav-link ${location === '/app/settings' ? 'active' : ''}`} data-testid="link-nav-settings"><Settings2 className="nav-icon" /><span>Profil</span></Link><Link href="/app/support" className={`nav-link ${location === '/app/support' ? 'active' : ''}`} data-testid="link-nav-support"><Info className="nav-icon" /><span>Support</span></Link></nav></>}
+      <nav className="nav-list">{nav.map(item => { const Icon = item.icon; return <Link key={item.href} href={item.href} className={`nav-link ${location === item.href ? 'active' : ''}`} data-testid={`link-nav-${item.label.toLowerCase().replaceAll(' ', '-')}`}>{item.image ? <img className="nav-image" src={dashboardIcon(item.image)} alt="" /> : <Icon className="nav-icon" />}<span>{item.label}</span></Link>; })}</nav>
+      {!admin && <><div className="side-label" style={{ marginTop: 30 }}>Compte</div><nav className="nav-list"><Link href="/app/api" className={`nav-link ${location === '/app/api' ? 'active' : ''}`} data-testid="link-nav-api"><Settings2 className="nav-icon" /><span>API partenaire</span></Link><Link href="/app/documents" className={`nav-link ${location === '/app/documents' ? 'active' : ''}`} data-testid="link-nav-documents"><img className="nav-image" src={dashboardIcon('documents.png')} alt="" /><span>Documents</span></Link><Link href="/app/notifications" className={`nav-link ${location === '/app/notifications' ? 'active' : ''}`} data-testid="link-nav-notifications"><img className="nav-image" src={dashboardIcon('notifications.png')} alt="" /><span>Notifications</span></Link><Link href="/app/kyc" className={`nav-link ${location === '/app/kyc' ? 'active' : ''}`} data-testid="link-nav-verification"><img className="nav-image" src={dashboardIcon('kyc.png')} alt="" /><span>Vérification KYC</span></Link><Link href="/app/security" className={`nav-link ${location === '/app/security' ? 'active' : ''}`} data-testid="link-nav-security"><LockKeyhole className="nav-icon" /><span>Sécurité</span></Link><Link href="/app/settings" className={`nav-link ${location === '/app/settings' ? 'active' : ''}`} data-testid="link-nav-settings"><img className="nav-image" src={dashboardIcon('profile.png')} alt="" /><span>Profil</span></Link><Link href="/app/support" className={`nav-link ${location === '/app/support' ? 'active' : ''}`} data-testid="link-nav-support"><img className="nav-image" src={dashboardIcon('support.png')} alt="" /><span>Support</span></Link></nav></>}
       <div className="side-footer"><div className="demo-chip"><span className="demo-dot" /><span><strong style={{ color: 'hsl(160 42% 64%)' }}>Compte sécurisé</strong><br />Vos opérations sont persistées et auditées.</span></div></div>
     </aside>
     {mobileMenuOpen && <button className="mobile-menu-backdrop" aria-label="Fermer le menu" onClick={() => setMobileMenuOpen(false)} />}
@@ -302,7 +304,7 @@ function Overview() {
   const { wallets, transactions, profile } = useStore();
   const total = wallets.reduce((sum, item) => sum + (item.status === 'Active' ? item.balance : 0), 0);
   return <main className="page-wrap"><PageIntro eyebrow="Espace financier sécurisé" title={`Bonjour, ${profile.firstName}.`} />
-    <div className="dashboard-grid"><div><div className="card balance-hero card-pad"><div className="eyebrow" style={{ color: 'hsl(160 42% 64%)' }}>total des wallets actifs</div><div className="hero-balance">{money(total).replace('XOF', '')}<small>XOF</small></div><div className="hero-caption">Solde confirmé sur vos wallets actifs</div><div className="hero-footer"><Link href="/app/wallets" className="button button-amber" data-testid="button-view-wallets">Voir les wallets <ChevronRight size={14} /></Link><Link href="/app/deposit" className="button button-ghost" data-testid="button-overview-deposit"><ArrowDownLeft size={14} /> Déposer</Link><Link href="/app/withdrawal" className="button button-ghost" data-testid="button-overview-withdrawal"><ArrowUpRight size={14} /> Retirer</Link></div></div></div>
+    <div className="dashboard-grid"><div><div className="card balance-hero card-pad"><div className="eyebrow" style={{ color: 'hsl(160 42% 64%)' }}>total des wallets actifs</div><div className="hero-balance">{money(total).replace('XOF', '')}<small>XOF</small></div><div className="hero-caption">Solde confirmé sur vos wallets actifs</div><div className="hero-footer"><Link href="/app/wallets" className="button button-amber" data-testid="button-view-wallets"><img className="dashboard-action-icon" src={dashboardIcon('wallet.png')} alt="" /> Voir les wallets</Link><Link href="/app/deposit" className="button button-ghost" data-testid="button-overview-deposit"><img className="dashboard-action-icon" src={dashboardIcon('deposit.png')} alt="" /> Déposer</Link><Link href="/app/withdrawal" className="button button-ghost" data-testid="button-overview-withdrawal"><img className="dashboard-action-icon" src={dashboardIcon('wallet.png')} alt="" /> Retirer</Link></div></div></div>
       <div className="card card-pad"><div className="section-head" style={{ marginBottom: 4 }}><div><h2 className="section-title">Activité récente</h2><p className="section-note">Vos derniers mouvements</p></div><Link href="/app/transactions" className="eyebrow" data-testid="link-overview-transactions">Tout voir</Link></div>{transactions.slice(0, 4).map(t => <TransactionRow key={t.id} transaction={t} />)}</div>
     </div>
   </main>;
@@ -310,8 +312,9 @@ function Overview() {
 
 function TransactionRow({ transaction }: { transaction: Transaction }) {
   const Icon = transaction.type === 'Received' ? ArrowDownLeft : transaction.type === 'Sent' ? ArrowUpRight : transaction.type === 'Exchange' ? ArrowRightLeft : Banknote;
+  const transactionImage = transaction.type === 'Deposit' ? 'deposit.png' : transaction.type === 'Withdrawal' ? 'wallet.png' : transaction.type === 'Payment' ? 'payment-links.png' : undefined;
   const positive = transaction.type === 'Received' || transaction.type === 'Deposit';
-  return <div className="activity-row" data-testid={`row-transaction-${transaction.id}`}><div className="activity-main"><div className="activity-icon"><Icon size={15} /></div><div><div className="activity-name">{counterpartyLabel(transaction.counterparty)}</div><div className="activity-meta">{movementLabel(transaction.type)} · {dateLabel(transaction.createdAt)}</div></div></div><div style={{ textAlign: 'right' }}><div className={`amount ${positive ? 'positive' : 'negative'}`}>{positive ? '+' : '-'}{new Intl.NumberFormat('fr-FR').format(transaction.amount)} {transaction.currency}</div><div style={{ marginTop: 5 }}><span className={`pill ${transaction.status === 'Completed' ? 'pill-success' : 'pill-pending'}`}>{statusLabel(transaction.status)}</span></div></div></div>;
+  return <div className="activity-row" data-testid={`row-transaction-${transaction.id}`}><div className="activity-main"><div className="activity-icon">{transactionImage ? <img className="activity-image" src={dashboardIcon(transactionImage)} alt="" /> : <Icon size={15} />}</div><div><div className="activity-name">{counterpartyLabel(transaction.counterparty)}</div><div className="activity-meta">{movementLabel(transaction.type)} · {dateLabel(transaction.createdAt)}</div></div></div><div style={{ textAlign: 'right' }}><div className={`amount ${positive ? 'positive' : 'negative'}`}>{positive ? '+' : '-'}{new Intl.NumberFormat('fr-FR').format(transaction.amount)} {transaction.currency}</div><div style={{ marginTop: 5 }}><span className={`pill ${transaction.status === 'Completed' ? 'pill-success' : 'pill-pending'}`}>{statusLabel(transaction.status)}</span></div></div></div>;
 }
 
 function Wallets() {
