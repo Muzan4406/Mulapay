@@ -184,6 +184,18 @@ h1,h2,h3,p { margin:0; }
 .country-select > img { position:absolute; left:12px; z-index:1; width:29px; height:29px; border-radius:50%; object-fit:cover; pointer-events:none; }
 .country-select select { width:100%; padding-left:52px; padding-right:42px; appearance:none; cursor:pointer; }
 .country-select-chevron { position:absolute; right:13px; color:hsl(var(--muted-foreground)); pointer-events:none; }
+.wallet-availability { display:flex; align-items:center; gap:7px; margin-top:8px; padding:9px 10px; border-radius:9px; background:hsl(var(--secondary) / .7); color:hsl(var(--muted-foreground)); font-size:11px; }
+.wallet-availability svg { color:hsl(var(--primary)); flex:0 0 auto; }
+.wallet-availability strong { margin-left:auto; color:hsl(var(--foreground)); font-family:var(--font-mono); font-size:11px; white-space:nowrap; }
+.fee-options { display:grid; gap:8px; }
+.fee-option { position:relative; display:flex; align-items:center; gap:10px; padding:11px 12px; border:1px solid hsl(var(--border)); border-radius:10px; background:hsl(42 44% 99%); cursor:pointer; transition:border .2s, background .2s, box-shadow .2s; }
+.fee-option:hover { border-color:hsl(var(--primary) / .55); }
+.fee-option.selected { border-color:hsl(var(--primary)); background:hsl(160 42% 38% / .07); box-shadow:0 0 0 2px hsl(var(--primary) / .12); }
+.fee-option input { position:absolute; opacity:0; pointer-events:none; }
+.fee-option span { display:grid; gap:3px; flex:1; }
+.fee-option strong { font-size:11px; }
+.fee-option small { color:hsl(var(--muted-foreground)); font-size:10px; line-height:1.35; }
+.fee-option > svg { color:hsl(var(--primary)); flex:0 0 auto; }
 .mobile-money-options { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:9px; }
 .mobile-money-option { min-height:74px; display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid hsl(var(--border)); border-radius:10px; background:hsl(42 44% 99%); cursor:pointer; transition:border .2s, background .2s, box-shadow .2s; }
 .mobile-money-option:hover { border-color:hsl(var(--primary) / .55); }

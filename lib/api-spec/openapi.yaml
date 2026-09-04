@@ -424,6 +424,11 @@ components:
       properties:
         walletId: { type: string }
         amount: { type: number, exclusiveMinimum: 0 }
+        method: { type: string, enum: [mobile_money] }
+        country: { type: string }
+        operator: { type: string }
+        phone: { type: string }
+        feePayer: { type: string, enum: [sender, recipient] }
     KycInput:
       type: object
       required: [country, documents]
