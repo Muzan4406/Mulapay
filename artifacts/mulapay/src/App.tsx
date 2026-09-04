@@ -98,12 +98,12 @@ function Logo({ light = false }: { light?: boolean }) {
 }
 
 const mobileMoneyProviders = [
-  { name: 'Airtel Money', country: 'Régional', src: 'airtel-money.png' },
-  { name: 'Wave', country: 'Régional', src: 'wave.png' },
-  { name: 'MTN MoMo', country: 'Régional', src: 'mtn-momo.png' },
-  { name: 'Mixx by Yas', country: 'Togo', src: 'mixx.png' },
-  { name: 'Orange Money', country: 'Régional', src: 'orange-money.png' },
-  { name: 'Moov Money', country: 'Régional', src: 'moov-money.png' },
+  { name: 'Airtel Money', country: 'Régional', src: 'airtel-money_no_bg.png' },
+  { name: 'Wave', country: 'Régional', src: 'wave_no_bg.png' },
+  { name: 'MTN MoMo', country: 'Régional', src: 'mtn-momo_no_bg.png' },
+  { name: 'Mixx by Yas', country: 'Togo', src: 'mixx_no_bg.png' },
+  { name: 'Orange Money', country: 'Régional', src: 'orange-money_no_bg.png' },
+  { name: 'Moov Money', country: 'Régional', src: 'moov-money_no_bg.png' },
 ];
 
 const landingCountries = [
@@ -117,13 +117,13 @@ const landingCountries = [
 ];
 
 const mobileMoneyCountryOptions = [
-  { country: 'Togo', flag: '🇹🇬', dialCode: '+228', operators: [{ name: 'Mixx by Yas', src: 'mixx.png' }, { name: 'Moov Money', src: 'moov-money.png' }] },
-  { country: 'Bénin', flag: '🇧🇯', dialCode: '+229', operators: [{ name: 'MTN MoMo', src: 'mtn-momo.png' }, { name: 'Moov Money', src: 'moov-money.png' }] },
-  { country: 'Côte d’Ivoire', flag: '🇨🇮', dialCode: '+225', operators: [{ name: 'Orange Money', src: 'orange-money.png' }, { name: 'MTN MoMo', src: 'mtn-momo.png' }, { name: 'Moov Money', src: 'moov-money.png' }, { name: 'Wave', src: 'wave.png' }] },
-  { country: 'Burkina Faso', flag: '🇧🇫', dialCode: '+226', operators: [{ name: 'Orange Money', src: 'orange-money.png' }, { name: 'Moov Money', src: 'moov-money.png' }, { name: 'Airtel Money', src: 'airtel-money.png' }] },
-  { country: 'Sénégal', flag: '🇸🇳', dialCode: '+221', operators: [{ name: 'Wave', src: 'wave.png' }, { name: 'Orange Money', src: 'orange-money.png' }] },
-  { country: 'Mali', flag: '🇲🇱', dialCode: '+223', operators: [{ name: 'Orange Money', src: 'orange-money.png' }, { name: 'Moov Money', src: 'moov-money.png' }, { name: 'Airtel Money', src: 'airtel-money.png' }] },
-  { country: 'Niger', flag: '🇳🇪', dialCode: '+227', operators: [{ name: 'Airtel Money', src: 'airtel-money.png' }, { name: 'Moov Money', src: 'moov-money.png' }, { name: 'Orange Money', src: 'orange-money.png' }] },
+  { country: 'Togo', flag: '🇹🇬', dialCode: '+228', operators: [{ name: 'Mixx by Yas', src: 'mixx_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }] },
+  { country: 'Bénin', flag: '🇧🇯', dialCode: '+229', operators: [{ name: 'MTN MoMo', src: 'mtn-momo_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }] },
+  { country: 'Côte d’Ivoire', flag: '🇨🇮', dialCode: '+225', operators: [{ name: 'Orange Money', src: 'orange-money_no_bg.png' }, { name: 'MTN MoMo', src: 'mtn-momo_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }, { name: 'Wave', src: 'wave_no_bg.png' }] },
+  { country: 'Burkina Faso', flag: '🇧🇫', dialCode: '+226', operators: [{ name: 'Orange Money', src: 'orange-money_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }, { name: 'Airtel Money', src: 'airtel-money_no_bg.png' }] },
+  { country: 'Sénégal', flag: '🇸🇳', dialCode: '+221', operators: [{ name: 'Wave', src: 'wave_no_bg.png' }, { name: 'Orange Money', src: 'orange-money_no_bg.png' }] },
+  { country: 'Mali', flag: '🇲🇱', dialCode: '+223', operators: [{ name: 'Orange Money', src: 'orange-money_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }, { name: 'Airtel Money', src: 'airtel-money_no_bg.png' }] },
+  { country: 'Niger', flag: '🇳🇪', dialCode: '+227', operators: [{ name: 'Airtel Money', src: 'airtel-money_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }, { name: 'Orange Money', src: 'orange-money_no_bg.png' }] },
 ];
 
 const landingFeatures = [
