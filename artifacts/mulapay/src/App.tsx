@@ -1,4 +1,4 @@
-import { createContext, type FormEvent, type ReactNode, useContext, useState } from 'react';
+import { createContext, type FormEvent, type ReactNode, useContext, useEffect, useState } from 'react';
 import {
   Activity, ArrowDownLeft, ArrowRightLeft, ArrowUpRight, Banknote, Bell, Check, CheckCircle2,
   ChevronRight, CircleAlert, Clock3, Copy, Download, Eye, FileCheck2, Globe2, Info, LayoutDashboard,
@@ -250,19 +250,26 @@ const adminNav = [
 
 function Shell({ children, admin = false, onNotifications }: { children: ReactNode; admin?: boolean; onNotifications: () => void }) {
   const [location, setLocation] = useLocation();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const nav = admin ? adminNav : userNav;
   const unread = useStore().notifications.filter(n => !n.read).length;
   const current = nav.find(item => item.href === location)?.label || (location === '/app/kyc' ? 'Vérification KYC' : location === '/app/settings' ? 'Profil' : admin ? 'Opérations' : 'Vue d’ensemble');
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [location, admin]);
   return <div className="app-shell">
-    <aside className="side-rail">
+    <aside id="mobile-navigation" className={`side-rail ${mobileMenuOpen ? 'mobile-open' : ''}`} onClick={event => {
+      if ((event.target as HTMLElement).closest('a')) setMobileMenuOpen(false);
+    }}>
       <Link href={admin ? '/admin' : '/app'}><Logo light /></Link>
       <div className="side-label">{admin ? 'Bureau des opérations' : 'Votre Mulapay'}</div>
       <nav className="nav-list">{nav.map(item => { const Icon = item.icon; return <Link key={item.href} href={item.href} className={`nav-link ${location === item.href ? 'active' : ''}`} data-testid={`link-nav-${item.label.toLowerCase().replaceAll(' ', '-')}`}><Icon className="nav-icon" /><span>{item.label}</span></Link>; })}</nav>
       {!admin && <><div className="side-label" style={{ marginTop: 30 }}>Compte</div><nav className="nav-list"><Link href="/app/api" className={`nav-link ${location === '/app/api' ? 'active' : ''}`} data-testid="link-nav-api"><Settings2 className="nav-icon" /><span>API partenaire</span></Link><Link href="/app/documents" className={`nav-link ${location === '/app/documents' ? 'active' : ''}`} data-testid="link-nav-documents"><FileCheck2 className="nav-icon" /><span>Documents</span></Link><Link href="/app/notifications" className={`nav-link ${location === '/app/notifications' ? 'active' : ''}`} data-testid="link-nav-notifications"><Bell className="nav-icon" /><span>Notifications</span></Link><Link href="/app/kyc" className={`nav-link ${location === '/app/kyc' ? 'active' : ''}`} data-testid="link-nav-verification"><ShieldCheck className="nav-icon" /><span>Vérification KYC</span></Link><Link href="/app/security" className={`nav-link ${location === '/app/security' ? 'active' : ''}`} data-testid="link-nav-security"><LockKeyhole className="nav-icon" /><span>Sécurité</span></Link><Link href="/app/settings" className={`nav-link ${location === '/app/settings' ? 'active' : ''}`} data-testid="link-nav-settings"><Settings2 className="nav-icon" /><span>Profil</span></Link><Link href="/app/support" className={`nav-link ${location === '/app/support' ? 'active' : ''}`} data-testid="link-nav-support"><Info className="nav-icon" /><span>Support</span></Link></nav></>}
       <div className="side-footer"><div className="demo-chip"><span className="demo-dot" /><span><strong style={{ color: 'hsl(160 42% 64%)' }}>Compte sécurisé</strong><br />Vos opérations sont persistées et auditées.</span></div></div>
     </aside>
+    {mobileMenuOpen && <button className="mobile-menu-backdrop" aria-label="Fermer le menu" onClick={() => setMobileMenuOpen(false)} />}
     <div className="main-pane">
-      <div className="mobile-top"><Link href={admin ? '/admin' : '/app'}><Logo light /></Link><div className="mobile-menu"><button className="icon-button" style={{ background: 'transparent', color: 'inherit', borderColor: 'hsl(205 30% 25%)' }} onClick={() => setLocation(admin ? '/app' : '/admin')} data-testid="button-switch-area"><ArrowRightLeft size={16} /></button><button className="icon-button" style={{ background: 'transparent', color: 'inherit', borderColor: 'hsl(205 30% 25%)' }} data-testid="button-mobile-menu"><Menu size={17} /></button></div></div>
+      <div className="mobile-top"><Link href={admin ? '/admin' : '/app'}><Logo light /></Link><div className="mobile-menu"><button className="icon-button" style={{ background: 'transparent', color: 'inherit', borderColor: 'hsl(205 30% 25%)' }} onClick={() => setLocation(admin ? '/app' : '/admin')} data-testid="button-switch-area"><ArrowRightLeft size={16} /></button><button className="icon-button" style={{ background: 'transparent', color: 'inherit', borderColor: 'hsl(205 30% 25%)' }} aria-label={mobileMenuOpen ? 'Fermer le menu' : 'Ouvrir le menu'} aria-expanded={mobileMenuOpen} aria-controls="mobile-navigation" onClick={() => setMobileMenuOpen(open => !open)} data-testid="button-mobile-menu"><Menu size={17} /></button></div></div>
        {admin && <div className="admin-bar"><span><CircleAlert size={13} style={{ verticalAlign: 'middle', marginRight: 6 }} />Vue opérations · chaque action sensible est journalisée.</span><Link href="/app">Retour à l’espace utilisateur</Link></div>}
       <header className="topbar"><div className="crumb">{admin ? 'Opérations / ' : 'Espace / '}{current}</div><div className="top-actions"><Link href="/app" className="icon-button" title="Espace utilisateur" data-testid="link-top-user-app"><Globe2 size={16} /></Link><button className="icon-button" title="Notifications" onClick={onNotifications} data-testid="button-notifications"><Bell size={16} />{unread > 0 && <span className="notification-dot" />}</button><div className="avatar" data-testid="text-user-avatar">{useStore().profile.firstName.slice(0, 1)}{useStore().profile.lastName.slice(0, 1)}</div></div></header>
       {children}
