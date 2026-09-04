@@ -1,0 +1,1 @@
+- [Mulapay auth and ledger](auth-and-ledger.md) — Clerk sessions front a persisted Drizzle wallet/ledger; development fallback must not reach production.

@@ -1,22 +1,22 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
-  version: 0.1.0
-  description: API specification
+  version: 0.2.0
+  description: Mulapay wallet, ledger, KYC and operations API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
-    description: Health operations
+  - name: wallet
+  - name: operations
+  - name: admin
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
-      summary: Health check
-      description: Returns server health status
+      summary: Returns server health
       responses:
         "200":
           description: Healthy
@@ -24,13 +24,428 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /v1/bootstrap:
+    get:
+      operationId: getBootstrap
+      tags: [wallet]
+      summary: Loads the authenticated Mulapay workspace
+      responses:
+        "200":
+          description: Workspace state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bootstrap"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /v1/transfers:
+    post:
+      operationId: createTransfer
+      tags: [wallet]
+      summary: Sends funds to another Mulapay user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransferInput"
+      responses:
+        "201":
+          description: Transfer created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /v1/exchanges:
+    post:
+      operationId: createExchange
+      tags: [wallet]
+      summary: Requests an inter-wallet exchange
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExchangeInput"
+      responses:
+        "201":
+          description: Exchange request created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationResult"
+  /v1/exchanges/{id}/decision:
+    patch:
+      operationId: decideExchange
+      tags: [admin]
+      summary: Approves or rejects an exchange request
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DecisionInput"
+      responses:
+        "200":
+          description: Decision applied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationResult"
+  /v1/payment-links:
+    post:
+      operationId: createPaymentLink
+      tags: [wallet]
+      summary: Creates a simulated payment link
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentLinkInput"
+      responses:
+        "201":
+          description: Payment link created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentLink"
+    get:
+      operationId: listPaymentLinks
+      tags: [wallet]
+      summary: Lists payment links
+      responses:
+        "200":
+          description: Payment links
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PaymentLink"
+  /v1/deposits/manual:
+    post:
+      operationId: createManualDeposit
+      tags: [wallet]
+      summary: Records a deposit request for manual review
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ManualMoneyInput"
+      responses:
+        "201":
+          description: Deposit request created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationResult"
+  /v1/withdrawals/manual:
+    post:
+      operationId: createManualWithdrawal
+      tags: [wallet]
+      summary: Records a withdrawal request for manual review
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ManualMoneyInput"
+      responses:
+        "201":
+          description: Withdrawal request created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationResult"
+  /v1/notifications/{id}/read:
+    patch:
+      operationId: markNotificationRead
+      tags: [wallet]
+      summary: Marks a notification as read
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Notification updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationResult"
+  /v1/kyc:
+    post:
+      operationId: submitKyc
+      tags: [wallet]
+      summary: Submits KYC information for review
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/KycInput"
+      responses:
+        "201":
+          description: KYC submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KycVerification"
+  /v1/admin/summary:
+    get:
+      operationId: getAdminSummary
+      tags: [admin]
+      summary: Loads operations summary
+      responses:
+        "200":
+          description: Operations summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSummary"
+  /v1/admin/kyc:
+    get:
+      operationId: listAdminKyc
+      tags: [admin]
+      summary: Lists KYC cases for operations
+      responses:
+        "200":
+          description: KYC cases
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/KycVerification"
+  /v1/admin/kyc/{id}/decision:
+    patch:
+      operationId: decideKyc
+      tags: [admin]
+      summary: Applies a KYC decision
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DecisionInput"
+      responses:
+        "200":
+          description: KYC decision applied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationResult"
+  /v1/admin/transactions:
+    get:
+      operationId: listAdminTransactions
+      tags: [admin]
+      summary: Lists the operations ledger
+      responses:
+        "200":
+          description: Transactions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Transaction"
 components:
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+  responses:
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
-        status:
+        status: { type: string }
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+    Profile:
+      type: object
+      required: [id, firstName, lastName, email, role, country, kycStatus]
+      properties:
+        id: { type: string }
+        firstName: { type: string }
+        lastName: { type: string }
+        email: { type: string }
+        role: { type: string }
+        country: { type: string }
+        kycStatus: { type: string }
+    Wallet:
+      type: object
+      required: [id, country, code, currency, balance, pending, status]
+      properties:
+        id: { type: string }
+        country: { type: string }
+        code: { type: string }
+        currency: { type: string }
+        balance: { type: number }
+        pending: { type: number }
+        status: { type: string }
+    Transaction:
+      type: object
+      required: [id, type, status, amount, currency, country, counterparty, createdAt, reference]
+      properties:
+        id: { type: string }
+        type: { type: string }
+        status: { type: string }
+        amount: { type: number }
+        currency: { type: string }
+        country: { type: string }
+        counterparty: { type: string }
+        createdAt: { type: string }
+        reference: { type: string }
+    Exchange:
+      type: object
+      required: [id, source, destination, amount, rate, receivedAmount, status, requestedAt]
+      properties:
+        id: { type: string }
+        source: { type: string }
+        destination: { type: string }
+        amount: { type: number }
+        rate: { type: number }
+        receivedAmount: { type: number }
+        status: { type: string }
+        requestedAt: { type: string }
+    PaymentLink:
+      type: object
+      required: [id, slug, amount, currency, description, status, expiresAt, payments]
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        amount: { type: number }
+        currency: { type: string }
+        description: { type: string }
+        status: { type: string }
+        expiresAt: { type: string }
+        payments: { type: number }
+    Notification:
+      type: object
+      required: [id, title, body, read]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        body: { type: string }
+        read: { type: boolean }
+    KycVerification:
+      type: object
+      required: [id, userId, name, country, status, documents, submittedAt]
+      properties:
+        id: { type: string }
+        userId: { type: string }
+        name: { type: string }
+        country: { type: string }
+        status: { type: string }
+        documents:
+          type: array
+          items: { type: string }
+        submittedAt: { type: string }
+    Bootstrap:
+      type: object
+      required: [profile, wallets, transactions, exchanges, links, notifications, kyc]
+      properties:
+        profile: { $ref: "#/components/schemas/Profile" }
+        wallets:
+          type: array
+          items: { $ref: "#/components/schemas/Wallet" }
+        transactions:
+          type: array
+          items: { $ref: "#/components/schemas/Transaction" }
+        exchanges:
+          type: array
+          items: { $ref: "#/components/schemas/Exchange" }
+        links:
+          type: array
+          items: { $ref: "#/components/schemas/PaymentLink" }
+        notifications:
+          type: array
+          items: { $ref: "#/components/schemas/Notification" }
+        kyc: { $ref: "#/components/schemas/KycVerification" }
+    OperationResult:
+      type: object
+      required: [ok, message]
+      properties:
+        ok: { type: boolean }
+        message: { type: string }
+        reference: { type: ["string", "null"] }
+    TransferInput:
+      type: object
+      required: [amount, currency, counterparty]
+      properties:
+        amount: { type: number, exclusiveMinimum: 0 }
+        currency: { type: string }
+        counterparty: { type: string, minLength: 2 }
+        note: { type: string }
+    ExchangeInput:
+      type: object
+      required: [source, destination, amount]
+      properties:
+        source: { type: string }
+        destination: { type: string }
+        amount: { type: number, exclusiveMinimum: 0 }
+    PaymentLinkInput:
+      type: object
+      required: [amount, currency, description, expiresAt]
+      properties:
+        amount: { type: number, exclusiveMinimum: 0 }
+        currency: { type: string }
+        description: { type: string, minLength: 2 }
+        expiresAt: { type: string }
+    ManualMoneyInput:
+      type: object
+      required: [walletId, amount]
+      properties:
+        walletId: { type: string }
+        amount: { type: number, exclusiveMinimum: 0 }
+    KycInput:
+      type: object
+      required: [country, documents]
+      properties:
+        country: { type: string }
+        documents:
+          type: array
+          minItems: 1
+          items: { type: string }
+    DecisionInput:
+      type: object
+      required: [decision]
+      properties:
+        decision:
           type: string
-      required:
-        - status
-
+          enum: [APPROVED, REJECTED, VERIFIED, REFUSED]
+        reason: { type: string }
+    AdminSummary:
+      type: object
+      required: [kycAwaiting, exchangeQueue, volume, successRate]
+      properties:
+        kycAwaiting: { type: number }
+        exchangeQueue: { type: number }
+        volume: { type: number }
+        successRate: { type: number }
