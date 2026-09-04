@@ -137,6 +137,13 @@ const landingSecurityItems = [
 function Landing() {
   const assetUrl = (file: string) => `${import.meta.env.BASE_URL}mobile-money/${file}`;
   return <div className="landing landing-rich">
+    <div className="landing-background-marquee" aria-hidden="true">
+      <div className="landing-background-row landing-background-row-one">{mobileMoneyProviders.concat(mobileMoneyProviders, mobileMoneyProviders).map((provider, index) => <span className="landing-background-logo" key={`bg-one-${provider.name}-${index}`}><img src={assetUrl(provider.src)} alt="" /></span>)}</div>
+      <div className="landing-background-row landing-background-row-two">{mobileMoneyProviders.concat(mobileMoneyProviders, mobileMoneyProviders).map((provider, index) => <span className="landing-background-logo" key={`bg-two-${provider.name}-${index}`}><img src={assetUrl(provider.src)} alt="" /></span>)}</div>
+      <div className="landing-background-row landing-background-row-three">{mobileMoneyProviders.concat(mobileMoneyProviders, mobileMoneyProviders).map((provider, index) => <span className="landing-background-logo" key={`bg-three-${provider.name}-${index}`}><img src={assetUrl(provider.src)} alt="" /></span>)}</div>
+        <div className="landing-background-row landing-background-row-four">{mobileMoneyProviders.concat(mobileMoneyProviders, mobileMoneyProviders).map((provider, index) => <span className="landing-background-logo" key={`bg-four-${provider.name}-${index}`}><img src={assetUrl(provider.src)} alt="" /></span>)}</div>
+        <div className="landing-background-row landing-background-row-five">{mobileMoneyProviders.concat(mobileMoneyProviders, mobileMoneyProviders).map((provider, index) => <span className="landing-background-logo" key={`bg-five-${provider.name}-${index}`}><img src={assetUrl(provider.src)} alt="" /></span>)}</div>
+    </div>
     <nav className="landing-nav">
       <Logo />
       <div className="landing-nav-links"><a href="#pays">Pays</a><a href="#fonctionnalites">Fonctionnalités</a><a href="#securite">Sécurité</a></div>
@@ -170,10 +177,6 @@ function Landing() {
           </div>
           <div className="hero-float-card hero-float-card-bottom"><span className="float-check"><Check size={14} /></span><span><small>opération vérifiée</small><strong>Historique à jour</strong></span></div>
         </div>
-      </section>
-      <section className="landing-provider-strip" aria-label="Réseaux Mobile Money disponibles dans la région">
-        <div className="landing-provider-heading"><span className="eyebrow">un écosystème connecté</span><strong>Vos moyens de paiement, dans un seul espace.</strong></div>
-        <div className="landing-provider-marquee" aria-hidden="true"><div className="landing-provider-track">{mobileMoneyProviders.concat(mobileMoneyProviders).map((provider, index) => <div className="provider-logo-card" key={`${provider.name}-${index}`} aria-label={provider.name}><img src={assetUrl(provider.src)} alt="" /></div>)}</div></div>
       </section>
       <section className="landing-section landing-countries" id="pays">
         <div className="landing-section-heading"><div><div className="eyebrow">une présence régionale</div><h2>MULAPAY en Afrique de l’Ouest</h2></div><p>Une expérience financière pensée pour les réalités de notre région.</p></div>
