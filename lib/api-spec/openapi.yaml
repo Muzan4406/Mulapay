@@ -100,7 +100,7 @@ paths:
     post:
       operationId: createPaymentLink
       tags: [wallet]
-      summary: Creates a simulated payment link
+      summary: Creates a payment link
       requestBody:
         required: true
         content:
@@ -127,17 +127,17 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/PaymentLink"
-  /v1/deposits/manual:
+  /v1/deposits:
     post:
-      operationId: createManualDeposit
+      operationId: createDeposit
       tags: [wallet]
-      summary: Records a deposit request for manual review
+      summary: Starts a provider-backed deposit
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ManualMoneyInput"
+              $ref: "#/components/schemas/MoneyOperationInput"
       responses:
         "201":
           description: Deposit request created
@@ -145,17 +145,17 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/OperationResult"
-  /v1/withdrawals/manual:
+  /v1/withdrawals:
     post:
-      operationId: createManualWithdrawal
+      operationId: createWithdrawal
       tags: [wallet]
-      summary: Records a withdrawal request for manual review
+      summary: Starts a provider-backed withdrawal
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ManualMoneyInput"
+              $ref: "#/components/schemas/MoneyOperationInput"
       responses:
         "201":
           description: Withdrawal request created
@@ -418,7 +418,7 @@ components:
         currency: { type: string }
         description: { type: string, minLength: 2 }
         expiresAt: { type: string }
-    ManualMoneyInput:
+    MoneyOperationInput:
       type: object
       required: [walletId, amount]
       properties:

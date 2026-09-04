@@ -40,4 +40,13 @@ app.use(
 
 app.use("/api", router);
 
+app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  if (error instanceof Error && error.message === "AUTHENTICATION_REQUIRED") {
+    res.status(401).json({ error: "Authentification requise." });
+    return;
+  }
+  logger.error({ error }, "Unhandled API error");
+  res.status(500).json({ error: "Une erreur interne est survenue." });
+});
+
 export default app;

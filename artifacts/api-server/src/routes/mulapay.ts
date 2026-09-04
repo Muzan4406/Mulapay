@@ -8,8 +8,6 @@ import {
   DecideKycBody,
   DecideKycParams,
   CreateExchangeBody,
-  CreateManualDepositBody,
-  CreateManualWithdrawalBody,
   CreatePaymentLinkBody,
   CreateTransferBody,
   GetBootstrapResponse,
@@ -19,8 +17,6 @@ import {
   CreateTransferResponse,
   CreateExchangeResponse,
   DecideExchangeResponse,
-  CreateManualDepositResponse,
-  CreateManualWithdrawalResponse,
   MarkNotificationReadResponse,
   DecideKycResponse,
 } from "@workspace/api-zod";
@@ -37,6 +33,14 @@ import {
 
 const router: IRouter = Router();
 
+router.use((req, res, next) => {
+  if (!getAuth(req).userId) {
+    res.status(401).json({ error: "Authentification requise." });
+    return;
+  }
+  next();
+});
+
 const COUNTRY_WALLETS = [
   { country: "Togo", code: "TG", currency: "XOF", balance: 482500, pending: 12500 },
   { country: "Bénin", code: "BJ", currency: "XOF", balance: 218000, pending: 0 },
@@ -47,8 +51,6 @@ const COUNTRY_WALLETS = [
   { country: "Niger", code: "NE", currency: "XOF", balance: 0, pending: 0 },
 ];
 
-const DEMO_USER_ID = "demo-admin";
-
 function nowLabel() {
   return new Date().toISOString();
 }
@@ -58,27 +60,22 @@ function reference(prefix: string) {
 }
 
 function currentUserId(req: Request) {
-  try {
-    return getAuth(req).userId ?? DEMO_USER_ID;
-  } catch {
-    return DEMO_USER_ID;
-  }
+  return getAuth(req).userId;
 }
 
 async function ensureUser(req: Request) {
   const id = currentUserId(req);
-  const isDemo = id === DEMO_USER_ID;
-  const role = isDemo || process.env.NODE_ENV !== "production" ? "ADMIN" : "USER";
+  if (!id) throw new Error("AUTHENTICATION_REQUIRED");
   await db
     .insert(users)
     .values({
       id,
-      firstName: isDemo ? "Afi" : "Mulapay",
-      lastName: isDemo ? "Kossi" : "User",
-      email: isDemo ? "admin@mulapay.demo" : `${id}@clerk.user`,
-      role,
+      firstName: "Utilisateur",
+      lastName: "Mulapay",
+      email: `${id}@clerk.user`,
+      role: "USER",
       country: "Togo",
-      kycStatus: "VERIFIE",
+      kycStatus: "NON_VERIFIE",
     })
     .onConflictDoNothing();
 
@@ -92,60 +89,6 @@ async function ensureUser(req: Request) {
         status: wallet.balance > 0 || wallet.country === "Togo" ? "Active" : "Active",
       })),
     );
-    const togoWalletId = `${id}-tg`;
-    const txId = crypto.randomUUID();
-    await db.insert(transactions).values([
-      { id: txId, userId: id, walletId: togoWalletId, type: "Received", status: "Completed", amount: 17500, currency: "XOF", country: "Togo", counterparty: "Afi Kossi", reference: "MP-8K4D2" },
-      { id: crypto.randomUUID(), userId: id, walletId: `${id}-bj`, type: "Exchange", status: "Completed", amount: 75000, currency: "XOF", country: "Bénin", counterparty: "Togo wallet", reference: "MP-8K2A9" },
-      { id: crypto.randomUUID(), userId: id, walletId: `${id}-ci`, type: "Sent", status: "Completed", amount: 32000, currency: "XOF", country: "Côte d’Ivoire", counterparty: "Koffi Mensah", reference: "MP-8J91Q" },
-      { id: crypto.randomUUID(), userId: id, walletId: togoWalletId, type: "Deposit", status: "Pending", amount: 50000, currency: "XOF", country: "Togo", counterparty: "Manual deposit", reference: "MP-8G21B" },
-      { id: crypto.randomUUID(), userId: id, walletId: `${id}-sn`, type: "Payment", status: "Completed", amount: 8900, currency: "XOF", country: "Sénégal", counterparty: "Nia Atelier", reference: "MP-8E75N" },
-    ]);
-    await db.insert(ledgerEntries).values({
-      id: crypto.randomUUID(),
-      userId: id,
-      walletId: togoWalletId,
-      transactionId: txId,
-      entryType: "CREDIT",
-      amount: 17500,
-      currency: "XOF",
-      description: "Received from Afi Kossi",
-    });
-    await db.insert(exchanges).values([
-      { id: crypto.randomUUID(), userId: id, source: "Togo · XOF", destination: "Bénin · XOF", amount: 75000, rate: "1", receivedAmount: 75000, status: "COMPLETED" },
-      { id: `${id}-ex-demo-pending`, userId: id, source: "Côte d’Ivoire · XOF", destination: "Togo · XOF", amount: 48000, rate: "1", receivedAmount: 48000, status: "PENDING_ADMIN" },
-    ]);
-    await db.insert(paymentLinks).values([
-      { id: crypto.randomUUID(), userId: id, slug: "mulapay.me/afi-atelier", amount: 12500, currency: "XOF", description: "Afi Atelier order #184", status: "Active", expiresAt: "2026-06-18", payments: 3 },
-      { id: crypto.randomUUID(), userId: id, slug: "mulapay.me/afi-consult", amount: 30000, currency: "XOF", description: "Consultation deposit", status: "Active", expiresAt: "2026-06-30", payments: 0 },
-    ]);
-    await db.insert(notifications).values([
-      { id: crypto.randomUUID(), userId: id, title: "Exchange request received", body: "Your Côte d’Ivoire to Togo exchange is queued for review.", read: false },
-      { id: crypto.randomUUID(), userId: id, title: "Transfer completed", body: "17,500 XOF was received from Afi Kossi.", read: false },
-      { id: crypto.randomUUID(), userId: id, title: "KYC approved", body: "Your identity check is complete. Your account is verified.", read: true },
-    ]);
-    await db.insert(kycVerifications).values({
-      id: crypto.randomUUID(),
-      userId: id,
-      name: `${isDemo ? "Afi Kossi" : "Mulapay User"}`,
-      country: "Togo",
-      status: "VERIFIE",
-      documents: ["National ID", "Selfie"],
-    });
-  }
-  if (isDemo) {
-    const reviewCases = [
-      { id: "review-mariam", name: "Mariam Traoré", country: "Mali", documents: ["National ID", "Selfie"] },
-      { id: "review-youssouf", name: "Youssouf Diallo", country: "Sénégal", documents: ["Passport", "Proof of address"] },
-      { id: "review-nana", name: "Nana Abena", country: "Burkina Faso", documents: ["National ID", "Selfie"] },
-    ];
-    for (const item of reviewCases) {
-      await db.insert(users).values({ id: item.id, firstName: item.name.split(" ")[0], lastName: item.name.split(" ").slice(1).join(" "), email: `${item.id}@mulapay.demo`, role: "USER", country: item.country, kycStatus: "EN_ATTENTE" }).onConflictDoNothing();
-      const existingCase = await db.query.kycVerifications.findFirst({ where: eq(kycVerifications.userId, item.id) });
-      if (!existingCase) {
-        await db.insert(kycVerifications).values({ id: crypto.randomUUID(), userId: item.id, name: item.name, country: item.country, status: "EN_ATTENTE", documents: item.documents });
-      }
-    }
   }
   return (await db.query.users.findFirst({ where: eq(users.id, id) }))!;
 }
@@ -274,32 +217,12 @@ router.get("/v1/payment-links", async (req, res) => {
   res.json(await db.select().from(paymentLinks).where(eq(paymentLinks.userId, user.id)).orderBy(desc(paymentLinks.createdAt)));
 });
 
-router.post("/v1/deposits/manual", async (req, res) => {
-  const input = CreateManualDepositBody.parse(req.body);
-  const user = await ensureUser(req);
-  const wallet = await db.query.wallets.findFirst({ where: and(eq(wallets.id, input.walletId), eq(wallets.userId, user.id)) });
-  if (!wallet) {
-    res.status(400).json({ error: "Wallet introuvable." });
-    return;
-  }
-  const ref = reference("DEP");
-  await db.insert(transactions).values({ id: crypto.randomUUID(), userId: user.id, walletId: wallet.id, type: "Deposit", status: "Pending", amount: input.amount, currency: wallet.currency, country: wallet.country, counterparty: "Manual deposit", reference: ref });
-  await db.update(wallets).set({ pending: sql`${wallets.pending} + ${input.amount}` }).where(eq(wallets.id, wallet.id));
-  res.status(201).json(CreateManualDepositResponse.parse({ ok: true, message: "Dépôt enregistré en attente de revue manuelle.", reference: ref }));
+router.post("/v1/deposits", async (_req, res) => {
+  res.status(501).json({ error: "Le connecteur Drimpay n’est pas encore configuré. Aucun wallet n’a été crédité." });
 });
 
-router.post("/v1/withdrawals/manual", async (req, res) => {
-  const input = CreateManualWithdrawalBody.parse(req.body);
-  const user = await ensureUser(req);
-  const wallet = await db.query.wallets.findFirst({ where: and(eq(wallets.id, input.walletId), eq(wallets.userId, user.id)) });
-  if (!wallet || wallet.balance < input.amount) {
-    res.status(400).json({ error: "Wallet introuvable ou solde insuffisant." });
-    return;
-  }
-  const ref = reference("WDR");
-  await db.insert(transactions).values({ id: crypto.randomUUID(), userId: user.id, walletId: wallet.id, type: "Withdrawal", status: "Pending", amount: input.amount, currency: wallet.currency, country: wallet.country, counterparty: "Manual withdrawal", reference: ref });
-  await db.update(wallets).set({ balance: sql`${wallets.balance} - ${input.amount}`, pending: sql`${wallets.pending} + ${input.amount}` }).where(eq(wallets.id, wallet.id));
-  res.status(201).json(CreateManualWithdrawalResponse.parse({ ok: true, message: "Retrait enregistré en attente de revue manuelle.", reference: ref }));
+router.post("/v1/withdrawals", async (_req, res) => {
+  res.status(501).json({ error: "Le connecteur Drimpay n’est pas encore configuré. Aucun wallet n’a été débité." });
 });
 
 router.patch("/v1/notifications/:id/read", async (req, res) => {
