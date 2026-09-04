@@ -247,8 +247,8 @@ const userNav: NavItem[] = [
   { href: '/app/deposit', label: 'Dépôt', icon: ArrowDownLeft, image: 'deposit.png' },
   { href: '/app/withdrawal', label: 'Retrait', icon: ArrowUpRight, image: 'wallet.png' },
   { href: '/app/transactions', label: 'Transactions', icon: ListFilter, image: 'transactions.png' },
-  { href: '/app/transfer', label: 'Envoyer de l’argent', icon: Send },
-  { href: '/app/exchange', label: 'Échanger', icon: RefreshCw },
+  { href: '/app/transfer', label: 'Envoyer de l’argent', icon: Send, image: 'transfer.png' },
+  { href: '/app/exchange', label: 'Échanger', icon: RefreshCw, image: 'exchange.png' },
   { href: '/app/payments', label: 'Paiements', icon: Banknote, image: 'wallet.png' },
   { href: '/app/payment-links', label: 'Liens de paiement', icon: Link2, image: 'payment-links.png' },
   { href: '/app/qr', label: 'QR Code', icon: QrCode },
@@ -283,7 +283,7 @@ function Shell({ children, admin = false, onNotifications }: { children: ReactNo
       <Link href={admin ? '/admin' : '/app'}><Logo light /></Link>
       <div className="side-label">{admin ? 'Bureau des opérations' : 'Votre Mulapay'}</div>
       <nav className="nav-list">{nav.map(item => { const Icon = item.icon; return <Link key={item.href} href={item.href} className={`nav-link ${location === item.href ? 'active' : ''}`} data-testid={`link-nav-${item.label.toLowerCase().replaceAll(' ', '-')}`}>{item.image ? <img className="nav-image" src={dashboardIcon(item.image)} alt="" /> : <Icon className="nav-icon" />}<span>{item.label}</span></Link>; })}</nav>
-      {!admin && <><div className="side-label" style={{ marginTop: 30 }}>Compte</div><nav className="nav-list"><Link href="/app/api" className={`nav-link ${location === '/app/api' ? 'active' : ''}`} data-testid="link-nav-api"><Settings2 className="nav-icon" /><span>API partenaire</span></Link><Link href="/app/documents" className={`nav-link ${location === '/app/documents' ? 'active' : ''}`} data-testid="link-nav-documents"><img className="nav-image" src={dashboardIcon('documents.png')} alt="" /><span>Documents</span></Link><Link href="/app/notifications" className={`nav-link ${location === '/app/notifications' ? 'active' : ''}`} data-testid="link-nav-notifications"><img className="nav-image" src={dashboardIcon('notifications.png')} alt="" /><span>Notifications</span></Link><Link href="/app/kyc" className={`nav-link ${location === '/app/kyc' ? 'active' : ''}`} data-testid="link-nav-verification"><img className="nav-image" src={dashboardIcon('kyc.png')} alt="" /><span>Vérification KYC</span></Link><Link href="/app/security" className={`nav-link ${location === '/app/security' ? 'active' : ''}`} data-testid="link-nav-security"><LockKeyhole className="nav-icon" /><span>Sécurité</span></Link><Link href="/app/settings" className={`nav-link ${location === '/app/settings' ? 'active' : ''}`} data-testid="link-nav-settings"><img className="nav-image" src={dashboardIcon('profile.png')} alt="" /><span>Profil</span></Link><Link href="/app/support" className={`nav-link ${location === '/app/support' ? 'active' : ''}`} data-testid="link-nav-support"><img className="nav-image" src={dashboardIcon('support.png')} alt="" /><span>Support</span></Link></nav></>}
+      {!admin && <><div className="side-label" style={{ marginTop: 30 }}>Compte</div><nav className="nav-list"><Link href="/app/api" className={`nav-link ${location === '/app/api' ? 'active' : ''}`} data-testid="link-nav-api"><img className="nav-image" src={dashboardIcon('api.png')} alt="" /><span>API partenaire</span></Link><Link href="/app/documents" className={`nav-link ${location === '/app/documents' ? 'active' : ''}`} data-testid="link-nav-documents"><img className="nav-image" src={dashboardIcon('documents.png')} alt="" /><span>Documents</span></Link><Link href="/app/notifications" className={`nav-link ${location === '/app/notifications' ? 'active' : ''}`} data-testid="link-nav-notifications"><img className="nav-image" src={dashboardIcon('notifications.png')} alt="" /><span>Notifications</span></Link><Link href="/app/kyc" className={`nav-link ${location === '/app/kyc' ? 'active' : ''}`} data-testid="link-nav-verification"><img className="nav-image" src={dashboardIcon('kyc.png')} alt="" /><span>Vérification KYC</span></Link><Link href="/app/security" className={`nav-link ${location === '/app/security' ? 'active' : ''}`} data-testid="link-nav-security"><img className="nav-image" src={dashboardIcon('security.png')} alt="" /><span>Sécurité</span></Link><Link href="/app/settings" className={`nav-link ${location === '/app/settings' ? 'active' : ''}`} data-testid="link-nav-settings"><img className="nav-image" src={dashboardIcon('profile.png')} alt="" /><span>Profil</span></Link><Link href="/app/support" className={`nav-link ${location === '/app/support' ? 'active' : ''}`} data-testid="link-nav-support"><img className="nav-image" src={dashboardIcon('support.png')} alt="" /><span>Support</span></Link></nav></>}
       <div className="side-footer"><div className="demo-chip"><span className="demo-dot" /><span><strong style={{ color: 'hsl(160 42% 64%)' }}>Compte sécurisé</strong><br />Vos opérations sont persistées et auditées.</span></div></div>
     </aside>
     {mobileMenuOpen && <button className="mobile-menu-backdrop" aria-label="Fermer le menu" onClick={() => setMobileMenuOpen(false)} />}
@@ -373,11 +373,12 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
       <form className="card card-pad deposit-form" onSubmit={submit}>
         <div className="field">
           <label htmlFor="deposit-country">Pays</label>
-          <div className="country-options" role="radiogroup" aria-label="Choisir un pays">
+          <div className="country-options country-list-options" role="radiogroup" aria-label="Choisir un pays">
             {mobileMoneyCountryOptions.map(option => <label className={`country-option ${country === option.country ? 'selected' : ''}`} key={option.country}>
               <input type="radio" name="deposit-country" value={option.country} checked={country === option.country} onChange={event => setCountry(event.target.value)} required />
               <img src={`${import.meta.env.BASE_URL}countries/${option.flagSrc}`} alt="" />
-              <span>{option.country}</span>
+              <span className="country-option-copy"><strong>{option.country}</strong><small>{option.dialCode}</small></span>
+              <ChevronRight size={14} aria-hidden="true" />
             </label>)}
           </div>
         </div>
