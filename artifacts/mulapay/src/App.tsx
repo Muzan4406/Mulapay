@@ -148,7 +148,7 @@ function Landing() {
   const assetUrl = (file: string) => `${import.meta.env.BASE_URL}mobile-money/${file}`;
   return <div className="landing landing-rich">
     <div className="landing-background-marquee" aria-hidden="true">
-      {mobileMoneyProviders.concat(mobileMoneyProviders, mobileMoneyProviders, mobileMoneyProviders, mobileMoneyProviders, mobileMoneyProviders, mobileMoneyProviders, mobileMoneyProviders).map((provider, index) => {
+      {mobileMoneyProviders.concat(mobileMoneyProviders, mobileMoneyProviders, mobileMoneyProviders, mobileMoneyProviders, mobileMoneyProviders).map((provider, index) => {
         const position = backgroundLogoPositions[index % backgroundLogoPositions.length];
         return <span className="landing-background-logo" key={`background-logo-${provider.name}-${index}`} style={{ left: position[0], top: position[1], animationDelay: `${(index % 9) * -1.1}s` }}><img src={assetUrl(provider.src)} alt="" /></span>;
       })}
@@ -183,6 +183,9 @@ function Landing() {
               <div className="phone-activity"><span className="phone-activity-icon"><ArrowUpRight size={12} /></span><span><strong>Transfert</strong><small>Il y a quelques instants</small></span><b>••••</b></div>
               <div className="phone-bottom-nav"><span className="active"><LayoutDashboard size={14} />Accueil</span><span><WalletCards size={14} />Wallets</span><span><QrCode size={14} />Payer</span><span><Menu size={14} />Plus</span></div>
             </div></div>
+          </div>
+          <div className="hero-money-marquee" aria-label="Réseaux Mobile Money">
+            <div className="hero-money-track">{mobileMoneyProviders.concat(mobileMoneyProviders).map((provider, index) => <span className="hero-money-item" key={`hero-money-${provider.name}-${index}`}><span className="hero-money-logo"><img src={assetUrl(provider.src)} alt={provider.name} /></span><small>{provider.name}</small></span>)}</div>
           </div>
           <div className="hero-float-card hero-float-card-bottom"><span className="float-check"><Check size={14} /></span><span><small>opération vérifiée</small><strong>Historique à jour</strong></span></div>
         </div>
