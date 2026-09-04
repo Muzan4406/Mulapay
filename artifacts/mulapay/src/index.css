@@ -472,6 +472,14 @@ h1,h2,h3,p { margin:0; }
 @media (prefers-reduced-motion: reduce) {
   .landing-provider-track { animation-play-state:paused; }
 }
+
+/* Replace the previous horizontal rows with a scattered field of small logos. */
+.landing-rich > .landing-background-marquee { display:block; }
+.landing-rich .landing-background-logo { position:absolute; margin:0; animation:background-logo-float 8s ease-in-out infinite; }
+@keyframes background-logo-float {
+  0%, 100% { transform:translate3d(0, 0, 0) rotate(-4deg); }
+  50% { transform:translate3d(0, -9px, 0) rotate(4deg); }
+}
 .auth-heading p { color:hsl(var(--muted-foreground)); line-height:1.55; font-size:13px; max-width:390px; }
 .demo-credentials { background:hsl(39 78% 89% / .5); border:1px solid hsl(39 46% 73%); border-radius:11px; padding:13px 14px; margin-bottom:19px; }
 .demo-credentials-label { display:flex; align-items:center; gap:7px; color:hsl(34 68% 35%); font-family:var(--font-mono); text-transform:uppercase; letter-spacing:.08em; font-size:9px; font-weight:700; margin-bottom:11px; }

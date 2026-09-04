@@ -134,18 +134,24 @@ const landingSecurityItems = [
   { icon: ListFilter, title: 'Journalisation des opérations', copy: 'Un historique pour garder le contexte.' },
 ];
 
+const backgroundLogoPositions = [
+  ['3%', '5%'], ['16%', '8%'], ['32%', '4%'], ['51%', '7%'], ['73%', '5%'], ['91%', '10%'],
+  ['8%', '18%'], ['23%', '22%'], ['42%', '17%'], ['66%', '20%'], ['84%', '24%'], ['97%', '18%'],
+  ['2%', '34%'], ['18%', '31%'], ['36%', '37%'], ['57%', '33%'], ['77%', '36%'], ['94%', '31%'],
+  ['10%', '48%'], ['28%', '44%'], ['48%', '51%'], ['69%', '46%'], ['88%', '49%'], ['100%', '43%'],
+  ['4%', '63%'], ['21%', '67%'], ['40%', '61%'], ['61%', '65%'], ['81%', '60%'], ['96%', '69%'],
+  ['13%', '79%'], ['31%', '75%'], ['52%', '82%'], ['73%', '77%'], ['90%', '84%'], ['1%', '91%'],
+  ['19%', '94%'], ['43%', '91%'], ['64%', '96%'], ['84%', '92%'],
+] as const;
+
 function Landing() {
   const assetUrl = (file: string) => `${import.meta.env.BASE_URL}mobile-money/${file}`;
   return <div className="landing landing-rich">
     <div className="landing-background-marquee" aria-hidden="true">
-      <div className="landing-background-row landing-background-row-one">{mobileMoneyProviders.concat(mobileMoneyProviders, mobileMoneyProviders, mobileMoneyProviders).map((provider, index) => <span className="landing-background-logo" key={`bg-one-${provider.name}-${index}`}><img src={assetUrl(provider.src)} alt="" /></span>)}</div>
-      <div className="landing-background-row landing-background-row-two">{mobileMoneyProviders.concat(mobileMoneyProviders, mobileMoneyProviders, mobileMoneyProviders).map((provider, index) => <span className="landing-background-logo" key={`bg-two-${provider.name}-${index}`}><img src={assetUrl(provider.src)} alt="" /></span>)}</div>
-      <div className="landing-background-row landing-background-row-three">{mobileMoneyProviders.concat(mobileMoneyProviders, mobileMoneyProviders, mobileMoneyProviders).map((provider, index) => <span className="landing-background-logo" key={`bg-three-${provider.name}-${index}`}><img src={assetUrl(provider.src)} alt="" /></span>)}</div>
-      <div className="landing-background-row landing-background-row-four">{mobileMoneyProviders.concat(mobileMoneyProviders, mobileMoneyProviders, mobileMoneyProviders, mobileMoneyProviders).map((provider, index) => <span className="landing-background-logo" key={`bg-four-${provider.name}-${index}`}><img src={assetUrl(provider.src)} alt="" /></span>)}</div>
-      <div className="landing-background-row landing-background-row-five">{mobileMoneyProviders.concat(mobileMoneyProviders, mobileMoneyProviders, mobileMoneyProviders, mobileMoneyProviders).map((provider, index) => <span className="landing-background-logo" key={`bg-five-${provider.name}-${index}`}><img src={assetUrl(provider.src)} alt="" /></span>)}</div>
-      <div className="landing-background-row landing-background-row-six">{mobileMoneyProviders.concat(mobileMoneyProviders, mobileMoneyProviders, mobileMoneyProviders, mobileMoneyProviders).map((provider, index) => <span className="landing-background-logo" key={`bg-six-${provider.name}-${index}`}><img src={assetUrl(provider.src)} alt="" /></span>)}</div>
-      <div className="landing-background-row landing-background-row-seven">{mobileMoneyProviders.concat(mobileMoneyProviders, mobileMoneyProviders, mobileMoneyProviders, mobileMoneyProviders).map((provider, index) => <span className="landing-background-logo" key={`bg-seven-${provider.name}-${index}`}><img src={assetUrl(provider.src)} alt="" /></span>)}</div>
-      <div className="landing-background-row landing-background-row-eight">{mobileMoneyProviders.concat(mobileMoneyProviders, mobileMoneyProviders, mobileMoneyProviders, mobileMoneyProviders).map((provider, index) => <span className="landing-background-logo" key={`bg-eight-${provider.name}-${index}`}><img src={assetUrl(provider.src)} alt="" /></span>)}</div>
+      {mobileMoneyProviders.concat(mobileMoneyProviders, mobileMoneyProviders, mobileMoneyProviders, mobileMoneyProviders, mobileMoneyProviders, mobileMoneyProviders, mobileMoneyProviders).map((provider, index) => {
+        const position = backgroundLogoPositions[index % backgroundLogoPositions.length];
+        return <span className="landing-background-logo" key={`background-logo-${provider.name}-${index}`} style={{ left: position[0], top: position[1], animationDelay: `${(index % 9) * -1.1}s` }}><img src={assetUrl(provider.src)} alt="" /></span>;
+      })}
     </div>
     <nav className="landing-nav">
       <Logo />
