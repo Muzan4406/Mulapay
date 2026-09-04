@@ -1,7 +1,7 @@
 import { createContext, type FormEvent, type ReactNode, useContext, useEffect, useState } from 'react';
 import {
   Activity, ArrowDownLeft, ArrowLeft, ArrowRightLeft, ArrowRight, ArrowUpRight, Banknote, Bell, Check, CheckCircle2,
-  ChevronRight, CircleAlert, Clock3, Copy, Download, Eye, FileCheck2, Globe2, Info, LayoutDashboard,
+  ChevronDown, ChevronRight, CircleAlert, Clock3, Copy, Download, Eye, FileCheck2, Globe2, Info, LayoutDashboard,
   Link2, ListFilter, LockKeyhole, LogOut, Menu, MoreHorizontal, Plus, QrCode, RefreshCw, Search,
   Send, Settings2, ShieldCheck, WalletCards, X
 } from 'lucide-react';
@@ -373,13 +373,12 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
       <form className="card card-pad deposit-form" onSubmit={submit}>
         <div className="field">
           <label htmlFor="deposit-country">Pays</label>
-          <div className="country-options country-list-options" role="radiogroup" aria-label="Choisir un pays">
-            {mobileMoneyCountryOptions.map(option => <label className={`country-option ${country === option.country ? 'selected' : ''}`} key={option.country}>
-              <input type="radio" name="deposit-country" value={option.country} checked={country === option.country} onChange={event => setCountry(event.target.value)} required />
-              <img src={`${import.meta.env.BASE_URL}countries/${option.flagSrc}`} alt="" />
-              <span className="country-option-copy"><strong>{option.country}</strong><small>{option.dialCode}</small></span>
-              <ChevronRight size={14} aria-hidden="true" />
-            </label>)}
+          <div className="country-select">
+            <img src={`${import.meta.env.BASE_URL}countries/${selectedCountry.flagSrc}`} alt="" />
+            <select id="deposit-country" value={country} onChange={event => setCountry(event.target.value)} required>
+              {mobileMoneyCountryOptions.map(option => <option key={option.country} value={option.country}>{option.country} · {option.dialCode}</option>)}
+            </select>
+            <ChevronDown className="country-select-chevron" size={16} aria-hidden="true" />
           </div>
         </div>
         <div className="field">
