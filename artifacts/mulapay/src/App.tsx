@@ -1,7 +1,7 @@
 import { createContext, type FormEvent, type ReactNode, useContext, useEffect, useState } from 'react';
 import {
   Activity, ArrowDownLeft, ArrowLeft, ArrowRightLeft, ArrowRight, ArrowUpRight, Banknote, Bell, Check, CheckCircle2,
-  ChevronRight, CircleAlert, Clock3, Copy, Download, Eye, FileCheck2, Info, LayoutDashboard,
+  ChevronRight, CircleAlert, Clock3, Copy, Download, Eye, FileCheck2, Globe2, Info, LayoutDashboard,
   Link2, ListFilter, LockKeyhole, LogOut, Menu, MoreHorizontal, Plus, QrCode, RefreshCw, Search,
   Send, Settings2, ShieldCheck, WalletCards, X
 } from 'lucide-react';
