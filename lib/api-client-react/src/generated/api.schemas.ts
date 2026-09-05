@@ -144,7 +144,7 @@ export interface TransferInput {
   /** @minLength 2 */
   counterparty: string;
   note?: string;
-  feePayer?: TransferInputFeePayer;
+  feePayer: TransferInputFeePayer;
 }
 
 export interface ExchangeInput {

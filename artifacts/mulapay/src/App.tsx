@@ -48,7 +48,7 @@ type Store = {
   profile: { id: string; firstName: string; lastName: string; email: string; role: string; country: string; kycStatus: string };
   wallets: Wallet[]; transactions: Transaction[]; exchanges: Exchange[]; links: PaymentLink[]; notifications: Notification[];
   adminKyc: AdminKycCase[]; adminTransactions: Transaction[]; adminSummary?: AdminSummary; feePercentage: number;
-  transfer: (data: { amount: number; currency: string; country: string; counterparty: string; note: string }) => void;
+  transfer: (data: { amount: number; currency: string; country: string; counterparty: string; note: string; feePayer: 'sender' | 'recipient' }) => void;
   exchange: (data: { source: string; destination: string; amount: number }) => void;
   setExchangeStatus: (id: string, status: string) => void;
   addLink: (data: { amount: number; currency: string; description: string; expiresAt: string }) => void;
@@ -406,6 +406,7 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
   const availableBalance = selectedWallet ? Math.max(0, selectedWallet.balance - selectedWallet.pending) : 0;
   const operationAmount = Number(amount) || 0;
   const operationFee = calculateFee(operationAmount, feePercentage);
+  const operationDebitAmount = operationAmount + operationFee;
 
   useEffect(() => {
     const nextWallet = walletForCountry(country) ?? wallets[0];
@@ -539,7 +540,9 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
       </div>
       {operationAmount > 0 && <div className="summary-box" style={{ marginBottom: 16 }} data-testid="withdrawal-fee-summary">
         <div className="summary-line"><span>Montant retiré</span><strong>{money(operationAmount, selectedWallet?.currency ?? 'XOF')}</strong></div>
-        <div className="summary-line total"><span>Frais de retrait estimés ({feePercentage}%)</span><strong>{money(operationFee, selectedWallet?.currency ?? 'XOF')}</strong></div>
+        <div className="summary-line"><span>Frais de retrait ({feePercentage}%)</span><strong>{money(operationFee, selectedWallet?.currency ?? 'XOF')}</strong></div>
+        <div className="summary-line"><span>Montant reçu après frais</span><strong>{money(operationAmount, selectedWallet?.currency ?? 'XOF')}</strong></div>
+        <div className="summary-line total"><span>Total débité</span><strong>{money(operationDebitAmount, selectedWallet?.currency ?? 'XOF')}</strong></div>
       </div>}
       <button className="button button-primary button-wide" type="submit" disabled={submitting}>
         {submitting ? 'Traitement…' : 'Retirer maintenant'} <ChevronRight size={15} />
@@ -988,6 +991,9 @@ function Transfer() {
   const availableBalance = selectedWallet ? Math.max(0, selectedWallet.balance - selectedWallet.pending) : 0;
   const transferAmount = Number(amount) || 0;
   const transferFee = calculateFee(transferAmount, feePercentage);
+  const recipientAmount = feePayer === 'recipient' ? Math.max(0, transferAmount - transferFee) : transferAmount;
+  const debitAmount = feePayer === 'sender' ? transferAmount + transferFee : transferAmount;
+  const canSubmit = transferAmount > 0 && phone.length > 0 && Boolean(selectedWallet) && operator.length > 0 && (feePayer === 'sender' || transferAmount > transferFee);
   useEffect(() => {
     const nextOperator = selectedCountry.operators[0]?.name ?? '';
     if (operator !== nextOperator && !selectedCountry.operators.some(item => item.name === operator)) setOperator(nextOperator);
@@ -996,7 +1002,7 @@ function Transfer() {
     e.preventDefault();
     if (!amount || !phone || !selectedWallet || !operator) return;
     const recipientPhone = `${selectedCountry.dialCode}${phone.replace(/\D/g, '')}`;
-    transfer({ amount: Number(amount), currency: selectedWallet.currency, country: selectedWallet.country, counterparty: `${recipientPhone} · ${operator}`, note: `Frais à la charge de ${feePayer === 'sender' ? 'moi' : 'du destinataire'}` });
+    transfer({ amount: transferAmount, currency: selectedWallet.currency, country: selectedWallet.country, counterparty: `${recipientPhone} · ${operator}`, note: `Frais à la charge de ${feePayer === 'sender' ? 'moi' : 'du destinataire'}`, feePayer });
     setAmount('');
     setPhone('');
   };
@@ -1043,8 +1049,10 @@ function Transfer() {
         </div>
       </div>
       {transferAmount > 0 && <div className="summary-box" style={{ marginBottom: 16 }} data-testid="transfer-fee-summary">
-        <div className="summary-line"><span>Montant envoyé</span><strong>{money(transferAmount, selectedWallet?.currency ?? 'XOF')}</strong></div>
-        <div className="summary-line total"><span>Frais de transfert estimés ({feePercentage}%)</span><strong>{money(transferFee, selectedWallet?.currency ?? 'XOF')}</strong></div>
+        <div className="summary-line"><span>Montant saisi</span><strong>{money(transferAmount, selectedWallet?.currency ?? 'XOF')}</strong></div>
+        <div className="summary-line"><span>Frais de transfert ({feePercentage}%)</span><strong>{money(transferFee, selectedWallet?.currency ?? 'XOF')}</strong></div>
+        <div className="summary-line"><span>Montant reçu après frais</span><strong>{money(recipientAmount, selectedWallet?.currency ?? 'XOF')}</strong></div>
+        <div className="summary-line total"><span>Total débité</span><strong>{money(debitAmount, selectedWallet?.currency ?? 'XOF')}</strong></div>
       </div>}
       <div className="field">
         <label>Prise en charge des frais</label>
@@ -1061,7 +1069,7 @@ function Transfer() {
           </label>
         </div>
       </div>
-      <button className="button button-primary button-wide" type="submit" disabled={!amount || !phone || !selectedWallet || !operator} data-testid="button-submit-transfer"><Send size={15} /> Envoyer maintenant</button>
+      <button className="button button-primary button-wide" type="submit" disabled={!canSubmit} data-testid="button-submit-transfer"><Send size={15} /> Envoyer maintenant</button>
     </form>
   </main>;
 }
@@ -1197,7 +1205,7 @@ function RoutedApp() {
     profile: { ...(data?.profile ?? { id: '', firstName: 'Utilisateur', lastName: 'Mulapay', email: '', role: 'USER', country: 'Togo', kycStatus: 'NON_VERIFIE' }), firstName: user?.firstName ?? data?.profile.firstName ?? 'Utilisateur', lastName: user?.lastName ?? data?.profile.lastName ?? 'Mulapay', email: user?.primaryEmailAddress?.emailAddress ?? data?.profile.email ?? '' },
     wallets: data?.wallets ?? [], transactions: data?.transactions ?? [], exchanges: data?.exchanges ?? [], links: data?.links ?? [], notifications: data?.notifications ?? [],
     adminKyc: (adminKycQuery.data ?? []) as AdminKycCase[], adminTransactions: (adminTransactionsQuery.data ?? []) as Transaction[], adminSummary: adminSummaryQuery.data as AdminSummary | undefined, feePercentage: data?.feePercentage ?? 1,
-    transfer: ({ amount, currency, country, counterparty, note }) => { transferMutation.mutate({ data: { amount, currency, country, counterparty, note } }, { onSuccess: response => { invalidate(); toast(response.message); }, onError: () => toast('Transfert impossible. Vérifiez le solde disponible.') }); },
+    transfer: ({ amount, currency, country, counterparty, note, feePayer }) => { transferMutation.mutate({ data: { amount, currency, country, counterparty, note, feePayer } }, { onSuccess: response => { invalidate(); toast(response.message); }, onError: () => toast('Transfert impossible. Vérifiez le solde disponible.') }); },
     exchange: ({ source, destination, amount }) => { exchangeMutation.mutate({ data: { source, destination, amount } }, { onSuccess: response => { invalidate(); toast(response.message); }, onError: () => toast('La demande d’échange n’a pas pu être créée.') }); },
     setExchangeStatus: (id, status) => { exchangeDecisionMutation.mutate({ id, data: { decision: status === 'Completed' ? 'APPROVED' : 'REJECTED' } }, { onSuccess: response => { invalidate(); toast(response.message); }, onError: () => toast('La décision d’échange n’a pas pu être enregistrée.') }); },
     addLink: ({ amount, currency, description, expiresAt }) => { paymentLinkMutation.mutate({ data: { amount, currency, description, expiresAt } }, { onSuccess: response => { invalidate(); toast(`Lien de paiement ${response.slug} créé.`); }, onError: () => toast('Le lien de paiement n’a pas pu être créé.') }); },

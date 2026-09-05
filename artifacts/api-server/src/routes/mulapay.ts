@@ -389,23 +389,27 @@ router.get("/v1/bootstrap", async (req, res) => {
 router.post("/v1/transfers", async (req, res) => {
   const input = CreateTransferBody.parse(req.body);
   const user = await ensureUser(req);
+  const settings = await getPlatformSettings();
+  const fee = Math.round(input.amount * Number(settings.feePercentage) / 100);
+  const debitAmount = input.feePayer === "sender" ? input.amount + fee : input.amount;
+  const netAmount = input.feePayer === "recipient" ? Math.max(0, input.amount - fee) : input.amount;
   const source = await db.query.wallets.findFirst({
     where: input.country
       ? and(eq(wallets.userId, user.id), eq(wallets.country, input.country), eq(wallets.status, "Active"))
       : and(eq(wallets.userId, user.id), eq(wallets.currency, input.currency), eq(wallets.status, "Active")),
   });
-  if (!source || source.balance < input.amount) {
+  if (!source || source.balance < debitAmount) {
     res.status(400).json({ error: "Solde disponible insuffisant pour ce transfert." });
     return;
   }
   const id = crypto.randomUUID();
   const ref = reference("MP");
   await db.transaction(async (tx) => {
-    await tx.update(wallets).set({ balance: sql`${wallets.balance} - ${input.amount}` }).where(eq(wallets.id, source.id));
-    await tx.insert(transactions).values({ id, userId: user.id, walletId: source.id, type: "Sent", status: "Completed", amount: input.amount, currency: input.currency, country: source.country, counterparty: input.counterparty, reference: ref });
-    await tx.insert(ledgerEntries).values({ id: crypto.randomUUID(), userId: user.id, walletId: source.id, transactionId: id, entryType: "DEBIT", amount: input.amount, currency: input.currency, description: `Transfer to ${input.counterparty}` });
+    await tx.update(wallets).set({ balance: sql`${wallets.balance} - ${debitAmount}` }).where(eq(wallets.id, source.id));
+    await tx.insert(transactions).values({ id, userId: user.id, walletId: source.id, type: "Sent", status: "Completed", amount: debitAmount, currency: input.currency, country: source.country, counterparty: input.counterparty, reference: ref, fee, netAmount });
+    await tx.insert(ledgerEntries).values({ id: crypto.randomUUID(), userId: user.id, walletId: source.id, transactionId: id, entryType: "DEBIT", amount: debitAmount, currency: input.currency, description: `Transfer to ${input.counterparty}` });
   });
-  res.status(201).json(CreateTransferResponse.parse({ ok: true, message: "Transfert exécuté.", reference: ref }));
+  res.status(201).json(CreateTransferResponse.parse({ ok: true, message: "Transfert exécuté.", reference: ref, fee, netAmount }));
 });
 
 router.post("/v1/exchanges", async (req, res) => {

@@ -442,7 +442,7 @@ components:
         netAmount: { type: number }
     TransferInput:
       type: object
-      required: [amount, currency, counterparty]
+      required: [amount, currency, counterparty, feePayer]
       properties:
         amount: { type: number, exclusiveMinimum: 0 }
         currency: { type: string }
