@@ -106,7 +106,7 @@ function operatorLogoUrl(operator?: string) {
 }
 
 function transactionIsIncoming(transaction: Pick<TransactionView, 'type' | 'counterparty'>) {
-  if (transaction.type === 'Received' || transaction.type === 'Deposit') return true;
+  if (transaction.type === 'Received' || transaction.type === 'Deposit' || transaction.type === 'Exchange') return true;
   if (transaction.type !== 'Payment') return false;
   const counterparty = transaction.counterparty.toLowerCase();
   return counterparty.includes('paiement par lien') || counterparty.includes('paiement api') || counterparty.includes('paiement reçu') || counterparty.includes('payment link') || counterparty.includes('payin');
@@ -381,7 +381,7 @@ function Wallets() {
   const number = new Intl.NumberFormat('fr-FR');
   return <main className="page-wrap"><PageIntro eyebrow="Votre argent, marché par marché" title="Wallets par pays" subtitle="Des soldes locaux séparés, réunis sous un même compte Mulapay." action={<Link href="/app/exchange" className="button button-primary" data-testid="button-wallets-exchange"><ArrowRightLeft size={15} /> Demander un échange</Link>} /><div className="wallet-grid">{wallets.map(wallet => {
     const country = mobileMoneyCountryOptions.find(option => option.code === wallet.code);
-    const completedTransactions = transactions.filter(transaction => transaction.country === wallet.country && transaction.status === 'Completed');
+    const completedTransactions = transactions.filter(transaction => transaction.country === wallet.country && transaction.status === 'Completed' && transaction.type !== 'Exchange');
     const totalIn = completedTransactions.filter(transactionIsIncoming).reduce((sum, transaction) => sum + transaction.amount, 0);
     const totalOut = completedTransactions.filter(transaction => !transactionIsIncoming(transaction)).reduce((sum, transaction) => sum + transaction.amount, 0);
     return <div className={`card wallet-card ${wallet.status !== 'Active' ? 'coming-soon' : ''}`} key={wallet.code} data-testid={`card-wallet-${wallet.code}`}><div className="wallet-top"><div className="wallet-identity"><img className="wallet-country-flag" src={`${import.meta.env.BASE_URL}countries/${country?.flagSrc ?? `${wallet.code.toLowerCase()}.png`}`} alt={`Drapeau ${wallet.country}`} /><div><div className="wallet-name">{countryLabel(wallet.country)}</div><div className="wallet-currency">Wallet {wallet.currency}</div></div></div><span className={`pill ${wallet.status === 'Active' ? 'pill-success' : 'pill-neutral'}`}>{statusLabel(wallet.status)}</span></div><div className="wallet-total"><span className="wallet-total-label">Montant disponible</span><strong>{number.format(wallet.balance - wallet.pending)} <small>{wallet.currency}</small></strong></div><div className="wallet-stats"><div><div className="wallet-stat-label">Total entrées</div><div className="wallet-stat-value positive">+{number.format(totalIn)} {wallet.currency}</div></div><div><div className="wallet-stat-label">Total retiré</div><div className="wallet-stat-value negative">-{number.format(totalOut)} {wallet.currency}</div></div></div></div>;
