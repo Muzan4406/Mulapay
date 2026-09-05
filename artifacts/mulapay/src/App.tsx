@@ -562,7 +562,35 @@ function Receive() {
 function Payments() {
   const { transactions } = useStore();
   const payments = transactions.filter(item => item.type === 'Payment');
-  return <main className="page-wrap"><PageIntro eyebrow="Encaisser et payer" title="Paiements" subtitle="Suivez les paiements confirmés, les frais et les reçus associés." /><div className="card table-card"><div className="table-scroll"><table className="data-table"><thead><tr><th>Référence</th><th>Contrepartie</th><th>Montant</th><th>Statut</th></tr></thead><tbody>{payments.map(payment => <tr key={payment.id}><td>{payment.reference}</td><td>{counterpartyLabel(payment.counterparty)}</td><td>{money(payment.amount, payment.currency)}</td><td><span className="pill pill-success">{statusLabel(payment.status)}</span></td></tr>)}</tbody></table>{payments.length === 0 && <div className="empty-state"><Banknote size={25} /><strong>Aucun paiement</strong><p>Les paiements confirmés seront affichés ici.</p></div>}</div></div></main>;
+  const examplePayments = [
+    { reference: 'MP-EX-1042', counterparty: 'Café Lomé', channel: 'Lien de paiement', amount: 12500, date: 'Aujourd’hui · 10:42' },
+    { reference: 'MP-EX-1038', counterparty: 'Marché de Bè', channel: 'QR Code', amount: 7800, date: 'Hier · 16:18' },
+    { reference: 'MP-EX-1029', counterparty: 'Boutique Étoile', channel: 'Paiement marchand', amount: 25000, date: '12 juin · 09:06' },
+  ];
+  return <main className="page-wrap payments-page">
+    <PageIntro eyebrow="Encaisser et payer" title="Paiements" subtitle="Suivez les paiements confirmés, les frais et les reçus associés." action={<Link href="/app/payment-links" className="button button-primary" data-testid="button-payments-create-link"><Link2 size={15} /> Créer un lien</Link>} />
+    <div className="payments-page-grid">
+      <div className="card table-card payments-real-card">
+        <div className="table-toolbar">
+          <div><h2 className="section-title">Paiements confirmés</h2><p className="section-note">Mouvements réellement enregistrés dans votre ledger.</p></div>
+          <span className="pill pill-success">{payments.length} réel{payments.length > 1 ? 's' : ''}</span>
+        </div>
+        <div className="table-scroll"><table className="data-table"><thead><tr><th>Référence</th><th>Contrepartie</th><th>Montant</th><th>Statut</th></tr></thead><tbody>{payments.map(payment => <tr key={payment.id}><td>{payment.reference}</td><td>{counterpartyLabel(payment.counterparty)}</td><td>{money(payment.amount, payment.currency)}</td><td><span className="pill pill-success">{statusLabel(payment.status)}</span></td></tr>)}</tbody></table>{payments.length === 0 && <div className="empty-state"><Banknote size={25} /><strong>Aucun paiement réel</strong><p>Les paiements confirmés apparaîtront ici après leur enregistrement.</p></div>}</div>
+      </div>
+      <div className="card card-pad example-payments-card" data-testid="example-payments-history">
+        <div className="section-head">
+          <div><h2 className="section-title">Historique de démonstration</h2><p className="section-note">Quelques exemples de paiements possibles.</p></div>
+          <span className="pill pill-neutral">Exemple</span>
+        </div>
+        <div className="example-payments-note"><Info size={14} /><span>Ces lignes sont visuelles uniquement et ne modifient pas votre solde.</span></div>
+        <div className="example-payment-list">{examplePayments.map(payment => <div className="example-payment-row" key={payment.reference}>
+          <div className="example-payment-icon">{payment.channel === 'QR Code' ? <QrCode size={15} /> : payment.channel === 'Lien de paiement' ? <Link2 size={15} /> : <Banknote size={15} />}</div>
+          <div className="example-payment-main"><strong>{payment.counterparty}</strong><span>{payment.channel} · {payment.date}</span></div>
+          <div className="example-payment-amount"><strong>{money(payment.amount)}</strong><span>Exemple</span></div>
+        </div>)}</div>
+      </div>
+    </div>
+  </main>;
 }
 
 function QrPage() {
