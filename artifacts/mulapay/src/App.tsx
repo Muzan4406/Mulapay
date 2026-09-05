@@ -54,7 +54,7 @@ type ApiKey = { id: string; name: string; keyPrefix: string; scopes: string[]; l
 type AdminKycCase = { id: string; userId: string; name: string; country: string; status: string; documents: string[]; submittedAt: string };
 type AdminSummary = { kycAwaiting: number; exchangeQueue: number; volume: number; successRate: number };
 type PaymentProviderId = 'DRIMPAY' | 'ASHTECHPAY';
-type DepositTracking = { reference: string; status: string; amount: number; currency: string; fee: number | null; netAmount: number | null; paymentUrl: string | null };
+type DepositTracking = { reference: string; status: string; amount: number; currency: string; fee: number | null; netAmount: number | null; platformFee: number | null; merchantAmount: number | null; paymentUrl: string | null };
 type PublicPaymentResult = { reference: string; status: string; operator?: string; message?: string; amount?: number; currency?: string; fee?: number | null; netAmount?: number | null; platformFee?: number | null; merchantAmount?: number | null; paymentUrl?: string | null; expiresAt?: string | null };
 type Store = {
   profile: { id: string; firstName: string; lastName: string; email: string; role: string; country: string; kycStatus: string };
@@ -434,6 +434,8 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
           status: payload.status ?? current.status,
           fee: typeof payload.fee === 'number' ? payload.fee : current.fee,
           netAmount: typeof payload.netAmount === 'number' ? payload.netAmount : current.netAmount,
+          platformFee: typeof payload.platformFee === 'number' ? payload.platformFee : current.platformFee,
+          merchantAmount: typeof payload.merchantAmount === 'number' ? payload.merchantAmount : current.merchantAmount,
           paymentUrl: payload.paymentUrl ?? current.paymentUrl,
         } : current);
       } catch (error) {
@@ -495,6 +497,8 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
           currency: selectedWallet?.currency ?? 'XOF',
           fee: typeof payload.fee === 'number' ? payload.fee : null,
           netAmount: typeof payload.netAmount === 'number' ? payload.netAmount : null,
+          platformFee: typeof payload.platformFee === 'number' ? payload.platformFee : null,
+          merchantAmount: typeof payload.merchantAmount === 'number' ? payload.merchantAmount : null,
           paymentUrl: payload.paymentUrl ?? null,
         });
         setDepositStatusError('');
@@ -522,7 +526,7 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
           <div className={`deposit-status-icon ${completed ? 'is-complete' : failed ? 'is-failed' : ''}`}>{completed ? <CheckCircle2 size={28} /> : failed ? <CircleAlert size={28} /> : <RefreshCw size={28} className="loading-spin" />}</div>
           <span className={`pill ${completed ? 'pill-success' : failed ? 'pill-danger' : 'pill-pending'}`}>{statusLabel(depositTracking.status)}</span>
           <h2>{completed ? 'Votre wallet est crédité' : failed ? 'La confirmation n’a pas abouti' : 'Confirmation en cours'}</h2>
-          <p className="deposit-status-copy">{completed ? `Le montant net de ${money(depositTracking.netAmount ?? depositTracking.amount, depositTracking.currency)} est maintenant disponible.` : failed ? 'Aucun crédit ne sera appliqué tant que le paiement n’est pas confirmé.' : `Confirmez la demande sur votre téléphone. Mulapay attend le webhook signé du fournisseur.`}</p>
+          <p className="deposit-status-copy">{completed ? `Le montant net après frais Mulapay de ${money(depositTracking.merchantAmount ?? depositTracking.amount, depositTracking.currency)} est maintenant disponible.` : failed ? 'Aucun crédit ne sera appliqué tant que le paiement n’est pas confirmé.' : `Confirmez la demande sur votre téléphone. Mulapay attend le webhook signé du fournisseur.`}</p>
           <div className="summary-box deposit-status-summary">
             <div className="summary-line"><span>Montant demandé</span><strong>{money(depositTracking.amount, depositTracking.currency)}</strong></div>
             <div className="summary-line"><span>Opérateur</span><strong>{operator}</strong></div>

@@ -192,23 +192,25 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
       ) {
         return { found: true, walletMismatch: true };
       }
-      const netAmount = payload.net_amount ?? transaction.netAmount;
-      if (netAmount == null || netAmount <= 0 || netAmount > payload.amount) throw new Error("INVALID_PROVIDER_NET_AMOUNT");
+      const providerNetAmount = payload.net_amount ?? transaction.netAmount;
+      const merchantAmount = transaction.merchantAmount ?? providerNetAmount;
+      if (providerNetAmount == null || providerNetAmount <= 0 || providerNetAmount > payload.amount) throw new Error("INVALID_PROVIDER_NET_AMOUNT");
+      if (merchantAmount == null || merchantAmount <= 0 || merchantAmount > payload.amount) throw new Error("INVALID_MULAPAY_NET_AMOUNT");
       await tx
         .update(wallets)
         .set({
-          balance: sql`${wallets.balance} + ${netAmount}`,
+          balance: sql`${wallets.balance} + ${merchantAmount}`,
           pending: sql`GREATEST(${wallets.pending} - ${transaction.amount}, 0)`,
         })
         .where(eq(wallets.id, wallet.id));
-      await tx.update(transactions).set({ status: "Completed", netAmount }).where(eq(transactions.id, transaction.id));
+      await tx.update(transactions).set({ status: "Completed", netAmount: providerNetAmount }).where(eq(transactions.id, transaction.id));
       await tx.insert(ledgerEntries).values({
         id: crypto.randomUUID(),
         userId: transaction.userId,
         walletId: wallet.id,
         transactionId: transaction.id,
         entryType: "CREDIT",
-        amount: netAmount,
+        amount: merchantAmount,
         currency: transaction.currency,
         description: `${transaction.type === "Payment" ? "Paiement par lien" : "Dépôt Mulapay"} confirmé · ${payload.reference}`,
       });
@@ -220,7 +222,7 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
         id: crypto.randomUUID(),
         userId: transaction.userId,
         title: transaction.type === "Payment" ? "Paiement reçu" : "Dépôt confirmé",
-        body: `${netAmount.toLocaleString("fr-FR")} ${transaction.currency} ont été crédités sur le wallet ${wallet.country}.`,
+        body: `${merchantAmount.toLocaleString("fr-FR")} ${transaction.currency} ont été crédités sur le wallet ${wallet.country}.`,
         read: false,
       });
       return { found: true };
@@ -229,9 +231,9 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
     if (payload.status === "reversed" && transaction.status === "Completed") {
       const wallet = await tx.query.wallets.findFirst({ where: eq(wallets.id, transaction.walletId ?? "") });
       if (!wallet) throw new Error("WALLET_NOT_FOUND");
-      const netAmount = transaction.netAmount;
-      if (netAmount == null) throw new Error("MISSING_PROVIDER_NET_AMOUNT");
-      await tx.update(wallets).set({ balance: sql`${wallets.balance} - ${netAmount}` }).where(eq(wallets.id, wallet.id));
+      const merchantAmount = transaction.merchantAmount ?? transaction.netAmount;
+      if (merchantAmount == null) throw new Error("MISSING_MULAPAY_NET_AMOUNT");
+      await tx.update(wallets).set({ balance: sql`${wallets.balance} - ${merchantAmount}` }).where(eq(wallets.id, wallet.id));
       await tx.update(transactions).set({ status: "Reversed" }).where(eq(transactions.id, transaction.id));
       await tx.insert(ledgerEntries).values({
         id: crypto.randomUUID(),
@@ -239,7 +241,7 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
         walletId: wallet.id,
         transactionId: transaction.id,
         entryType: "DEBIT",
-        amount: netAmount,
+        amount: merchantAmount,
         currency: transaction.currency,
         description: `Dépôt Mulapay remboursé · ${payload.reference}`,
       });
@@ -361,28 +363,31 @@ async function handleAshtechPayWebhook(req: Request, res: Response) {
     if (nextStatus === "Completed") {
       const wallet = await tx.query.wallets.findFirst({ where: eq(wallets.id, transaction.walletId ?? "") });
       if (!wallet) throw new Error("WALLET_NOT_FOUND");
-      const netAmount = payload.amount;
-      if (typeof netAmount !== "number") throw new Error("ASH TECHPAY_NET_AMOUNT_MISSING");
+      const providerNetAmount = payload.amount;
+      if (typeof providerNetAmount !== "number") throw new Error("ASH TECHPAY_NET_AMOUNT_MISSING");
+      const merchantAmount = transaction.merchantAmount ?? providerNetAmount;
       if (
         !depositPayloadMatchesWallet(transaction, wallet, payload.country_code ?? wallet.code, payload.currency!, "ASHTECHPAY") ||
         (typeof payload.total_amount === "number" && payload.total_amount !== transaction.amount) ||
-        netAmount <= 0 ||
-        netAmount > (payload.total_amount ?? transaction.amount)
+        providerNetAmount <= 0 ||
+        providerNetAmount > (payload.total_amount ?? transaction.amount) ||
+        merchantAmount <= 0 ||
+        merchantAmount > providerNetAmount
       ) {
         return { found: true, duplicate: false, walletMismatch: true };
       }
       await tx.update(wallets).set({
-        balance: sql`${wallets.balance} + ${netAmount}`,
+        balance: sql`${wallets.balance} + ${merchantAmount}`,
         pending: sql`GREATEST(${wallets.pending} - ${transaction.amount}, 0)`,
       }).where(eq(wallets.id, wallet.id));
-      await tx.update(transactions).set({ status: "Completed", netAmount }).where(eq(transactions.id, transaction.id));
+      await tx.update(transactions).set({ status: "Completed", netAmount: providerNetAmount }).where(eq(transactions.id, transaction.id));
       await tx.insert(ledgerEntries).values({
         id: crypto.randomUUID(),
         userId: transaction.userId,
         walletId: wallet.id,
         transactionId: transaction.id,
         entryType: "CREDIT",
-        amount: netAmount,
+        amount: merchantAmount,
         currency: transaction.currency,
         description: `${transaction.type === "Payment" ? "Paiement par lien" : "Dépôt AshtechPay"} confirmé · ${payload.reference}`,
       });
@@ -394,7 +399,7 @@ async function handleAshtechPayWebhook(req: Request, res: Response) {
         id: crypto.randomUUID(),
         userId: transaction.userId,
         title: transaction.type === "Payment" ? "Paiement reçu" : "Dépôt confirmé",
-        body: `${netAmount.toLocaleString("fr-FR")} ${transaction.currency} ont été crédités sur le wallet ${wallet.country}.`,
+        body: `${merchantAmount.toLocaleString("fr-FR")} ${transaction.currency} ont été crédités sur le wallet ${wallet.country}.`,
         read: false,
       });
       return { found: true, duplicate: false };
@@ -918,6 +923,8 @@ router.post("/v1/public/payment-links/:token/payments", async (req, res) => {
         paymentUrl: normalizedProvider.paymentUrl,
         expiresAt: normalizedProvider.expiresAt,
         fee: normalizedProvider.fee,
+        platformFee: mulapayAmount.platformFee,
+        merchantAmount: mulapayAmount.merchantAmount,
         currency: ownerWallet.currency,
         country: ownerWallet.country,
         counterparty: `Paiement par lien · ${link.productName}`,
@@ -963,8 +970,6 @@ router.get("/v1/public/payment-links/:token/payments/:reference", async (req, re
     res.status(404).json({ error: "Paiement introuvable." });
     return;
   }
-  const settings = await getPlatformSettings();
-  const mulapayAmount = calculateMulapayNetAmount(transaction.amount, Number(settings.feePercentage));
   res.json({
     ok: true,
     reference: transaction.reference,
@@ -973,8 +978,8 @@ router.get("/v1/public/payment-links/:token/payments/:reference", async (req, re
     currency: transaction.currency,
     fee: transaction.fee,
     netAmount: transaction.netAmount,
-    platformFee: mulapayAmount.platformFee,
-    merchantAmount: mulapayAmount.merchantAmount,
+    platformFee: transaction.platformFee,
+    merchantAmount: transaction.merchantAmount,
     paymentUrl: transaction.paymentUrl,
     expiresAt: transaction.expiresAt?.toISOString() ?? null,
     createdAt: transaction.createdAt.toISOString(),
@@ -1095,6 +1100,8 @@ router.post("/v1/deposits", async (req, res) => {
     res.status(400).json({ error: "Le wallet sélectionné ne correspond pas au pays du dépôt." });
     return;
   }
+  const settings = await getPlatformSettings();
+  const mulapayAmount = calculateMulapayNetAmount(validatedAmount, Number(settings.feePercentage));
   const providerSelection = await resolvePaymentProvider(countryCode, input.operator);
   const orderIdHeader = req.header("Idempotency-Key");
   const orderId = orderIdHeader && orderIdHeader.length <= 128 ? orderIdHeader : `order_${crypto.randomUUID()}`;
@@ -1111,6 +1118,8 @@ router.post("/v1/deposits", async (req, res) => {
       expiresAt: existing.expiresAt?.toISOString() ?? null,
       fee: existing.fee,
       netAmount: existing.netAmount,
+      platformFee: existing.platformFee,
+      merchantAmount: existing.merchantAmount,
     });
     return;
   }
@@ -1184,6 +1193,8 @@ router.post("/v1/deposits", async (req, res) => {
           status: normalizedProvider.status,
         amount: validatedAmount,
           netAmount: normalizedProvider.netAmount ?? null,
+          platformFee: mulapayAmount.platformFee,
+          merchantAmount: mulapayAmount.merchantAmount,
           paymentUrl: normalizedProvider.paymentUrl,
           expiresAt: normalizedProvider.expiresAt,
           fee: normalizedProvider.fee == null ? null : Math.round(normalizedProvider.fee),
@@ -1203,6 +1214,8 @@ router.post("/v1/deposits", async (req, res) => {
       expiresAt: normalizedProvider.expiresAt?.toISOString() ?? null,
       fee: normalizedProvider.fee,
       netAmount: normalizedProvider.netAmount,
+      platformFee: mulapayAmount.platformFee,
+      merchantAmount: mulapayAmount.merchantAmount,
       provider: providerSelection.provider,
     });
   } catch (error) {
@@ -1243,6 +1256,8 @@ router.get("/v1/deposits/:reference", async (req, res) => {
     currency: transaction.currency,
     fee: transaction.fee,
     netAmount: transaction.netAmount,
+    platformFee: transaction.platformFee,
+    merchantAmount: transaction.merchantAmount,
     paymentUrl: transaction.paymentUrl,
     expiresAt: transaction.expiresAt?.toISOString() ?? null,
     createdAt: transaction.createdAt.toISOString(),

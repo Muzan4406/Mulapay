@@ -75,6 +75,8 @@ export const transactions = pgTable(
     reference: text("reference").notNull().unique(),
     providerOrderId: text("provider_order_id").unique(),
     netAmount: integer("net_amount"),
+    platformFee: integer("platform_fee"),
+    merchantAmount: integer("merchant_amount"),
     paymentUrl: text("payment_url"),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
     fee: integer("fee"),
