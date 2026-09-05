@@ -566,7 +566,7 @@ function ApiAccess() {
   };
 
   const revokeKey = async (id: string) => {
-    if (!window.confirm('Révoquer cette clé API ? Les intégrations qui l’utilisent seront immédiatement bloquées.')) return;
+    if (!window.confirm('Supprimer définitivement cette clé API ? Les intégrations qui l’utilisent seront immédiatement bloquées et la clé ne pourra pas être restaurée.')) return;
     const response = await fetch(`/api/v1/api-keys/${id}`, { method: 'DELETE', credentials: 'include' });
     const body = await response.json();
     if (!response.ok) {
@@ -574,7 +574,7 @@ function ApiAccess() {
       return;
     }
     await loadKeys();
-    toast('Clé API révoquée.');
+    toast('Clé API supprimée définitivement.');
   };
 
   return <main className="page-wrap">
@@ -587,7 +587,7 @@ function ApiAccess() {
     </div>
     <div className="card card-pad" style={{ marginTop: 18 }}>
       <div className="section-head"><div><h2 className="section-title">Vos clés API</h2><p className="section-note">Utilisez-les uniquement depuis votre serveur, jamais dans une application cliente.</p></div><span className="pill pill-neutral">{keys.filter(key => !key.revokedAt).length} active(s)</span></div>
-      {loading ? <div className="loading-line" style={{ marginTop: 18 }} /> : keys.length === 0 ? <div className="empty-state"><LockKeyhole size={25} /><strong>Aucune clé API</strong><p>Créez votre première clé pour commencer l’intégration.</p></div> : <div className="api-key-list">{keys.map(key => <div className={`api-key-row ${key.revokedAt ? 'revoked' : ''}`} key={key.id}><div><div className="activity-name">{key.name}</div><div className="activity-meta"><code>{key.keyPrefix}••••••••</code> · créée le {new Date(key.createdAt).toLocaleDateString('fr-FR')}{key.lastUsedAt ? ` · utilisée le ${new Date(key.lastUsedAt).toLocaleDateString('fr-FR')}` : ''}</div></div>{key.revokedAt ? <span className="pill pill-danger">Révoquée</span> : <button className="button button-danger button-sm" onClick={() => void revokeKey(key.id)}>Révoquer</button>}</div>)}</div>}
+      {loading ? <div className="loading-line" style={{ marginTop: 18 }} /> : keys.length === 0 ? <div className="empty-state"><LockKeyhole size={25} /><strong>Aucune clé API</strong><p>Créez votre première clé pour commencer l’intégration.</p></div> : <div className="api-key-list">{keys.map(key => <div className="api-key-row" key={key.id}><div><div className="activity-name">{key.name}</div><div className="activity-meta"><code>{key.keyPrefix}••••••••</code> · créée le {new Date(key.createdAt).toLocaleDateString('fr-FR')}{key.lastUsedAt ? ` · utilisée le ${new Date(key.lastUsedAt).toLocaleDateString('fr-FR')}` : ''}</div></div><button className="button button-danger button-sm" onClick={() => void revokeKey(key.id)}>Supprimer définitivement</button></div>)}</div>}
     </div>
   </main>;
 }
@@ -795,7 +795,7 @@ function ApiPayinDocs() {
         <div className="docs-sidebar-footer"><span className="docs-production-dot" /> Production uniquement</div>
       </aside>
       <div className="docs-content">
-        <div className="docs-topline"><span className="eyebrow">Documentation partenaire</span><div className="docs-topline-actions"><span className="pill pill-success">Production</span><Link href="/app/api" className="button button-ghost button-sm"><Settings2 size={14} /> Gérer mes clés</Link></div></div>
+        <div className="docs-topline"><span className="eyebrow">Documentation partenaire</span><div className="docs-topline-actions"><span className="pill pill-success">Production</span><button className="button button-ghost button-sm docs-print-button" onClick={() => window.print()} data-testid="button-export-docs-pdf"><Download size={14} /> Exporter en PDF</button><Link href="/app/api" className="button button-ghost button-sm"><Settings2 size={14} /> Gérer mes clés</Link></div></div>
         <header className="docs-header">
           <div><h1 className="page-title">Documentation API Payin</h1><p className="page-subtitle">Tout ce qu’il faut pour accepter des paiements Mobile Money avec Mulapay : créer une demande, suivre son statut et rapprocher le résultat dans votre système.</p></div>
           <div className="docs-version">API <strong>v1</strong><span>•</span> Dernière version</div>

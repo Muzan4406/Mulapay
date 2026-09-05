@@ -274,7 +274,7 @@ const DEFAULT_API_KEY_SCOPES = ["wallets:read", "transactions:read", "deposits:w
 
 router.get("/v1/api-keys", async (req, res) => {
   const user = await ensureClerkUser(req);
-  const keys = await db.select().from(apiKeys).where(eq(apiKeys.userId, user.id)).orderBy(desc(apiKeys.createdAt));
+  const keys = await db.select().from(apiKeys).where(and(eq(apiKeys.userId, user.id), isNull(apiKeys.revokedAt))).orderBy(desc(apiKeys.createdAt));
   res.json(keys.map((key) => ({
     id: key.id,
     name: key.name,
@@ -315,15 +315,14 @@ router.post("/v1/api-keys", async (req, res) => {
 
 router.delete("/v1/api-keys/:id", async (req, res) => {
   const user = await ensureClerkUser(req);
-  const [revoked] = await db.update(apiKeys)
-    .set({ revokedAt: new Date() })
-    .where(and(eq(apiKeys.id, req.params.id), eq(apiKeys.userId, user.id), isNull(apiKeys.revokedAt)))
+  const [deleted] = await db.delete(apiKeys)
+    .where(and(eq(apiKeys.id, req.params.id), eq(apiKeys.userId, user.id)))
     .returning({ id: apiKeys.id });
-  if (!revoked) {
-    res.status(404).json({ error: "Clé API introuvable ou déjà révoquée." });
+  if (!deleted) {
+    res.status(404).json({ error: "Clé API introuvable." });
     return;
   }
-  res.json({ ok: true, message: "Clé API révoquée." });
+  res.json({ ok: true, message: "Clé API supprimée définitivement." });
 });
 
 function formatWallet(wallet: typeof wallets.$inferSelect) {
