@@ -407,8 +407,8 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
     const nextWallet = walletForCountry(country) ?? wallets[0];
     if (nextWallet && nextWallet.id !== walletId) setWalletId(nextWallet.id);
     const nextOperator = selectedCountry.operators[0]?.name ?? '';
-    if (operator !== nextOperator) setOperator(nextOperator);
-  }, [country, operator, selectedCountry, walletId, wallets]);
+    setOperator(currentOperator => selectedCountry.operators.some(item => item.name === currentOperator) ? currentOperator : nextOperator);
+  }, [country, selectedCountry, wallets]);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -986,8 +986,8 @@ function Transfer() {
   const canSubmit = transferAmount > 0 && phone.length > 0 && Boolean(selectedWallet) && operator.length > 0 && (feePayer === 'sender' || transferAmount > transferFee);
   useEffect(() => {
     const nextOperator = selectedCountry.operators[0]?.name ?? '';
-    if (operator !== nextOperator && !selectedCountry.operators.some(item => item.name === operator)) setOperator(nextOperator);
-  }, [operator, selectedCountry]);
+    setOperator(currentOperator => selectedCountry.operators.some(item => item.name === currentOperator) ? currentOperator : nextOperator);
+  }, [selectedCountry]);
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!amount || !phone || !selectedWallet || !operator) return;
