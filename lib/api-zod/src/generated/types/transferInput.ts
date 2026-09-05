@@ -5,6 +5,7 @@
  * Mulapay wallet, ledger, KYC and operations API
  * OpenAPI spec version: 0.2.0
  */
+import type { TransferInputFeePayer } from './transferInputFeePayer';
 
 export interface TransferInput {
   /** @exclusiveMinimum 0 */
@@ -14,4 +15,5 @@ export interface TransferInput {
   /** @minLength 2 */
   counterparty: string;
   note?: string;
+  feePayer?: TransferInputFeePayer;
 }

@@ -449,6 +449,7 @@ components:
         country: { type: string }
         counterparty: { type: string, minLength: 2 }
         note: { type: string }
+        feePayer: { type: string, enum: [sender, recipient] }
     ExchangeInput:
       type: object
       required: [source, destination, amount]

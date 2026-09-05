@@ -107,7 +107,8 @@ export const CreateTransferBody = zod.object({
   "currency": zod.string(),
   "country": zod.string().optional(),
   "counterparty": zod.string().min(createTransferBodyCounterpartyMin),
-  "note": zod.string().optional()
+  "note": zod.string().optional(),
+  "feePayer": zod.enum(['sender', 'recipient']).optional()
 })
 
 export const CreateTransferResponse = zod.object({

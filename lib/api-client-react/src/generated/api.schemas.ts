@@ -128,6 +128,14 @@ export interface OperationResult {
   netAmount?: number;
 }
 
+export type TransferInputFeePayer = typeof TransferInputFeePayer[keyof typeof TransferInputFeePayer];
+
+
+export const TransferInputFeePayer = {
+  sender: 'sender',
+  recipient: 'recipient',
+} as const;
+
 export interface TransferInput {
   /** @exclusiveMinimum 0 */
   amount: number;
@@ -136,6 +144,7 @@ export interface TransferInput {
   /** @minLength 2 */
   counterparty: string;
   note?: string;
+  feePayer?: TransferInputFeePayer;
 }
 
 export interface ExchangeInput {

@@ -28,6 +28,7 @@ export * from './paymentLinkInput';
 export * from './profile';
 export * from './transaction';
 export * from './transferInput';
+export * from './transferInputFeePayer';
 export * from './unauthorizedResponse';
 export * from './updateAdminSettingsInput';
 export * from './wallet';
