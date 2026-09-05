@@ -20,6 +20,9 @@ import {
   DecideExchangeResponse,
   MarkNotificationReadResponse,
   DecideKycResponse,
+  GetAdminSettingsResponse,
+  UpdateAdminSettingsBody,
+  UpdateAdminSettingsResponse,
 } from "@workspace/api-zod";
 import {
   apiKeys,
@@ -27,6 +30,7 @@ import {
   kycVerifications,
   ledgerEntries,
   notifications,
+  platformSettings,
   paymentLinks,
   transactions,
   users,
@@ -44,6 +48,15 @@ const router: IRouter = Router();
 
 const ORANGE_OTP_COUNTRIES = new Set(["CI", "SN", "BF", "ML"]);
 const TERMINAL_PROVIDER_STATUSES = new Set(["success", "failed", "expired", "cancelled", "reversed"]);
+const PLATFORM_SETTINGS_ID = "global";
+const DEFAULT_FEE_PERCENTAGE = 1;
+
+async function getPlatformSettings() {
+  const existing = await db.query.platformSettings.findFirst({ where: eq(platformSettings.id, PLATFORM_SETTINGS_ID) });
+  if (existing) return existing;
+  const [created] = await db.insert(platformSettings).values({ id: PLATFORM_SETTINGS_ID, feePercentage: DEFAULT_FEE_PERCENTAGE.toFixed(2) }).onConflictDoNothing().returning();
+  return created ?? (await db.query.platformSettings.findFirst({ where: eq(platformSettings.id, PLATFORM_SETTINGS_ID) }))!;
+}
 
 function parseDrimPayWebhookSignature(header: string | undefined, rawBody: Buffer) {
   const secret = process.env.DRIMPAY_WEBHOOK_SECRET;
@@ -339,13 +352,14 @@ function formatExchange(exchange: typeof exchanges.$inferSelect) {
 
 async function bootstrap(req: Request) {
   const user = await ensureUser(req);
-  const [userWallets, userTransactions, userExchanges, userLinks, userNotifications, userKyc] = await Promise.all([
+  const [userWallets, userTransactions, userExchanges, userLinks, userNotifications, userKyc, settings] = await Promise.all([
     db.select().from(wallets).where(eq(wallets.userId, user.id)),
     db.select().from(transactions).where(eq(transactions.userId, user.id)).orderBy(desc(transactions.createdAt)),
     db.select().from(exchanges).where(eq(exchanges.userId, user.id)).orderBy(desc(exchanges.requestedAt)),
     db.select().from(paymentLinks).where(eq(paymentLinks.userId, user.id)).orderBy(desc(paymentLinks.createdAt)),
     db.select().from(notifications).where(eq(notifications.userId, user.id)).orderBy(desc(notifications.createdAt)),
     db.query.kycVerifications.findFirst({ where: eq(kycVerifications.userId, user.id), orderBy: desc(kycVerifications.submittedAt) }),
+    getPlatformSettings(),
   ]);
   return GetBootstrapResponse.parse({
     profile: { id: user.id, firstName: user.firstName, lastName: user.lastName, email: user.email, role: user.role, country: user.country, kycStatus: user.kycStatus },
@@ -355,6 +369,7 @@ async function bootstrap(req: Request) {
     links: userLinks.map((link) => ({ ...link })),
     notifications: userNotifications.map((notification) => ({ id: notification.id, title: notification.title, body: notification.body, read: notification.read })),
     kyc: userKyc ? { id: userKyc.id, userId: userKyc.userId, name: userKyc.name, country: userKyc.country, status: userKyc.status, documents: userKyc.documents, submittedAt: userKyc.submittedAt.toISOString() } : { id: "none", userId: user.id, name: `${user.firstName} ${user.lastName}`, country: user.country, status: user.kycStatus, documents: [], submittedAt: nowLabel() },
+    feePercentage: Number(settings.feePercentage),
   });
 }
 
@@ -616,6 +631,18 @@ router.get("/v1/admin/summary", requireAdmin, async (_req, res) => {
     db.select().from(transactions),
   ]);
   res.json(GetAdminSummaryResponse.parse({ kycAwaiting: kyc.length, exchangeQueue: pendingExchanges.length, volume: allTransactions.reduce((sum, item) => sum + item.amount, 0), successRate: 98.6 }));
+});
+
+router.get("/v1/admin/settings", requireAdmin, async (_req, res) => {
+  const settings = await getPlatformSettings();
+  res.json(GetAdminSettingsResponse.parse({ feePercentage: Number(settings.feePercentage) }));
+});
+
+router.patch("/v1/admin/settings", requireAdmin, async (req, res) => {
+  const input = UpdateAdminSettingsBody.parse(req.body);
+  const settings = await getPlatformSettings();
+  const [updated] = await db.update(platformSettings).set({ feePercentage: input.feePercentage.toFixed(2), updatedAt: new Date() }).where(eq(platformSettings.id, settings.id)).returning();
+  res.json(UpdateAdminSettingsResponse.parse({ feePercentage: Number(updated.feePercentage) }));
 });
 
 router.get("/v1/admin/kyc", requireAdmin, async (_req, res) => {

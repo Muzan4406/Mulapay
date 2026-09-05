@@ -19,6 +19,11 @@ export const HealthCheckResponse = zod.object({
 /**
  * @summary Loads the authenticated Mulapay workspace
  */
+export const getBootstrapResponseFeePercentageMin = 0;
+export const getBootstrapResponseFeePercentageMax = 100;
+
+
+
 export const GetBootstrapResponse = zod.object({
   "profile": zod.object({
   "id": zod.string(),
@@ -83,7 +88,8 @@ export const GetBootstrapResponse = zod.object({
   "status": zod.string(),
   "documents": zod.array(zod.string()),
   "submittedAt": zod.string()
-})
+}),
+  "feePercentage": zod.number().min(getBootstrapResponseFeePercentageMin).max(getBootstrapResponseFeePercentageMax)
 })
 
 
@@ -318,6 +324,41 @@ export const GetAdminSummaryResponse = zod.object({
   "exchangeQueue": zod.number(),
   "volume": zod.number(),
   "successRate": zod.number()
+})
+
+
+/**
+ * @summary Loads platform fee settings
+ */
+export const getAdminSettingsResponseFeePercentageMin = 0;
+export const getAdminSettingsResponseFeePercentageMax = 100;
+
+
+
+export const GetAdminSettingsResponse = zod.object({
+  "feePercentage": zod.number().min(getAdminSettingsResponseFeePercentageMin).max(getAdminSettingsResponseFeePercentageMax)
+})
+
+
+/**
+ * @summary Updates platform fee settings
+ */
+export const updateAdminSettingsBodyFeePercentageMin = 0;
+export const updateAdminSettingsBodyFeePercentageMax = 100;
+
+
+
+export const UpdateAdminSettingsBody = zod.object({
+  "feePercentage": zod.number().min(updateAdminSettingsBodyFeePercentageMin).max(updateAdminSettingsBodyFeePercentageMax)
+})
+
+export const updateAdminSettingsResponseFeePercentageMin = 0;
+export const updateAdminSettingsResponseFeePercentageMax = 100;
+
+
+
+export const UpdateAdminSettingsResponse = zod.object({
+  "feePercentage": zod.number().min(updateAdminSettingsResponseFeePercentageMin).max(updateAdminSettingsResponseFeePercentageMax)
 })
 
 

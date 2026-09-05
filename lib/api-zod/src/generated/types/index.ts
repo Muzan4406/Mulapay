@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.2.0
  */
 
+export * from './adminSettings';
 export * from './adminSummary';
 export * from './badRequestResponse';
 export * from './bootstrap';
@@ -28,4 +29,5 @@ export * from './profile';
 export * from './transaction';
 export * from './transferInput';
 export * from './unauthorizedResponse';
+export * from './updateAdminSettingsInput';
 export * from './wallet';

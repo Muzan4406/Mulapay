@@ -20,6 +20,12 @@ export const users = pgTable("mulapay_users", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+export const platformSettings = pgTable("mulapay_platform_settings", {
+  id: text("id").primaryKey(),
+  feePercentage: numeric("fee_percentage", { precision: 5, scale: 2 }).notNull().default("1.00"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 export const apiKeys = pgTable(
   "mulapay_api_keys",
   {

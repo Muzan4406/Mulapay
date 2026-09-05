@@ -14,6 +14,7 @@ import { frFR } from '@clerk/localizations';
 import {
   getGetBootstrapQueryKey,
   getGetAdminSummaryQueryKey,
+  getGetAdminSettingsQueryKey,
   getListAdminKycQueryKey,
   getListAdminTransactionsQueryKey,
   useCreateExchange,
@@ -22,11 +23,13 @@ import {
   useDecideExchange,
   useDecideKyc,
   useGetAdminSummary,
+  useGetAdminSettings,
   useGetBootstrap,
   useListAdminKyc,
   useListAdminTransactions,
   useMarkNotificationRead,
   useSubmitKyc,
+  useUpdateAdminSettings,
 } from '@workspace/api-client-react';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -44,7 +47,7 @@ type AdminSummary = { kycAwaiting: number; exchangeQueue: number; volume: number
 type Store = {
   profile: { id: string; firstName: string; lastName: string; email: string; role: string; country: string; kycStatus: string };
   wallets: Wallet[]; transactions: Transaction[]; exchanges: Exchange[]; links: PaymentLink[]; notifications: Notification[];
-  adminKyc: AdminKycCase[]; adminTransactions: Transaction[]; adminSummary?: AdminSummary;
+  adminKyc: AdminKycCase[]; adminTransactions: Transaction[]; adminSummary?: AdminSummary; feePercentage: number;
   transfer: (data: { amount: number; currency: string; country: string; counterparty: string; note: string }) => void;
   exchange: (data: { source: string; destination: string; amount: number }) => void;
   setExchangeStatus: (id: string, status: string) => void;
@@ -62,6 +65,10 @@ const useStore = () => useContext(StoreContext)!;
 
 function money(value: number, currency = 'XOF') {
   return new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(value) + ` ${currency}`;
+}
+
+function calculateFee(amount: number, percentage: number) {
+  return Math.round(amount * percentage / 100);
 }
 
 function statusLabel(status: string) {
@@ -383,7 +390,7 @@ function Wallets() {
 }
 
 function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
-  const { wallets, toast } = useStore();
+  const { wallets, toast, feePercentage } = useStore();
   const [walletId, setWalletId] = useState(wallets[0]?.id ?? '');
   const [country, setCountry] = useState(countryLabel(wallets[0]?.country ?? mobileMoneyCountryOptions[0].country));
   const [amount, setAmount] = useState('');
@@ -398,7 +405,7 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
   const selectedWallet = wallets.find(wallet => wallet.id === walletId) ?? walletForCountry(country) ?? wallets[0];
   const availableBalance = selectedWallet ? Math.max(0, selectedWallet.balance - selectedWallet.pending) : 0;
   const operationAmount = Number(amount) || 0;
-  const operationFee = operationAmount > 0 ? 350 : 0;
+  const operationFee = calculateFee(operationAmount, feePercentage);
 
   useEffect(() => {
     const nextWallet = walletForCountry(country) ?? wallets[0];
@@ -532,7 +539,7 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
       </div>
       {operationAmount > 0 && <div className="summary-box" style={{ marginBottom: 16 }} data-testid="withdrawal-fee-summary">
         <div className="summary-line"><span>Montant retiré</span><strong>{money(operationAmount, selectedWallet?.currency ?? 'XOF')}</strong></div>
-        <div className="summary-line total"><span>Frais de retrait estimés</span><strong>{money(operationFee, selectedWallet?.currency ?? 'XOF')}</strong></div>
+        <div className="summary-line total"><span>Frais de retrait estimés ({feePercentage}%)</span><strong>{money(operationFee, selectedWallet?.currency ?? 'XOF')}</strong></div>
       </div>}
       <button className="button button-primary button-wide" type="submit" disabled={submitting}>
         {submitting ? 'Traitement…' : 'Retirer maintenant'} <ChevronRight size={15} />
@@ -969,7 +976,7 @@ function Transactions() {
 }
 
 function Transfer() {
-  const { wallets, transfer } = useStore();
+  const { wallets, transfer, feePercentage } = useStore();
   const [amount, setAmount] = useState('');
   const [country, setCountry] = useState(wallets[0]?.country ?? mobileMoneyCountryOptions[0].country);
   const [operator, setOperator] = useState('');
@@ -980,7 +987,7 @@ function Transfer() {
   const selectedWallet = walletForCountry(country);
   const availableBalance = selectedWallet ? Math.max(0, selectedWallet.balance - selectedWallet.pending) : 0;
   const transferAmount = Number(amount) || 0;
-  const transferFee = transferAmount > 0 ? 350 : 0;
+  const transferFee = calculateFee(transferAmount, feePercentage);
   useEffect(() => {
     const nextOperator = selectedCountry.operators[0]?.name ?? '';
     if (operator !== nextOperator && !selectedCountry.operators.some(item => item.name === operator)) setOperator(nextOperator);
@@ -1037,7 +1044,7 @@ function Transfer() {
       </div>
       {transferAmount > 0 && <div className="summary-box" style={{ marginBottom: 16 }} data-testid="transfer-fee-summary">
         <div className="summary-line"><span>Montant envoyé</span><strong>{money(transferAmount, selectedWallet?.currency ?? 'XOF')}</strong></div>
-        <div className="summary-line total"><span>Frais de transfert estimés</span><strong>{money(transferFee, selectedWallet?.currency ?? 'XOF')}</strong></div>
+        <div className="summary-line total"><span>Frais de transfert estimés ({feePercentage}%)</span><strong>{money(transferFee, selectedWallet?.currency ?? 'XOF')}</strong></div>
       </div>}
       <div className="field">
         <label>Prise en charge des frais</label>
@@ -1082,10 +1089,58 @@ function Settings() {
   return <main className="page-wrap"><PageIntro eyebrow="Préférences du compte" title="Paramètres" subtitle="Gardez votre profil Mulapay et vos informations de sécurité à jour." /><div className="form-layout" style={{ marginTop: 27 }}><div className="card card-pad"><div className="section-title">Informations du profil</div><p className="section-note" style={{ marginTop: 5, marginBottom: 22 }}>Votre identité est gérée de façon sécurisée par Clerk ; les données de paiement restent dans le ledger Mulapay.</p><div className="field"><label>Nom complet</label><input value={name} onChange={e => setName(e.target.value)} data-testid="input-settings-name" /></div><div className="field"><label>Adresse email</label><input value={email} onChange={e => setEmail(e.target.value)} placeholder="Gérée par votre fournisseur de connexion" data-testid="input-settings-email" /></div><div className="field"><label>Numéro de téléphone</label><input value={phone} onChange={e => setPhone(e.target.value)} data-testid="input-settings-phone" /></div><div className="field"><label>Pays de résidence</label><select defaultValue="Togo" data-testid="select-settings-country"><option>Togo</option><option>Bénin</option><option>Sénégal</option><option>Côte d’Ivoire</option><option>Burkina Faso</option><option>Mali</option><option>Niger</option></select></div><button className="button button-primary" onClick={() => toast('Préférences du profil enregistrées pour la prochaine mise à jour.')} data-testid="button-save-settings">Enregistrer les changements</button></div><div><div className="card card-pad"><div className="section-title">Sécurité</div><div className="activity-row"><div className="activity-main"><div className="activity-icon"><LockKeyhole size={15} /></div><div><div className="activity-name">Authentification</div><div className="activity-meta">Gérée par Clerk avec des sessions sécurisées</div></div></div><Link className="button button-ghost button-sm" href="/sign-in">Gérer</Link></div><div className="activity-row"><div className="activity-main"><div className="activity-icon"><Bell size={15} /></div><div><div className="activity-name">Alertes de transaction</div><div className="activity-meta">Notifications email et dans l’application</div></div></div><button className="button button-primary button-sm" onClick={() => toast('Les alertes de transaction sont activées.')} data-testid="button-toggle-alerts">Activées</button></div></div><div className="card card-pad" style={{ marginTop: 14 }}><div className="eyebrow">Compte</div><button className="button button-danger button-wide" style={{ marginTop: 17 }} onClick={signOut} data-testid="button-sign-out"><LogOut size={14} /> Se déconnecter</button></div></div></div></main>;
 }
 
+function AdminFeeSettings() {
+  const { toast } = useStore();
+  const settingsQuery = useGetAdminSettings({ query: { queryKey: getGetAdminSettingsQueryKey(), retry: false } });
+  const updateSettingsMutation = useUpdateAdminSettings();
+  const [value, setValue] = useState('');
+
+  useEffect(() => {
+    if (settingsQuery.data) setValue(String(settingsQuery.data.feePercentage));
+  }, [settingsQuery.data]);
+
+  const save = (event: FormEvent) => {
+    event.preventDefault();
+    const feePercentage = Number(value);
+    if (!Number.isFinite(feePercentage) || feePercentage < 0 || feePercentage > 100) {
+      toast('Le taux doit être compris entre 0 % et 100 %.');
+      return;
+    }
+    updateSettingsMutation.mutate({ data: { feePercentage } }, {
+      onSuccess: response => {
+        setValue(String(response.feePercentage));
+        void queryClient.invalidateQueries({ queryKey: getGetAdminSettingsQueryKey() });
+        void queryClient.invalidateQueries({ queryKey: getGetBootstrapQueryKey() });
+        toast('Le taux de frais a été enregistré.');
+      },
+      onError: () => toast('Le taux de frais n’a pas pu être enregistré.'),
+    });
+  };
+
+  return <div className="card card-pad" style={{ marginTop: 17 }}>
+    <div className="section-head">
+      <div><h2 className="section-title">Configuration des frais</h2><p className="section-note">Ce taux est utilisé pour les estimations de retrait et d’envoi.</p></div>
+      <span className="pill pill-success">Admin</span>
+    </div>
+    <form onSubmit={save} style={{ display: 'flex', alignItems: 'end', gap: 12, marginTop: 18, flexWrap: 'wrap' }}>
+      <div className="field" style={{ marginBottom: 0, width: 190 }}>
+        <label htmlFor="admin-fee-percentage">Pourcentage des frais</label>
+        <div className="input-prefix">
+          <input id="admin-fee-percentage" type="number" min="0" max="100" step="0.01" value={value} onChange={event => setValue(event.target.value)} placeholder="1" required data-testid="input-admin-fee-percentage" />
+          <span style={{ left: 'auto', right: 12 }}>%</span>
+        </div>
+      </div>
+      <button className="button button-primary" type="submit" disabled={updateSettingsMutation.isPending || !value} data-testid="button-save-admin-fee">
+        {updateSettingsMutation.isPending ? 'Enregistrement…' : 'Enregistrer le taux'}
+      </button>
+    </form>
+  </div>;
+}
+
 function AdminOverview() {
   const { exchanges, transactions, adminSummary } = useStore();
   const pendingExchanges = exchanges.filter(exchange => exchange.status === 'Pending review').length;
-  return <main className="page-wrap"><PageIntro eyebrow="Opérations sécurisées" title="Vue d’ensemble des opérations" subtitle="Une vue des contrôles et mouvements réellement enregistrés dans Mulapay." action={<Link href="/admin/exchanges" className="button button-primary" data-testid="button-admin-review"><Eye size={15} /> Ouvrir la file</Link>} /><div className="admin-grid"><div className="card admin-stat"><div className="metric-label">KYC à examiner <FileCheck2 size={15} /></div><div className="metric-value">{adminSummary?.kycAwaiting ?? 0}</div><div className="activity-meta">Dossiers persistés</div></div><div className="card admin-stat"><div className="metric-label">File des échanges <RefreshCw size={15} /></div><div className="metric-value">{pendingExchanges}</div><div className="activity-meta">Décision requise</div></div><div className="card admin-stat"><div className="metric-label">Volume enregistré <ArrowUpRight size={15} /></div><div className="metric-value">{money(adminSummary?.volume ?? 0).replace(' XOF', '')}<small>XOF</small></div><div className="activity-meta">Ledger Mulapay</div></div><div className="card admin-stat"><div className="metric-label">Taux de réussite <Activity size={15} /></div><div className="metric-value">{String(adminSummary?.successRate ?? 0).replace('.', ',')}<small>%</small></div><div className="activity-meta">Calculé par le serveur</div></div></div><div className="dashboard-grid"><div className="card card-pad"><div className="section-head"><div><h2 className="section-title">Files de contrôle</h2><p className="section-note">Les dossiers et opérations nécessitant une décision.</p></div></div><Link href="/admin/exchanges" className="case-row" data-testid="link-admin-exchange-case"><div className="case-person"><div className="person-initial"><RefreshCw size={15} /></div><div><div className="case-name">Demandes d’échange</div><div className="case-meta">{pendingExchanges} demande(s) en attente</div></div></div><ChevronRight size={16} color="hsl(203 18% 46%)" /></Link><Link href="/admin/kyc" className="case-row" style={{ marginTop: 10 }} data-testid="link-admin-kyc-case"><div className="case-person"><div className="person-initial"><FileCheck2 size={15} /></div><div><div className="case-name">Dossiers KYC</div><div className="case-meta">{adminSummary?.kycAwaiting ?? 0} dossier(s) en attente</div></div></div><ChevronRight size={16} color="hsl(203 18% 46%)" /></Link></div><div className="card card-pad"><div className="section-head"><div><h2 className="section-title">État du système</h2><p className="section-note">Données courantes du serveur</p></div><span className="pill pill-success">Opérationnel</span></div><div className="summary-box"><div className="summary-line"><span>Transactions chargées</span><strong>{transactions.length}</strong></div><div className="summary-line"><span>Échanges en attente</span><strong>{pendingExchanges}</strong></div><div className="summary-line"><span>Actions échouées</span><strong>—</strong></div></div><div className="activity-meta" style={{ marginTop: 15 }}><Activity size={12} style={{ verticalAlign: 'middle', marginRight: 5 }} /> Actualisé depuis l’API</div></div></div><div className="card card-pad" style={{ marginTop: 17 }}><div className="section-head"><div><h2 className="section-title">Derniers mouvements</h2><p className="section-note">Sur tous les wallets par pays</p></div><Link href="/admin/transactions" className="eyebrow" data-testid="link-admin-all-transactions">Voir le ledger</Link></div>{transactions.slice(0, 3).map(t => <TransactionRow transaction={t} key={t.id} />)}</div></main>;
+  return <main className="page-wrap"><PageIntro eyebrow="Opérations sécurisées" title="Vue d’ensemble des opérations" subtitle="Une vue des contrôles et mouvements réellement enregistrés dans Mulapay." action={<Link href="/admin/exchanges" className="button button-primary" data-testid="button-admin-review"><Eye size={15} /> Ouvrir la file</Link>} /><div className="admin-grid"><div className="card admin-stat"><div className="metric-label">KYC à examiner <FileCheck2 size={15} /></div><div className="metric-value">{adminSummary?.kycAwaiting ?? 0}</div><div className="activity-meta">Dossiers persistés</div></div><div className="card admin-stat"><div className="metric-label">File des échanges <RefreshCw size={15} /></div><div className="metric-value">{pendingExchanges}</div><div className="activity-meta">Décision requise</div></div><div className="card admin-stat"><div className="metric-label">Volume enregistré <ArrowUpRight size={15} /></div><div className="metric-value">{money(adminSummary?.volume ?? 0).replace(' XOF', '')}<small>XOF</small></div><div className="activity-meta">Ledger Mulapay</div></div><div className="card admin-stat"><div className="metric-label">Taux de réussite <Activity size={15} /></div><div className="metric-value">{String(adminSummary?.successRate ?? 0).replace('.', ',')}<small>%</small></div><div className="activity-meta">Calculé par le serveur</div></div></div><div className="dashboard-grid"><div className="card card-pad"><div className="section-head"><div><h2 className="section-title">Files de contrôle</h2><p className="section-note">Les dossiers et opérations nécessitant une décision.</p></div></div><Link href="/admin/exchanges" className="case-row" data-testid="link-admin-exchange-case"><div className="case-person"><div className="person-initial"><RefreshCw size={15} /></div><div><div className="case-name">Demandes d’échange</div><div className="case-meta">{pendingExchanges} demande(s) en attente</div></div></div><ChevronRight size={16} color="hsl(203 18% 46%)" /></Link><Link href="/admin/kyc" className="case-row" style={{ marginTop: 10 }} data-testid="link-admin-kyc-case"><div className="case-person"><div className="person-initial"><FileCheck2 size={15} /></div><div><div className="case-name">Dossiers KYC</div><div className="case-meta">{adminSummary?.kycAwaiting ?? 0} dossier(s) en attente</div></div></div><ChevronRight size={16} color="hsl(203 18% 46%)" /></Link></div><div className="card card-pad"><div className="section-head"><div><h2 className="section-title">État du système</h2><p className="section-note">Données courantes du serveur</p></div><span className="pill pill-success">Opérationnel</span></div><div className="summary-box"><div className="summary-line"><span>Transactions chargées</span><strong>{transactions.length}</strong></div><div className="summary-line"><span>Échanges en attente</span><strong>{pendingExchanges}</strong></div><div className="summary-line"><span>Actions échouées</span><strong>—</strong></div></div><div className="activity-meta" style={{ marginTop: 15 }}><Activity size={12} style={{ verticalAlign: 'middle', marginRight: 5 }} /> Actualisé depuis l’API</div></div></div><AdminFeeSettings /><div className="card card-pad" style={{ marginTop: 17 }}><div className="section-head"><div><h2 className="section-title">Derniers mouvements</h2><p className="section-note">Sur tous les wallets par pays</p></div><Link href="/admin/transactions" className="eyebrow" data-testid="link-admin-all-transactions">Voir le ledger</Link></div>{transactions.slice(0, 3).map(t => <TransactionRow transaction={t} key={t.id} />)}</div></main>;
 }
 
 function AdminKyc() {
@@ -1141,7 +1196,7 @@ function RoutedApp() {
   const store: Store = {
     profile: { ...(data?.profile ?? { id: '', firstName: 'Utilisateur', lastName: 'Mulapay', email: '', role: 'USER', country: 'Togo', kycStatus: 'NON_VERIFIE' }), firstName: user?.firstName ?? data?.profile.firstName ?? 'Utilisateur', lastName: user?.lastName ?? data?.profile.lastName ?? 'Mulapay', email: user?.primaryEmailAddress?.emailAddress ?? data?.profile.email ?? '' },
     wallets: data?.wallets ?? [], transactions: data?.transactions ?? [], exchanges: data?.exchanges ?? [], links: data?.links ?? [], notifications: data?.notifications ?? [],
-    adminKyc: (adminKycQuery.data ?? []) as AdminKycCase[], adminTransactions: (adminTransactionsQuery.data ?? []) as Transaction[], adminSummary: adminSummaryQuery.data as AdminSummary | undefined,
+    adminKyc: (adminKycQuery.data ?? []) as AdminKycCase[], adminTransactions: (adminTransactionsQuery.data ?? []) as Transaction[], adminSummary: adminSummaryQuery.data as AdminSummary | undefined, feePercentage: data?.feePercentage ?? 1,
     transfer: ({ amount, currency, country, counterparty, note }) => { transferMutation.mutate({ data: { amount, currency, country, counterparty, note } }, { onSuccess: response => { invalidate(); toast(response.message); }, onError: () => toast('Transfert impossible. Vérifiez le solde disponible.') }); },
     exchange: ({ source, destination, amount }) => { exchangeMutation.mutate({ data: { source, destination, amount } }, { onSuccess: response => { invalidate(); toast(response.message); }, onError: () => toast('La demande d’échange n’a pas pu être créée.') }); },
     setExchangeStatus: (id, status) => { exchangeDecisionMutation.mutate({ id, data: { decision: status === 'Completed' ? 'APPROVED' : 'REJECTED' } }, { onSuccess: response => { invalidate(); toast(response.message); }, onError: () => toast('La décision d’échange n’a pas pu être enregistrée.') }); },

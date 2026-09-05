@@ -21,4 +21,9 @@ export interface Bootstrap {
   links: PaymentLink[];
   notifications: Notification[];
   kyc: KycVerification;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  feePercentage: number;
 }

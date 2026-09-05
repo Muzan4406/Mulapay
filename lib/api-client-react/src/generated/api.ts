@@ -20,6 +20,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AdminSettings,
   AdminSummary,
   BadRequestResponse,
   Bootstrap,
@@ -34,7 +35,8 @@ import type {
   PaymentLinkInput,
   Transaction,
   TransferInput,
-  UnauthorizedResponse
+  UnauthorizedResponse,
+  UpdateAdminSettingsInput
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -940,6 +942,154 @@ export function useGetAdminSummary<TData = Awaited<ReturnType<typeof getAdminSum
 
 
 
+
+export const getGetAdminSettingsUrl = () => {
+
+
+
+
+  return `/api/v1/admin/settings`
+}
+
+/**
+ * @summary Loads platform fee settings
+ */
+export const getAdminSettings = async ( options?: Parameters<typeof customFetch>[1]): Promise<AdminSettings> => {
+
+  return customFetch<AdminSettings>(getGetAdminSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminSettingsQueryKey = () => {
+    return [
+    `/api/v1/admin/settings`
+    ] as const;
+    }
+
+
+export const getGetAdminSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getAdminSettings>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminSettings>>> = ({ signal }) => getAdminSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminSettings>>>
+export type GetAdminSettingsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Loads platform fee settings
+ */
+
+export function useGetAdminSettings<TData = Awaited<ReturnType<typeof getAdminSettings>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateAdminSettingsUrl = () => {
+
+
+
+
+  return `/api/v1/admin/settings`
+}
+
+/**
+ * @summary Updates platform fee settings
+ */
+export const updateAdminSettings = async (updateAdminSettingsInput: UpdateAdminSettingsInput, options?: Parameters<typeof customFetch>[1]): Promise<AdminSettings> => {
+
+  return customFetch<AdminSettings>(getUpdateAdminSettingsUrl(),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateAdminSettingsInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateAdminSettingsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminSettings>>, TError,{data: BodyType<UpdateAdminSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAdminSettings>>, TError,{data: BodyType<UpdateAdminSettingsInput>}, TContext> => {
+
+const mutationKey = ['updateAdminSettings'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAdminSettings>>, {data: BodyType<UpdateAdminSettingsInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateAdminSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAdminSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateAdminSettings>>>
+    export type UpdateAdminSettingsMutationBody = BodyType<UpdateAdminSettingsInput>
+    export type UpdateAdminSettingsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Updates platform fee settings
+ */
+export const useUpdateAdminSettings = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminSettings>>, TError,{data: BodyType<UpdateAdminSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAdminSettings>>,
+        TError,
+        {data: BodyType<UpdateAdminSettingsInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateAdminSettingsMutationOptions(options));
+    }
 
 export const getListAdminKycUrl = () => {
 

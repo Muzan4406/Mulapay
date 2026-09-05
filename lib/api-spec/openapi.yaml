@@ -207,6 +207,35 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AdminSummary"
+  /v1/admin/settings:
+    get:
+      operationId: getAdminSettings
+      tags: [admin]
+      summary: Loads platform fee settings
+      responses:
+        "200":
+          description: Platform settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSettings"
+    patch:
+      operationId: updateAdminSettings
+      tags: [admin]
+      summary: Updates platform fee settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAdminSettingsInput"
+      responses:
+        "200":
+          description: Updated platform settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSettings"
   /v1/admin/kyc:
     get:
       operationId: listAdminKyc
@@ -369,7 +398,7 @@ components:
         submittedAt: { type: string }
     Bootstrap:
       type: object
-      required: [profile, wallets, transactions, exchanges, links, notifications, kyc]
+      required: [profile, wallets, transactions, exchanges, links, notifications, kyc, feePercentage]
       properties:
         profile: { $ref: "#/components/schemas/Profile" }
         wallets:
@@ -388,6 +417,17 @@ components:
           type: array
           items: { $ref: "#/components/schemas/Notification" }
         kyc: { $ref: "#/components/schemas/KycVerification" }
+        feePercentage: { type: number, minimum: 0, maximum: 100 }
+    AdminSettings:
+      type: object
+      required: [feePercentage]
+      properties:
+        feePercentage: { type: number, minimum: 0, maximum: 100 }
+    UpdateAdminSettingsInput:
+      type: object
+      required: [feePercentage]
+      properties:
+        feePercentage: { type: number, minimum: 0, maximum: 100 }
     OperationResult:
       type: object
       required: [ok, message]

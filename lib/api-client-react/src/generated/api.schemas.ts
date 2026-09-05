@@ -92,6 +92,27 @@ export interface Bootstrap {
   links: PaymentLink[];
   notifications: Notification[];
   kyc: KycVerification;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  feePercentage: number;
+}
+
+export interface AdminSettings {
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  feePercentage: number;
+}
+
+export interface UpdateAdminSettingsInput {
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  feePercentage: number;
 }
 
 export interface OperationResult {
