@@ -127,6 +127,27 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/PaymentLink"
+  /v1/public/payment-links/{token}:
+    get:
+      operationId: getPublicPaymentLink
+      tags: [public]
+      summary: Loads a public payment link
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Public payment link
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicPaymentLink"
+        "404":
+          description: Payment link not found
+        "410":
+          description: Payment link no longer available
   /v1/payment-links/{id}:
     delete:
       operationId: deletePaymentLink
@@ -401,6 +422,26 @@ components:
         notifyApp: { type: boolean }
         notifyEmail: { type: boolean }
         notifyWebhook: { type: boolean }
+        payments: { type: number }
+    PublicPaymentLink:
+      type: object
+      required: [slug, reference, productName, amount, currency, description, amountType, customerFields, status, expiresAt, maxPayments, afterPaymentAction, redirectUrl, payments]
+      properties:
+        slug: { type: string }
+        reference: { type: ["string", "null"] }
+        productName: { type: string }
+        amount: { type: number }
+        currency: { type: string }
+        description: { type: string }
+        amountType: { type: string, enum: [FIXED, CUSTOMER_CHOOSES] }
+        customerFields:
+          type: array
+          items: { type: string, enum: [full_name, country, operator, phone, email] }
+        status: { type: string }
+        expiresAt: { type: string }
+        maxPayments: { type: ["number", "null"] }
+        afterPaymentAction: { type: string, enum: [CONFIRMATION, REDIRECT] }
+        redirectUrl: { type: ["string", "null"] }
         payments: { type: number }
     Notification:
       type: object

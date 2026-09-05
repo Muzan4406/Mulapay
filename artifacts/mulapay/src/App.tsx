@@ -42,6 +42,7 @@ type Transaction = { id: string; type: string; status: string; amount: number; c
 type TransactionView = Transaction & { isExample?: boolean };
 type Exchange = { id: string; source: string; destination: string; amount: number; rate: number; receivedAmount: number; status: string; requestedAt: string };
 type PaymentLink = ApiPaymentLink;
+type PublicPaymentLink = Omit<PaymentLink, 'id' | 'walletId' | 'notifyApp' | 'notifyEmail' | 'notifyWebhook'>;
 type Notification = { id: string; title: string; body: string; read: boolean };
 type ApiKey = { id: string; name: string; keyPrefix: string; scopes: string[]; lastUsedAt: string | null; revokedAt: string | null; createdAt: string };
 type AdminKycCase = { id: string; userId: string; name: string; country: string; status: string; documents: string[]; submittedAt: string };
@@ -1325,6 +1326,50 @@ function PaymentLinks() {
   </main>;
 }
 
+function PublicPaymentPage() {
+  const [location] = useLocation();
+  const token = location.split('/').filter(Boolean).pop() ?? '';
+  const [link, setLink] = useState<PublicPaymentLink | null>(null);
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+
+  useEffect(() => {
+    let mounted = true;
+    setState('loading');
+    void fetch(`/api/v1/public/payment-links/${encodeURIComponent(token)}`)
+      .then(async response => {
+        if (!response.ok) throw new Error('unavailable');
+        return response.json() as Promise<PublicPaymentLink>;
+      })
+      .then(data => {
+        if (!mounted) return;
+        setLink(data);
+        setState('ready');
+      })
+      .catch(() => {
+        if (mounted) setState('error');
+      });
+    return () => { mounted = false; };
+  }, [token]);
+
+  if (state === 'loading') return <div className="loading-screen">Chargement du paiement…</div>;
+  if (state === 'error' || !link) return <main className="public-payment-page"><div className="public-payment-card card"><Logo /><span className="eyebrow">Lien indisponible</span><h1>Ce lien de paiement n’est plus disponible</h1><p>Vérifiez l’adresse reçue ou demandez un nouveau lien au commerçant.</p><Link className="button button-primary" href="/">Retour à Mulapay</Link></div></main>;
+
+  const fixedAmount = link.amountType === 'FIXED' ? money(link.amount, link.currency) : 'Montant libre';
+  return <main className="public-payment-page">
+    <div className="public-payment-card card">
+      <div className="public-payment-brand"><span className="preview-mark">M</span><strong>Mulapay</strong><ShieldCheck size={16} /></div>
+      <span className="eyebrow">Paiement sécurisé</span>
+      <h1>{link.productName}</h1>
+      {link.description && <p className="public-payment-description">{link.description}</p>}
+      <div className="public-payment-amount"><span>{link.amountType === 'FIXED' ? 'Montant à payer' : 'Montant choisi par vous'}</span><strong>{fixedAmount}</strong></div>
+      <div className="public-payment-details"><span><Clock3 size={14} /> {link.expiresAt ? `Valide jusqu’au ${new Date(link.expiresAt).toLocaleDateString('fr-FR')}` : 'Sans expiration'}</span><span><ShieldCheck size={14} /> Paiement protégé par Mulapay</span></div>
+      <div className="public-payment-fields"><h2>Vos informations</h2><p>Ces informations sont nécessaires pour effectuer le paiement.</p>{link.customerFields.map(field => <label key={field}>{({ full_name: 'Nom complet', country: 'Pays', operator: 'Opérateur', phone: 'Téléphone', email: 'Adresse e-mail' } as Record<string, string>)[field] ?? field}<input required /></label>)}</div>
+      <button className="button button-primary button-wide" type="button">Continuer vers le paiement <ChevronRight size={15} /></button>
+      <small className="public-payment-reference">Réf. {link.reference ?? '—'}</small>
+    </div>
+  </main>;
+}
+
 function Kyc() {
   const [uploaded, setUploaded] = useState(false); const { toast, submitKyc } = useStore();
   return <main className="page-wrap"><PageIntro eyebrow="Vérification du compte" title="Votre vérification" subtitle="Un compte vérifié rend les mouvements transfrontaliers plus sûrs pour tous. Les nouveaux documents sont enregistrés dans la file conformité." action={<span className="pill pill-success" style={{ padding: '8px 12px' }}><CheckCircle2 size={13} style={{ marginRight: 5 }} /> Vérifié</span>} /><div className="dashboard-grid" style={{ marginTop: 27 }}><div className="card card-pad"><div className="section-head"><div><h2 className="section-title">État de la vérification</h2><p className="section-note">L’état actuel est enregistré sur votre profil Mulapay.</p></div><ShieldCheck size={24} color="hsl(160 42% 38%)" /></div><div style={{ height: 7, borderRadius: 5, background: 'hsl(160 42% 38% / .12)', overflow: 'hidden', margin: '23px 0 25px' }}><div style={{ width: uploaded ? '100%' : '66%', height: '100%', background: 'hsl(160 42% 38%)', borderRadius: 5 }} /></div><div className="step-list"><div className="step done"><div className="step-number"><Check size={13} /></div><div><div className="step-title">Informations du profil</div><div className="step-copy">Nom, email et numéro de téléphone confirmés.</div></div></div><div className="step done"><div className="step-number"><Check size={13} /></div><div><div className="step-title">Pièce d’identité</div><div className="step-copy">Carte nationale · examinée et approuvée.</div></div></div><div className={`step ${uploaded ? 'done' : ''}`}><div className="step-number">{uploaded ? <Check size={13} /> : '3'}</div><div><div className="step-title">Confirmation de l’adresse <span className="pill pill-neutral" style={{ marginLeft: 6 }}>{uploaded ? 'Envoyée' : 'Facultatif'}</span></div><div className="step-copy">{uploaded ? 'Justificatif de domicile envoyé pour examen.' : 'Ajoutez un justificatif de domicile pour augmenter vos limites.'}</div></div></div></div></div><div className="card card-pad"><div className="eyebrow">Liste des documents</div><div className="step-list" style={{ marginTop: 10 }}><div className="step done"><div className="step-number"><Check size={13} /></div><div><div className="step-title">Carte nationale</div><div className="step-copy">Approuvée et conservée dans le dossier de vérification.</div></div></div><div className={`step ${uploaded ? 'done' : ''}`}><div className="step-number">{uploaded ? <Check size={13} /> : '+'}</div><div style={{ flex: 1 }}><div className="step-title">Justificatif de domicile</div><div className="step-copy">{uploaded ? 'Document envoyé avec succès.' : 'Facture ou relevé bancaire des 3 derniers mois.'}</div>{!uploaded && <button className="button button-ghost button-sm" style={{ marginTop: 11 }} onClick={() => { setUploaded(true); submitKyc(['National ID', 'Selfie', 'Proof of address']); toast('Justificatif de domicile envoyé pour examen.'); }} data-testid="button-upload-kyc">Envoyer le document</button>}</div></div></div><div className="notice" style={{ marginTop: 20 }}><LockKeyhole size={14} /><span>Les documents sont transmis au circuit conformité Mulapay ; aucun prestataire de paiement n’intervient.</span></div></div></div></main>;
@@ -1680,7 +1725,7 @@ function HomeRedirect() {
 }
 
 function Router() {
-  return <Switch><Route path="/" component={HomeRedirect} /><Route path="/sign-in/*?" component={SignInPage} /><Route path="/sign-up/*?" component={SignUpPage} /><Route path="/forgot-password" component={ForgotPasswordPage} /><Route path="/terms" component={() => <LegalPage kind="terms" />} /><Route path="/privacy" component={() => <LegalPage kind="privacy" />} /><Route path="/app" component={RoutedApp} /><Route path="/app/:rest*" component={RoutedApp} /><Route path="/admin" component={RoutedApp} /><Route path="/admin/:rest*" component={RoutedApp} /><Route component={NotFound} /></Switch>;
+  return <Switch><Route path="/" component={HomeRedirect} /><Route path="/pay/:token" component={PublicPaymentPage} /><Route path="/sign-in/*?" component={SignInPage} /><Route path="/sign-up/*?" component={SignUpPage} /><Route path="/forgot-password" component={ForgotPasswordPage} /><Route path="/terms" component={() => <LegalPage kind="terms" />} /><Route path="/privacy" component={() => <LegalPage kind="privacy" />} /><Route path="/app" component={RoutedApp} /><Route path="/app/:rest*" component={RoutedApp} /><Route path="/admin" component={RoutedApp} /><Route path="/admin/:rest*" component={RoutedApp} /><Route component={NotFound} /></Switch>;
 }
 
 function App() {

@@ -109,6 +109,53 @@ export interface PaymentLink {
   payments: number;
 }
 
+export type PublicPaymentLinkAmountType = typeof PublicPaymentLinkAmountType[keyof typeof PublicPaymentLinkAmountType];
+
+
+export const PublicPaymentLinkAmountType = {
+  FIXED: 'FIXED',
+  CUSTOMER_CHOOSES: 'CUSTOMER_CHOOSES',
+} as const;
+
+export type PublicPaymentLinkCustomerFieldsItem = typeof PublicPaymentLinkCustomerFieldsItem[keyof typeof PublicPaymentLinkCustomerFieldsItem];
+
+
+export const PublicPaymentLinkCustomerFieldsItem = {
+  full_name: 'full_name',
+  country: 'country',
+  operator: 'operator',
+  phone: 'phone',
+  email: 'email',
+} as const;
+
+export type PublicPaymentLinkAfterPaymentAction = typeof PublicPaymentLinkAfterPaymentAction[keyof typeof PublicPaymentLinkAfterPaymentAction];
+
+
+export const PublicPaymentLinkAfterPaymentAction = {
+  CONFIRMATION: 'CONFIRMATION',
+  REDIRECT: 'REDIRECT',
+} as const;
+
+export interface PublicPaymentLink {
+  slug: string;
+  /** @nullable */
+  reference: string | null;
+  productName: string;
+  amount: number;
+  currency: string;
+  description: string;
+  amountType: PublicPaymentLinkAmountType;
+  customerFields: PublicPaymentLinkCustomerFieldsItem[];
+  status: string;
+  expiresAt: string;
+  /** @nullable */
+  maxPayments: number | null;
+  afterPaymentAction: PublicPaymentLinkAfterPaymentAction;
+  /** @nullable */
+  redirectUrl: string | null;
+  payments: number;
+}
+
 export interface Notification {
   id: string;
   title: string;

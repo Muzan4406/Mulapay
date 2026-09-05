@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { getAuth } from "@clerk/express";
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, like, sql } from "drizzle-orm";
 import { db } from "@workspace/db";
 import {
   DecideExchangeBody,
@@ -234,6 +234,10 @@ async function resolveApiKeyUserId(req: Request) {
 }
 
 router.use(async (req, res, next) => {
+  if (req.path.startsWith("/v1/public/payment-links/")) {
+    next();
+    return;
+  }
   const clerkUserId = getAuth(req).userId;
   if (clerkUserId) {
     (req as MulapayRequest).mulapayAuthMode = "clerk";
@@ -549,6 +553,41 @@ router.post("/v1/payment-links", async (req, res) => {
   };
   const [created] = await db.insert(paymentLinks).values(link).returning();
   res.status(201).json(created);
+});
+
+router.get("/v1/public/payment-links/:token", async (req, res) => {
+  const token = req.params.token;
+  if (!/^[a-f0-9]{16}$/i.test(token)) {
+    res.status(404).json({ error: "Lien de paiement introuvable." });
+    return;
+  }
+  const link = await db.query.paymentLinks.findFirst({ where: like(paymentLinks.slug, `%/${token}`) });
+  if (!link) {
+    res.status(404).json({ error: "Lien de paiement introuvable." });
+    return;
+  }
+  const expired = Boolean(link.expiresAt) && new Date(link.expiresAt).getTime() <= Date.now();
+  const exhausted = link.maxPayments !== null && link.payments >= link.maxPayments;
+  if (link.status !== "Active" || expired || exhausted) {
+    res.status(410).json({ error: "Ce lien de paiement n’est plus disponible." });
+    return;
+  }
+  res.json({
+    slug: `${requestOrigin(req)}/pay/${token}`,
+    reference: link.reference,
+    productName: link.productName,
+    amount: link.amount,
+    currency: link.currency,
+    description: link.description,
+    amountType: link.amountType,
+    customerFields: link.customerFields,
+    status: link.status,
+    expiresAt: link.expiresAt,
+    maxPayments: link.maxPayments,
+    afterPaymentAction: link.afterPaymentAction,
+    redirectUrl: link.redirectUrl,
+    payments: link.payments,
+  });
 });
 
 router.get("/v1/payment-links", async (req, res) => {

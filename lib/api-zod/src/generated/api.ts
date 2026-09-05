@@ -261,6 +261,31 @@ export const ListPaymentLinksResponse = zod.array(ListPaymentLinksResponseItem)
 
 
 /**
+ * @summary Loads a public payment link
+ */
+export const GetPublicPaymentLinkParams = zod.object({
+  "token": zod.coerce.string()
+})
+
+export const GetPublicPaymentLinkResponse = zod.object({
+  "slug": zod.string(),
+  "reference": zod.string().nullable(),
+  "productName": zod.string(),
+  "amount": zod.number(),
+  "currency": zod.string(),
+  "description": zod.string(),
+  "amountType": zod.enum(['FIXED', 'CUSTOMER_CHOOSES']),
+  "customerFields": zod.array(zod.enum(['full_name', 'country', 'operator', 'phone', 'email'])),
+  "status": zod.string(),
+  "expiresAt": zod.string(),
+  "maxPayments": zod.number().nullable(),
+  "afterPaymentAction": zod.enum(['CONFIRMATION', 'REDIRECT']),
+  "redirectUrl": zod.string().nullable(),
+  "payments": zod.number()
+})
+
+
+/**
  * @summary Permanently deletes a payment link
  */
 export const DeletePaymentLinkParams = zod.object({

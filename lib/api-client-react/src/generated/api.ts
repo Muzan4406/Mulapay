@@ -33,6 +33,7 @@ import type {
   OperationResult,
   PaymentLink,
   PaymentLinkInput,
+  PublicPaymentLink,
   Transaction,
   TransferInput,
   UnauthorizedResponse,
@@ -570,6 +571,83 @@ export function useListPaymentLinks<TData = Awaited<ReturnType<typeof listPaymen
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListPaymentLinksQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetPublicPaymentLinkUrl = (token: string,) => {
+
+
+
+
+  return `/api/v1/public/payment-links/${token}`
+}
+
+/**
+ * @summary Loads a public payment link
+ */
+export const getPublicPaymentLink = async (token: string, options?: Parameters<typeof customFetch>[1]): Promise<PublicPaymentLink> => {
+
+  return customFetch<PublicPaymentLink>(getGetPublicPaymentLinkUrl(token),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPublicPaymentLinkQueryKey = (token: string,) => {
+    return [
+    `/api/v1/public/payment-links/${token}`
+    ] as const;
+    }
+
+
+export const getGetPublicPaymentLinkQueryOptions = <TData = Awaited<ReturnType<typeof getPublicPaymentLink>>, TError = ErrorType<void>>(token: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPublicPaymentLink>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPublicPaymentLinkQueryKey(token);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPublicPaymentLink>>> = ({ signal }) => getPublicPaymentLink(token, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: token !== null && token !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPublicPaymentLink>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPublicPaymentLinkQueryResult = NonNullable<Awaited<ReturnType<typeof getPublicPaymentLink>>>
+export type GetPublicPaymentLinkQueryError = ErrorType<void>
+
+
+/**
+ * @summary Loads a public payment link
+ */
+
+export function useGetPublicPaymentLink<TData = Awaited<ReturnType<typeof getPublicPaymentLink>>, TError = ErrorType<void>>(
+ token: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPublicPaymentLink>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPublicPaymentLinkQueryOptions(token,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
