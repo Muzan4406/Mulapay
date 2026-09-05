@@ -845,7 +845,8 @@ router.post("/v1/public/payment-links/:token/payments", async (req, res) => {
   const orderId = `paylink_${link.id}_${paymentLinkIdempotencyKey}`;
   const existing = await db.query.transactions.findFirst({ where: eq(transactions.providerOrderId, orderId) });
   if (existing) {
-    res.status(200).json({ ok: true, message: "Cette demande de paiement existe déjà.", reference: existing.reference, status: existing.status, paymentUrl: existing.paymentUrl, expiresAt: existing.expiresAt?.toISOString() ?? null, fee: existing.fee, netAmount: existing.netAmount, platformFee: mulapayAmount.platformFee, merchantAmount: mulapayAmount.merchantAmount });
+    const existingMulapayAmount = calculateMulapayNetAmount(existing.amount, Number(settings.feePercentage));
+    res.status(200).json({ ok: true, message: "Cette demande de paiement existe déjà.", reference: existing.reference, status: existing.status, paymentUrl: existing.paymentUrl, expiresAt: existing.expiresAt?.toISOString() ?? null, fee: existing.fee, netAmount: existing.netAmount, platformFee: existingMulapayAmount.platformFee, merchantAmount: existingMulapayAmount.merchantAmount });
     return;
   }
   try {

@@ -946,13 +946,15 @@ h1,h2,h3,p { margin:0; }
 .preview-button { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:11px 12px; border-radius:8px; background:hsl(var(--primary)); color:hsl(var(--primary-foreground)); font-size:10px; font-weight:700; }
 .help-icon { width:26px; height:26px; display:grid; place-items:center; flex:0 0 auto; border-radius:8px; background:hsl(var(--accent) / .26); color:hsl(34 47% 29%); }
 .payment-success { position:relative; display:flex; align-items:flex-start; gap:14px; margin:18px 0; padding:20px 46px 20px 20px; border-color:hsl(var(--primary) / .3); background:linear-gradient(120deg,hsl(var(--primary) / .09),hsl(var(--card))); box-shadow:0 13px 30px hsl(205 38% 16% / .06); animation:payment-reveal .35s ease both; }
-.public-payment-page { min-height:100vh; padding-top:34px; padding-bottom:70px; background:radial-gradient(circle at 8% 8%,hsl(var(--primary) / .08),transparent 32%),linear-gradient(180deg,hsl(42 44% 99%),hsl(42 36% 96%)); }
-.public-payment-header, .public-payment-intro, .public-payment-layout { width:min(100% - 40px,980px); margin-left:auto; margin-right:auto; }
-.public-payment-header { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:37px; }
+.public-payment-page { min-height:100vh; padding-top:22px; padding-bottom:48px; background:radial-gradient(circle at 8% 8%,hsl(var(--primary) / .08),transparent 32%),linear-gradient(180deg,hsl(42 44% 99%),hsl(42 36% 96%)); }
+.public-payment-header, .public-payment-intro, .public-payment-layout { width:min(100% - 40px,680px); margin-left:auto; margin-right:auto; }
+.public-payment-header { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:16px; }
+.public-payment-header .brand { margin:0; padding:0; }
+.public-payment-header .brand-image { width:126px; max-height:64px; }
 .public-payment-trust { display:flex; align-items:center; gap:7px; padding:8px 11px; border:1px solid hsl(var(--primary) / .18); border-radius:999px; background:hsl(var(--card) / .72); color:hsl(var(--primary)); font-size:10px; font-weight:700; }
-.public-payment-intro { margin-bottom:25px; }
-.public-payment-intro h1 { max-width:650px; margin-top:9px; color:hsl(var(--foreground)); font-size:clamp(28px,4vw,44px); line-height:1.04; letter-spacing:-.06em; }
-.public-payment-intro p { max-width:600px; margin-top:12px; color:hsl(var(--muted-foreground)); font-size:13px; line-height:1.6; }
+.public-payment-intro { margin-bottom:16px; }
+.public-payment-intro h1 { max-width:650px; color:hsl(var(--foreground)); font-size:clamp(28px,4vw,38px); line-height:1.04; letter-spacing:-.06em; }
+.public-payment-intro p { max-width:600px; margin-top:7px; color:hsl(var(--muted-foreground)); font-size:12px; line-height:1.5; }
 .public-payment-layout { display:grid; grid-template-columns:minmax(260px,.78fr) minmax(0,1.22fr); align-items:start; gap:18px; }
 .public-payment-layout-single { grid-template-columns:minmax(0,680px); justify-content:center; }
 .public-payment-summary { position:sticky; top:28px; overflow:hidden; padding:21px; border:1px solid hsl(var(--border)); border-radius:18px; background:hsl(var(--card) / .84); box-shadow:0 18px 45px hsl(205 38% 16% / .07); }
@@ -1003,6 +1005,7 @@ h1,h2,h3,p { margin:0; }
 .public-payment-result h2 { color:hsl(var(--foreground)); font-size:24px; letter-spacing:-.06em; }
 .public-payment-result p { max-width:340px; color:hsl(var(--muted-foreground)); font-size:11px; line-height:1.55; }
 .public-payment-amount { display:grid; gap:3px; width:100%; padding:13px 12px; border:1px solid hsl(42 74% 64% / .36); border-radius:11px; background:hsl(45 91% 89% / .46); }
+.public-payment-amount small { color:hsl(34 47% 35%); font-size:9px; }
 .public-payment-amount strong { color:hsl(42 83% 42%); font-family:var(--font-mono); font-size:19px; letter-spacing:-.04em; }
 .public-payment-amount span { color:hsl(34 47% 35%); font-size:10px; }
 .public-payment-progress { display:grid; gap:7px; width:100%; text-align:left; }
@@ -1082,12 +1085,13 @@ h1,h2,h3,p { margin:0; }
   .generated-link .button { width:100%; }
   .success-actions .reference-chip { width:100%; text-align:center; }
   .existing-links-section { margin-top:28px; }
-  .public-payment-page { padding-top:22px; padding-bottom:38px; }
+  .public-payment-page { padding-top:16px; padding-bottom:32px; }
   .public-payment-header, .public-payment-intro, .public-payment-layout { width:calc(100% - 28px); }
-  .public-payment-header { margin-bottom:28px; }
+  .public-payment-header { margin-bottom:14px; }
+  .public-payment-header .brand-image { width:108px; max-height:55px; }
   .public-payment-trust { padding:7px 9px; font-size:9px; }
-  .public-payment-intro { margin-bottom:18px; }
-  .public-payment-intro h1 { font-size:32px; }
+  .public-payment-intro { margin-bottom:14px; }
+  .public-payment-intro h1 { font-size:29px; }
   .public-payment-intro p { font-size:11px; }
   .public-payment-summary, .public-payment-form { border-radius:15px; }
   .public-payment-summary { padding:17px; }

@@ -1509,6 +1509,8 @@ function PublicPaymentPage() {
           currency: payload.currency ?? current.currency,
           fee: typeof payload.fee === 'number' ? payload.fee : current.fee,
           netAmount: typeof payload.netAmount === 'number' ? payload.netAmount : current.netAmount,
+          platformFee: typeof payload.platformFee === 'number' ? payload.platformFee : current.platformFee,
+          merchantAmount: typeof payload.merchantAmount === 'number' ? payload.merchantAmount : current.merchantAmount,
           paymentUrl: payload.paymentUrl ?? current.paymentUrl,
           expiresAt: payload.expiresAt ?? current.expiresAt,
         } : current);
@@ -1616,7 +1618,7 @@ function PublicPaymentPage() {
 
    return <main className="page-wrap public-payment-page">
      <div className="public-payment-header"><Logo /><div className="public-payment-trust"><LockKeyhole size={13} /> Paiement sécurisé</div></div>
-     <div className="public-payment-intro"><span className="eyebrow">Paiement Mulapay</span><h1>{link.productName}</h1><p>{link.description || 'Effectuez votre paiement Mobile Money en toute sécurité.'}</p></div>
+     <div className="public-payment-intro"><h1>{link.productName}</h1><p>{link.description || 'Effectuez votre paiement Mobile Money en toute sécurité.'}</p></div>
      <div className="public-payment-layout public-payment-layout-single">
        <form className="card card-pad deposit-form public-payment-form" onSubmit={submitPayment}>
           {paymentResult ? <div className={`public-payment-result ${paymentCompleted ? 'is-complete' : paymentFailed ? 'is-failed' : ''}`} aria-live="polite">
