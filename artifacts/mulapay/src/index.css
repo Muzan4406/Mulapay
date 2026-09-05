@@ -990,11 +990,25 @@ h1,h2,h3,p { margin:0; }
 .public-payment-unavailable strong { flex:1; color:hsl(var(--foreground)); font-size:12px; }
 .public-payment-error { max-width:none; margin:0 0 12px; padding:10px 12px; border-radius:9px; background:hsl(var(--destructive) / .08); text-align:left; }
 .public-payment-result { display:grid; justify-items:center; gap:10px; min-height:310px; align-content:center; padding:20px; text-align:center; }
+.public-payment-provider { display:flex; align-items:center; gap:9px; align-self:stretch; padding:9px 11px; border:1px solid hsl(var(--border)); border-radius:11px; background:hsl(var(--background) / .68); text-align:left; }
+.public-payment-provider img, .public-payment-provider-fallback { width:34px; height:34px; display:grid; place-items:center; flex:0 0 auto; border-radius:10px; object-fit:contain; padding:5px; background:hsl(var(--card)); }
+.public-payment-provider-fallback { color:hsl(var(--primary)); }
+.public-payment-provider > span:last-child { display:grid; gap:3px; }
+.public-payment-provider small { color:hsl(var(--muted-foreground)); font-size:9px; }
+.public-payment-provider strong { color:hsl(var(--foreground)); font-size:11px; }
 .public-payment-result-icon { width:52px; height:52px; display:grid; place-items:center; margin-bottom:4px; border-radius:16px; background:hsl(var(--primary) / .12); color:hsl(var(--primary)); }
 .public-payment-result.is-failed .public-payment-result-icon { background:hsl(var(--destructive) / .1); color:hsl(var(--destructive)); }
 .public-payment-result.is-complete .public-payment-result-icon { background:hsl(var(--primary) / .12); color:hsl(var(--primary)); }
 .public-payment-result h2 { color:hsl(var(--foreground)); font-size:24px; letter-spacing:-.06em; }
 .public-payment-result p { max-width:340px; color:hsl(var(--muted-foreground)); font-size:11px; line-height:1.55; }
+.public-payment-amount { display:grid; gap:3px; width:100%; padding:13px 12px; border:1px solid hsl(42 74% 64% / .36); border-radius:11px; background:hsl(45 91% 89% / .46); }
+.public-payment-amount strong { color:hsl(42 83% 42%); font-family:var(--font-mono); font-size:19px; letter-spacing:-.04em; }
+.public-payment-amount span { color:hsl(34 47% 35%); font-size:10px; }
+.public-payment-progress { display:grid; gap:7px; width:100%; text-align:left; }
+.public-payment-progress > div { display:flex; align-items:center; justify-content:space-between; gap:12px; color:hsl(var(--muted-foreground)); font-size:9px; }
+.public-payment-progress strong { color:hsl(var(--foreground)); font-family:var(--font-mono); font-size:10px; }
+.public-payment-progress-track { display:block; width:100%; height:5px; overflow:hidden; border-radius:99px; background:hsl(var(--border)); }
+.public-payment-progress-track > span { display:block; height:100%; border-radius:inherit; background:hsl(43 86% 50%); transition:width .5s ease; }
 .public-payment-result code { padding:7px 10px; border-radius:8px; background:hsl(var(--muted)); color:hsl(var(--foreground)); font-family:var(--font-mono); font-size:10px; }
 .public-payment-result .button { max-width:340px; margin-top:8px; }
 .public-payment-waiting { display:flex; align-items:center; gap:7px; margin-top:8px; padding:10px 12px; border-radius:9px; background:hsl(var(--accent) / .22); color:hsl(34 47% 29%); font-size:10px; }

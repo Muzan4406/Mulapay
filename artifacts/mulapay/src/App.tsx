@@ -55,7 +55,7 @@ type AdminKycCase = { id: string; userId: string; name: string; country: string;
 type AdminSummary = { kycAwaiting: number; exchangeQueue: number; volume: number; successRate: number };
 type PaymentProviderId = 'DRIMPAY' | 'ASHTECHPAY';
 type DepositTracking = { reference: string; status: string; amount: number; currency: string; fee: number | null; netAmount: number | null; paymentUrl: string | null };
-type PublicPaymentResult = { reference: string; status: string; message?: string; amount?: number; currency?: string; fee?: number | null; netAmount?: number | null; paymentUrl?: string | null; expiresAt?: string | null };
+type PublicPaymentResult = { reference: string; status: string; operator?: string; message?: string; amount?: number; currency?: string; fee?: number | null; netAmount?: number | null; paymentUrl?: string | null; expiresAt?: string | null };
 type Store = {
   profile: { id: string; firstName: string; lastName: string; email: string; role: string; country: string; kycStatus: string };
   wallets: Wallet[]; transactions: Transaction[]; exchanges: Exchange[]; links: PaymentLink[]; notifications: Notification[];
@@ -1469,6 +1469,7 @@ function PublicPaymentPage() {
   const [paymentError, setPaymentError] = useState('');
   const [paymentStatusError, setPaymentStatusError] = useState('');
   const [paymentResult, setPaymentResult] = useState<PublicPaymentResult | null>(null);
+  const [paymentSecondsLeft, setPaymentSecondsLeft] = useState(60);
 
   useEffect(() => {
     let mounted = true;
@@ -1525,6 +1526,14 @@ function PublicPaymentPage() {
 
   useEffect(() => {
     if (!paymentResult?.reference || depositStatusIsTerminal(paymentResult.status)) return;
+    const interval = window.setInterval(() => {
+      setPaymentSecondsLeft(current => Math.max(0, current - 1));
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, [paymentResult?.reference, paymentResult?.status]);
+
+  useEffect(() => {
+    if (!paymentResult?.reference || depositStatusIsTerminal(paymentResult.status)) return;
     let redirectTimer: number | undefined;
     const timeout = window.setTimeout(() => {
       setPaymentResult(current => current && !depositStatusIsTerminal(current.status) ? { ...current, status: 'Failed', message: 'Le paiement n’a pas été confirmé après 60 secondes.' } : current);
@@ -1559,6 +1568,7 @@ function PublicPaymentPage() {
     event.preventDefault();
     setPaymentError('');
     setPaymentResult(null);
+    setPaymentSecondsLeft(60);
     setPaymentSubmitting(true);
     const selectedAmount = link.amountType === 'FIXED' ? link.amount : Number(amount);
     try {
@@ -1581,6 +1591,7 @@ function PublicPaymentPage() {
       setPaymentResult({
         reference: payload.reference,
         status: payload.status ?? 'Pending',
+        operator: customerOperator,
         message: payload.message,
         amount: selectedAmount,
         currency: link.currency,
@@ -1597,6 +1608,9 @@ function PublicPaymentPage() {
   };
   const paymentCompleted = paymentResult?.status.toLowerCase() === 'completed';
   const paymentFailed = paymentResult ? ['failed', 'expired', 'cancelled', 'reversed'].includes(paymentResult.status.toLowerCase()) : false;
+  const paymentOperator = paymentResult?.operator ?? customerOperator;
+  const paymentOperatorOption = selectedCustomerCountry.operators.find(option => option.name === paymentOperator);
+  const paymentAmountLabel = money(paymentResult?.netAmount ?? paymentResult?.amount ?? selectedAmount, paymentResult?.currency ?? link.currency);
 
    return <main className="page-wrap public-payment-page">
      <div className="public-payment-header"><Logo /><div className="public-payment-trust"><LockKeyhole size={13} /> Paiement sécurisé</div></div>
@@ -1610,7 +1624,19 @@ function PublicPaymentPage() {
          <p className="public-payment-note">Votre paiement est transmis au service de paiement puis crédité au commerçant uniquement après confirmation.</p>
        </aside>
        <form className="card card-pad deposit-form public-payment-form" onSubmit={submitPayment}>
-          {paymentResult ? <div className={`public-payment-result ${paymentCompleted ? 'is-complete' : paymentFailed ? 'is-failed' : ''}`} aria-live="polite"><span className="public-payment-result-icon">{paymentCompleted ? <CheckCircle2 size={22} /> : paymentFailed ? <CircleAlert size={22} /> : <RefreshCw size={22} className="loading-spin" />}</span><span className="eyebrow">{paymentCompleted ? 'Paiement confirmé' : paymentFailed ? 'Paiement échoué' : 'Paiement en attente'}</span><h2>{paymentCompleted ? 'Merci, votre paiement est confirmé' : paymentFailed ? 'Le paiement n’a pas été confirmé' : 'Continuez votre paiement'}</h2><p>{paymentCompleted ? `Le commerçant recevra ${money(paymentResult.netAmount ?? paymentResult.amount ?? 0, paymentResult.currency ?? link.currency)} après confirmation du service de paiement.` : paymentFailed ? 'Aucun crédit ne sera appliqué au commerçant sans confirmation signée du fournisseur.' : paymentResult.message ?? 'Confirmez la demande sur votre téléphone. Le statut est vérifié automatiquement.'}</p>{!paymentCompleted && !paymentFailed && paymentResult.paymentUrl && <a className="button button-primary button-wide" href={paymentResult.paymentUrl} target="_blank" rel="noreferrer">Ouvrir le paiement sécurisé <ChevronRight size={15} /></a>}{!paymentCompleted && !paymentFailed && !paymentResult.paymentUrl && <div className="public-payment-waiting"><RefreshCw size={15} className="loading-spin" /> Vérification automatique toutes les 4 secondes.</div>}{paymentStatusError && <div className="form-error public-payment-error"><CircleAlert size={14} /> {paymentStatusError}</div>}{paymentFailed && <button className="button button-ghost button-wide" type="button" onClick={() => { setPaymentResult(null); setPaymentStatusError(''); setPaymentError(''); }}>Réessayer le paiement</button>}</div> : <>
+          {paymentResult ? <div className={`public-payment-result ${paymentCompleted ? 'is-complete' : paymentFailed ? 'is-failed' : ''}`} aria-live="polite">
+            <div className="public-payment-provider">{paymentOperatorOption ? <img src={`${import.meta.env.BASE_URL}mobile-money/${paymentOperatorOption.src}`} alt="" /> : <span className="public-payment-provider-fallback"><WalletCards size={18} /></span>}<span><small>Opération Mobile Money</small><strong>{paymentOperator}</strong></span></div>
+            <span className="public-payment-result-icon">{paymentCompleted ? <CheckCircle2 size={22} /> : paymentFailed ? <CircleAlert size={22} /> : <RefreshCw size={22} className="loading-spin" />}</span>
+            <span className="eyebrow">{paymentCompleted ? 'Paiement confirmé' : paymentFailed ? 'Paiement non confirmé' : 'Paiement en cours'}</span>
+            <h2>{paymentCompleted ? 'Votre paiement est confirmé' : paymentFailed ? 'Le paiement n’a pas abouti' : 'Validez sur votre téléphone'}</h2>
+            <p>{paymentCompleted ? `Le commerçant recevra ${money(paymentResult.netAmount ?? paymentResult.amount ?? 0, paymentResult.currency ?? link.currency)} après confirmation du service de paiement.` : paymentFailed ? 'Le service de paiement n’a pas confirmé cette opération dans le délai prévu.' : paymentResult.message ?? 'Ouvrez votre application Mobile Money et validez la demande. Mulapay vérifie automatiquement la confirmation.'}</p>
+            <div className="public-payment-amount"><strong>{paymentAmountLabel}</strong><span>via {paymentOperator}</span></div>
+            {!paymentCompleted && !paymentFailed && <div className="public-payment-progress"><div><span>Confirmation automatique</span><strong>{paymentSecondsLeft}s</strong></div><span className="public-payment-progress-track"><span style={{ width: `${Math.round((paymentSecondsLeft / 60) * 100)}%` }} /></span></div>}
+            {!paymentCompleted && !paymentFailed && paymentResult.paymentUrl && <a className="button button-primary button-wide" href={paymentResult.paymentUrl} target="_blank" rel="noreferrer">Ouvrir le paiement sécurisé <ChevronRight size={15} /></a>}
+            {!paymentCompleted && !paymentFailed && <div className="public-payment-waiting"><RefreshCw size={15} className="loading-spin" /> Statut vérifié automatiquement.</div>}
+            {paymentStatusError && <div className="form-error public-payment-error"><CircleAlert size={14} /> {paymentStatusError}</div>}
+            {paymentFailed && <button className="button button-ghost button-wide" type="button" onClick={() => { setPaymentResult(null); setPaymentStatusError(''); setPaymentError(''); setPaymentSecondsLeft(60); }}>Réessayer le paiement</button>}
+          </div> : <>
            <div className="public-payment-form-head"><div><span className="eyebrow">Dernière étape</span><h2>Vos informations</h2><p>Renseignez les coordonnées utilisées pour le paiement.</p></div><span className="public-payment-step">1 / 1</span></div>
            {link.amountType === 'CUSTOMER_CHOOSES' && <div className="field"><label htmlFor="public-payment-amount">Montant à payer</label><div className="input-prefix"><span>{link.currency}</span><input id="public-payment-amount" type="number" min="1" step="1" value={amount} onChange={event => setAmount(event.target.value)} placeholder="0" required /></div><small className="field-hint">Saisissez un montant entier en {link.currency}.</small></div>}
            {hasField('full_name') && <div className="field"><label htmlFor="public-payment-full-name">Nom complet</label><input id="public-payment-full-name" value={customerValues.full_name ?? ''} onChange={event => updateCustomerValue('full_name', event.target.value)} autoComplete="name" placeholder="Votre nom et prénom" required /></div>}
