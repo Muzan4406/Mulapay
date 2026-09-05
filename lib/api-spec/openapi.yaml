@@ -149,6 +149,25 @@ paths:
         "410":
           description: Payment link no longer available
   /v1/payment-links/{id}:
+    patch:
+      operationId: updatePaymentLink
+      tags: [wallet]
+      summary: Updates an owned payment link
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentLinkInput"
+      responses:
+        "200":
+          description: Payment link updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentLink"
     delete:
       operationId: deletePaymentLink
       tags: [wallet]
