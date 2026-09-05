@@ -32,6 +32,7 @@ export * from './paymentLinkInputAfterPaymentAction';
 export * from './paymentLinkInputAmountType';
 export * from './paymentLinkInputCustomerFieldsItem';
 export * from './profile';
+export * from './publicPaymentInput';
 export * from './publicPaymentLink';
 export * from './publicPaymentLinkAfterPaymentAction';
 export * from './publicPaymentLinkAmountType';

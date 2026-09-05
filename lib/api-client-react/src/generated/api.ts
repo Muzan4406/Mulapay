@@ -33,6 +33,7 @@ import type {
   OperationResult,
   PaymentLink,
   PaymentLinkInput,
+  PublicPaymentInput,
   PublicPaymentLink,
   Transaction,
   TransferInput,
@@ -659,6 +660,78 @@ export function useGetPublicPaymentLink<TData = Awaited<ReturnType<typeof getPub
 
 
 
+
+export const getCreatePublicPaymentUrl = (token: string,) => {
+
+
+
+
+  return `/api/v1/public/payment-links/${token}/payments`
+}
+
+/**
+ * @summary Starts a real payment for a public payment link
+ */
+export const createPublicPayment = async (token: string,
+    publicPaymentInput: PublicPaymentInput, options?: Parameters<typeof customFetch>[1]): Promise<OperationResult> => {
+
+  return customFetch<OperationResult>(getCreatePublicPaymentUrl(token),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(publicPaymentInput)
+  }
+);}
+
+
+
+
+
+export const getCreatePublicPaymentMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPublicPayment>>, TError,{token: string;data: BodyType<PublicPaymentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createPublicPayment>>, TError,{token: string;data: BodyType<PublicPaymentInput>}, TContext> => {
+
+const mutationKey = ['createPublicPayment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createPublicPayment>>, {token: string;data: BodyType<PublicPaymentInput>}> = (props) => {
+          const {token,data} = props ?? {};
+
+          return  createPublicPayment(token,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreatePublicPaymentMutationResult = NonNullable<Awaited<ReturnType<typeof createPublicPayment>>>
+    export type CreatePublicPaymentMutationBody = BodyType<PublicPaymentInput>
+    export type CreatePublicPaymentMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Starts a real payment for a public payment link
+ */
+export const useCreatePublicPayment = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPublicPayment>>, TError,{token: string;data: BodyType<PublicPaymentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createPublicPayment>>,
+        TError,
+        {token: string;data: BodyType<PublicPaymentInput>},
+        TContext
+      > => {
+      return useMutation(getCreatePublicPaymentMutationOptions(options));
+    }
 
 export const getUpdatePaymentLinkUrl = (id: string,) => {
 

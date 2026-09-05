@@ -11,6 +11,7 @@ import { ClerkProvider, useAuth, useClerk, useSignIn, useSignUp, useUser } from 
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
 import { frFR } from '@clerk/localizations';
+import { QRCodeSVG } from 'qrcode.react';
 import {
   getGetBootstrapQueryKey,
   getGetAdminSummaryQueryKey,
@@ -40,7 +41,6 @@ import NotFound from '@/pages/not-found';
 
 type Wallet = { id: string; country: string; code: string; currency: string; balance: number; pending: number; status: string };
 type Transaction = { id: string; type: string; status: string; amount: number; currency: string; country: string; counterparty: string; createdAt: string; reference: string };
-type TransactionView = Transaction & { isExample?: boolean };
 type Exchange = { id: string; source: string; destination: string; amount: number; rate: number; receivedAmount: number; status: string; requestedAt: string };
 type PaymentLink = ApiPaymentLink;
 type PublicPaymentLink = Omit<PaymentLink, 'id' | 'walletId' | 'notifyApp' | 'notifyEmail' | 'notifyWebhook'>;
@@ -109,7 +109,7 @@ function operatorLogoUrl(operator?: string) {
   return provider ? `${import.meta.env.BASE_URL}mobile-money/${provider.src}` : undefined;
 }
 
-function transactionIsIncoming(transaction: Pick<TransactionView, 'type' | 'counterparty'>) {
+function transactionIsIncoming(transaction: Pick<Transaction, 'type' | 'counterparty'>) {
   if (transaction.type === 'Received' || transaction.type === 'Deposit' || transaction.type === 'Exchange') return true;
   if (transaction.type !== 'Payment') return false;
   const counterparty = transaction.counterparty.toLowerCase();
@@ -123,19 +123,6 @@ function transactionServiceLogo(counterparty: string) {
   if (normalized.includes('envoi')) return dashboardIcon('transfer.png');
   return dashboardIcon('transactions.png');
 }
-
-const exampleTransactions: TransactionView[] = [
-  { id: 'example-tg-mixx', type: 'Deposit', status: 'Completed', amount: 75000, currency: 'XOF', country: 'Togo', counterparty: 'Dépôt Mobile Money · Mixx by Yas', createdAt: '2026-09-05T08:35:00.000Z', reference: 'MP-EX-TG-001', isExample: true },
-  { id: 'example-bj-mtn', type: 'Deposit', status: 'Completed', amount: 120000, currency: 'XOF', country: 'Bénin', counterparty: 'Dépôt Mobile Money · MTN MoMo', createdAt: '2026-09-04T15:10:00.000Z', reference: 'MP-EX-BJ-002', isExample: true },
-  { id: 'example-ci-orange', type: 'Deposit', status: 'Completed', amount: 95000, currency: 'XOF', country: 'Côte d’Ivoire', counterparty: 'Dépôt Mobile Money · Orange Money', createdAt: '2026-09-03T11:25:00.000Z', reference: 'MP-EX-CI-003', isExample: true },
-  { id: 'example-sn-wave', type: 'Deposit', status: 'Processing', amount: 45000, currency: 'XOF', country: 'Sénégal', counterparty: 'Dépôt Mobile Money · Wave', createdAt: '2026-09-02T09:40:00.000Z', reference: 'MP-EX-SN-004', isExample: true },
-  { id: 'example-bf-moov', type: 'Received', status: 'Completed', amount: 30000, currency: 'XOF', country: 'Burkina Faso', counterparty: 'Réception de Kossi', createdAt: '2026-09-01T17:05:00.000Z', reference: 'MP-EX-BF-005', isExample: true },
-  { id: 'example-ml-airtel', type: 'Withdrawal', status: 'Completed', amount: 25000, currency: 'XOF', country: 'Mali', counterparty: 'Retrait Mobile Money · Airtel Money', createdAt: '2026-08-30T13:20:00.000Z', reference: 'MP-EX-ML-006', isExample: true },
-  { id: 'example-ne-moov', type: 'Payment', status: 'Completed', amount: 18500, currency: 'XOF', country: 'Niger', counterparty: 'Paiement marchand · Moov Money', createdAt: '2026-08-29T10:15:00.000Z', reference: 'MP-EX-NE-007', isExample: true },
-  { id: 'example-tg-link', type: 'Payment', status: 'Completed', amount: 22000, currency: 'XOF', country: 'Togo', counterparty: 'Paiement par lien · Café Lomé', createdAt: '2026-08-28T16:45:00.000Z', reference: 'MP-EX-TG-008', isExample: true },
-  { id: 'example-ci-api', type: 'Payment', status: 'Completed', amount: 68000, currency: 'XOF', country: 'Côte d’Ivoire', counterparty: 'Paiement API · Kora Market', createdAt: '2026-08-27T14:30:00.000Z', reference: 'MP-EX-CI-009', isExample: true },
-  { id: 'example-bj-send', type: 'Sent', status: 'Completed', amount: 40000, currency: 'XOF', country: 'Bénin', counterparty: 'Envoi d’argent · Afi Mensah', createdAt: '2026-08-26T12:05:00.000Z', reference: 'MP-EX-BJ-010', isExample: true },
-];
 
 function transactionDateLabel(value: string) {
   const date = new Date(value);
@@ -562,7 +549,8 @@ function Receive() {
 
 function QrPage() {
   const { links } = useStore();
-  return <main className="page-wrap"><PageIntro eyebrow="Réception rapide" title="QR Code" subtitle="Un QR code ne contient aucun secret. Il pointe vers une page de paiement sécurisée." /><div className="card card-pad qr-wrap"><div className="qr-box">{Array.from({ length: 81 }, (_, index) => <i key={index} />)}</div><div className="qr-caption">{links[0]?.slug ?? 'Créez un lien de paiement pour générer votre QR code.'}</div></div></main>;
+  const link = links.find(item => item.status === 'Active');
+  return <main className="page-wrap"><PageIntro eyebrow="Réception rapide" title="QR Code" subtitle="Un QR code ne contient aucun secret. Il pointe vers une page de paiement sécurisée." /><div className="card card-pad qr-wrap">{link ? <><QRCodeSVG value={link.slug} size={220} level="M" includeMargin data-testid="qr-payment-link" /><div className="qr-caption">{link.slug}</div></> : <div className="empty-state"><QrCode size={25} /><strong>Aucun lien actif</strong><p>Créez un lien de paiement pour générer un QR code réel.</p></div>}</div></main>;
 }
 
 const Payments = NotFound;
@@ -969,10 +957,9 @@ function Transactions() {
   const { transactions, toast } = useStore();
   const [filter, setFilter] = useState('All');
   const [query, setQuery] = useState('');
-  const displayedTransactions: TransactionView[] = [...transactions, ...exampleTransactions];
-  const filtered = displayedTransactions.filter(t => (filter === 'All' || t.type === filter) && `${t.counterparty} ${t.reference} ${t.country}`.toLowerCase().includes(query.toLowerCase()));
+  const filtered = transactions.filter(t => (filter === 'All' || t.type === filter) && `${t.counterparty} ${t.reference} ${t.country}`.toLowerCase().includes(query.toLowerCase()));
   const filterOptions = [['All', 'Toutes'], ['Received', 'Reçues'], ['Sent', 'Envoyées'], ['Exchange', 'Échanges'], ['Deposit', 'Dépôts'], ['Withdrawal', 'Retraits'], ['Payment', 'Paiements']];
-  return <main className="page-wrap"><PageIntro eyebrow="Une trace claire" title="Transactions" subtitle="Consultez vos mouvements par wallet, opérateur, référence et statut." action={<button className="button button-ghost" onClick={() => toast('L’export sera disponible après activation des permissions de téléchargement.')} data-testid="button-export-transactions"><Download size={15} /> Exporter en CSV</button>} /><div className="card table-card"><div className="table-toolbar"><div><div className="filter-set">{filterOptions.map(([value, label]) => <button key={value} onClick={() => setFilter(value)} className={`filter-button ${filter === value ? 'active' : ''}`} data-testid={`button-filter-${value.toLowerCase()}`}>{label}</button>)}</div><div className="transaction-example-note"><span className="pill pill-neutral">Exemples visuels</span><span>Les lignes marquées ainsi ne sont pas comptabilisées.</span></div></div><div className="input-prefix" style={{ width: 190 }}><Search size={14} style={{ position: 'absolute', left: 12, top: 11, color: 'hsl(203 18% 46%)' }} /><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Rechercher une référence" style={{ width: '100%', border: '1px solid hsl(38 28% 85%)', background: 'hsl(42 44% 99%)', borderRadius: 9, padding: '9px 10px 9px 32px', fontSize: 11, outline: 0 }} data-testid="input-search-transactions" /></div></div><div className="table-scroll"><table className="data-table"><thead><tr><th>Mouvement</th><th>Wallet</th><th>Référence</th><th>Date</th><th style={{ textAlign: 'right' }}>Montant</th><th>Statut</th></tr></thead><tbody>{filtered.map(t => { const operator = transactionOperator(t.counterparty); const operatorLogo = operatorLogoUrl(operator); const positive = transactionIsIncoming(t); return <tr className={t.isExample ? 'transaction-example-row' : undefined} key={t.id} data-testid={`row-table-transaction-${t.id}`}><td><div className="transaction-party"><span className="transaction-logo"><img src={operatorLogo ?? transactionServiceLogo(t.counterparty)} alt={operator ?? ''} /></span><span><div className="transaction-party-name">{counterpartyLabel(t.counterparty)}</div><div className="activity-meta">{movementLabel(t.type)}{operator && <span className="transaction-operator">{operator}</span>}</div></span></div></td><td><div className="transaction-wallet"><img className="transaction-country-logo" src={countryFlagUrl(t.country)} alt={`Drapeau ${t.country}`} /><span>{countryLabel(t.country)}<small>{t.currency}</small></span></div></td><td><div className="transaction-reference"><code>{t.reference}</code>{t.isExample && <span className="pill pill-neutral">Exemple</span>}</div></td><td>{transactionDateLabel(t.createdAt)}</td><td className={`transaction-amount ${positive ? 'positive' : 'negative'}`}>{positive ? '+' : '-'}{new Intl.NumberFormat('fr-FR').format(t.amount)} {t.currency}</td><td><span className={`pill ${t.status === 'Completed' ? 'pill-success' : 'pill-pending'}`}>{statusLabel(t.status)}</span></td></tr>; })}</tbody></table>{filtered.length === 0 && <div className="empty-state"><ListFilter size={25} /><strong>Aucun mouvement trouvé</strong><p>Essayez un autre filtre ou une autre référence.</p></div>}</div></div></main>;
+  return <main className="page-wrap"><PageIntro eyebrow="Une trace claire" title="Transactions" subtitle="Consultez uniquement les mouvements confirmés ou en cours issus des services réels." action={<button className="button button-ghost" onClick={() => toast('L’export sera disponible après activation des permissions de téléchargement.')} data-testid="button-export-transactions"><Download size={15} /> Exporter en CSV</button>} /><div className="card table-card"><div className="table-toolbar"><div><div className="filter-set">{filterOptions.map(([value, label]) => <button key={value} onClick={() => setFilter(value)} className={`filter-button ${filter === value ? 'active' : ''}`} data-testid={`button-filter-${value.toLowerCase()}`}>{label}</button>)}</div></div><div className="input-prefix" style={{ width: 190 }}><Search size={14} style={{ position: 'absolute', left: 12, top: 11, color: 'hsl(203 18% 46%)' }} /><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Rechercher une référence" style={{ width: '100%', border: '1px solid hsl(38 28% 85%)', background: 'hsl(42 44% 99%)', borderRadius: 9, padding: '9px 10px 9px 32px', fontSize: 11, outline: 0 }} data-testid="input-search-transactions" /></div></div><div className="table-scroll"><table className="data-table"><thead><tr><th>Mouvement</th><th>Wallet</th><th>Référence</th><th>Date</th><th style={{ textAlign: 'right' }}>Montant</th><th>Statut</th></tr></thead><tbody>{filtered.map(t => { const operator = transactionOperator(t.counterparty); const operatorLogo = operatorLogoUrl(operator); const positive = transactionIsIncoming(t); return <tr key={t.id} data-testid={`row-table-transaction-${t.id}`}><td><div className="transaction-party"><span className="transaction-logo"><img src={operatorLogo ?? transactionServiceLogo(t.counterparty)} alt={operator ?? ''} /></span><span><div className="transaction-party-name">{counterpartyLabel(t.counterparty)}</div><div className="activity-meta">{movementLabel(t.type)}{operator && <span className="transaction-operator">{operator}</span>}</div></span></div></td><td><div className="transaction-wallet"><img className="transaction-country-logo" src={countryFlagUrl(t.country)} alt={`Drapeau ${t.country}`} /><span>{countryLabel(t.country)}<small>{t.currency}</small></span></div></td><td><div className="transaction-reference"><code>{t.reference}</code></div></td><td>{transactionDateLabel(t.createdAt)}</td><td className={`transaction-amount ${positive ? 'positive' : 'negative'}`}>{positive ? '+' : '-'}{new Intl.NumberFormat('fr-FR').format(t.amount)} {t.currency}</td><td><span className={`pill ${t.status === 'Completed' ? 'pill-success' : 'pill-pending'}`}>{statusLabel(t.status)}</span></td></tr>; })}</tbody></table>{filtered.length === 0 && <div className="empty-state"><ListFilter size={25} /><strong>Aucun mouvement réel</strong><p>Les transactions apparaîtront ici après confirmation du service de paiement.</p></div>}</div></div></main>;
 }
 
 function Transfer() {
@@ -1364,7 +1351,7 @@ function PaymentLinks() {
     <section className="existing-links-section"><div className="section-head"><div><span className="eyebrow">Votre activité</span><h2 className="section-title">Liens existants</h2><p className="section-note">{links.length ? `${links.length} lien${links.length > 1 ? 's' : ''} enregistré${links.length > 1 ? 's' : ''}` : 'Vos liens créés apparaîtront ici.'}</p></div><span className="link-count-badge">{links.length}</span></div>
         {links.length === 0 ? <div className="empty-state card payment-links-empty"><Link2 size={25} /><strong>Aucun lien pour le moment</strong><p>Configurez votre premier lien ci-dessus pour commencer à recevoir des paiements.</p></div> : <div className="links-table card"><div className="links-table-head"><span>Produit / service</span><span>Montant</span><span>Référence</span><span>Statut</span><span>Validité</span><span>Paiements</span><span>Actions</span></div>{links.map(link => <div className={`links-table-row ${editingLink?.id === link.id ? 'is-editing' : ''}`} key={link.id} data-testid={`card-payment-link-${link.id}`}><div className="link-product"><span className="link-product-icon"><Link2 size={14} /></span><span><strong>{link.productName || link.description || 'Lien de paiement'}</strong><small>{link.description || 'Sans description'}</small></span></div><strong className="table-amount">{renderLinkAmount(link)}</strong><code>{link.reference || '—'}</code><span className={`pill ${link.status === 'Active' ? 'pill-success' : link.status === 'Expired' ? 'pill-danger' : 'pill-neutral'}`}>{statusLabel(link.status)}</span><span className="table-muted">{renderLinkExpiry(link)}</span><span className="table-muted">{link.payments}{link.maxPayments ? ` / ${link.maxPayments}` : ''}</span><div className="link-actions"><button className="icon-button" title="Modifier le lien" onClick={() => beginEdit(link)} data-testid={`button-edit-link-${link.id}`}><Pencil size={15} /></button><a className="icon-button" href={link.slug} target="_blank" rel="noreferrer" title="Aperçu du lien" data-testid={`button-preview-link-${link.id}`}><Eye size={15} /></a><button className="icon-button" title={copiedId === link.id ? 'Lien copié' : 'Copier le lien'} onClick={() => copyLink(link)} data-testid={`button-copy-link-${link.id}`}>{copiedId === link.id ? <Check size={15} /> : <Copy size={15} />}</button><button className="icon-button" title="Partager le lien" onClick={() => shareLink(link)} data-testid={`button-share-link-${link.id}`}><Send size={15} /></button><button className="icon-button" title="Afficher le QR code" onClick={() => setQrLink(link)} data-testid={`button-qr-link-${link.id}`}><QrCode size={15} /></button><button className="icon-button" title="Supprimer définitivement" onClick={() => removeLink(link)} disabled={deletePaymentLink.isPending} data-testid={`button-delete-link-${link.id}`}><Trash2 size={15} /></button></div></div>)}</div>}
     </section>
-    {qrLink && <div className="payment-modal-backdrop" role="presentation" onClick={() => setQrLink(null)}><div className="payment-qr-modal card" role="dialog" aria-modal="true" aria-label="QR Code du lien" onClick={event => event.stopPropagation()}><button className="payment-success-close" aria-label="Fermer" onClick={() => setQrLink(null)}><X size={16} /></button><span className="eyebrow">À partager en présentiel</span><h2>QR Code du paiement</h2><p>{qrLink.productName}</p><div className="qr-box payment-qr-visual">{Array.from({ length: 81 }, (_, index) => <i key={index} />)}</div><code>{qrLink.slug}</code><button className="button button-primary button-wide" onClick={() => copyLink(qrLink)}>{copiedId === qrLink.id ? <><Check size={14} /> Lien copié !</> : <><Copy size={14} /> Copier le lien</>}</button></div></div>}
+    {qrLink && <div className="payment-modal-backdrop" role="presentation" onClick={() => setQrLink(null)}><div className="payment-qr-modal card" role="dialog" aria-modal="true" aria-label="QR Code du lien" onClick={event => event.stopPropagation()}><button className="payment-success-close" aria-label="Fermer" onClick={() => setQrLink(null)}><X size={16} /></button><span className="eyebrow">À partager en présentiel</span><h2>QR Code du paiement</h2><p>{qrLink.productName}</p><QRCodeSVG value={qrLink.slug} size={220} level="M" includeMargin data-testid="qr-payment-link-modal" /><code>{qrLink.slug}</code><button className="button button-primary button-wide" onClick={() => copyLink(qrLink)}>{copiedId === qrLink.id ? <><Check size={14} /> Lien copié !</> : <><Copy size={14} /> Copier le lien</>}</button></div></div>}
   </main>;
 }
 
@@ -1377,6 +1364,10 @@ function PublicPaymentPage() {
   const [customerOperator, setCustomerOperator] = useState(mobileMoneyCountryOptions[0].operators[0]?.name ?? '');
   const [customerValues, setCustomerValues] = useState<Record<string, string>>({});
   const [amount, setAmount] = useState('');
+  const [operatorOtp, setOperatorOtp] = useState('');
+  const [paymentSubmitting, setPaymentSubmitting] = useState(false);
+  const [paymentError, setPaymentError] = useState('');
+  const [paymentResult, setPaymentResult] = useState<{ reference?: string; message?: string; paymentUrl?: string | null } | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -1401,14 +1392,45 @@ function PublicPaymentPage() {
   if (state === 'error' || !link) return <main className="page-wrap public-payment-page"><div className="public-payment-header"><Logo /></div><PageIntro eyebrow="Paiement Mulapay" title="Lien indisponible" subtitle="Vérifiez l’adresse reçue ou demandez un nouveau lien au commerçant." /><div className="card card-pad public-payment-unavailable"><CircleAlert size={22} /><strong>Ce lien de paiement n’est plus disponible.</strong><Link className="button button-primary" href="/">Retour à Mulapay</Link></div></main>;
 
   const selectedCustomerCountry = mobileMoneyCountryOptions.find(option => option.country === customerCountry) ?? mobileMoneyCountryOptions[0];
-  const hasField = (name: string) => (link.customerFields as string[]).includes(name);
+   // Les informations de paiement sont toujours obligatoires pour une transaction réelle,
+   // même si un ancien lien a été créé avec une configuration de champs incomplète.
+   const hasField = (_name: string) => true;
   const updateCustomerValue = (name: string, value: string) => setCustomerValues(values => ({ ...values, [name]: value }));
   const fixedAmount = link.amountType === 'FIXED' ? money(link.amount, link.currency) : 'Montant libre';
+  const submitPayment = async (event: FormEvent) => {
+    event.preventDefault();
+    setPaymentError('');
+    setPaymentResult(null);
+    setPaymentSubmitting(true);
+    const selectedAmount = link.amountType === 'FIXED' ? link.amount : Number(amount);
+    try {
+      const response = await fetch(`/api/v1/public/payment-links/${encodeURIComponent(token)}/payments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': crypto.randomUUID() },
+        body: JSON.stringify({
+          amount: selectedAmount,
+          fullName: customerValues.full_name?.trim(),
+          country: customerCountry,
+          operator: customerOperator,
+          phone: `${selectedCustomerCountry.dialCode}${(customerValues.phone ?? '').replace(/\D/g, '')}`,
+          email: customerValues.email?.trim(),
+          ...(operatorOtp ? { operatorOtp } : {}),
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? 'Le paiement n’a pas pu être initié.');
+      setPaymentResult(payload);
+    } catch (error) {
+      setPaymentError(error instanceof Error ? error.message : 'Le paiement n’a pas pu être initié.');
+    } finally {
+      setPaymentSubmitting(false);
+    }
+  };
 
   return <main className="page-wrap public-payment-page">
     <div className="public-payment-header"><Logo /></div>
     <PageIntro eyebrow="Paiement Mulapay" title={link.productName} subtitle={link.description || 'Effectuez votre paiement Mobile Money en toute sécurité.'} />
-    <form className="card card-pad deposit-form public-payment-form" onSubmit={event => event.preventDefault()}>
+    <form className="card card-pad deposit-form public-payment-form" onSubmit={submitPayment}>
       <div className="public-payment-order">
         <div className="section-head"><div><span className="eyebrow">Détails du paiement</span><h2 className="section-title">{link.productName}</h2><p className="section-note">Référence {link.reference ?? '—'}</p></div><ShieldCheck size={21} color="hsl(160 42% 38%)" /></div>
         <div className="summary-box" style={{ marginTop: 18 }}><div className="summary-line"><span>{link.amountType === 'FIXED' ? 'Montant à payer' : 'Montant choisi par vous'}</span><strong>{fixedAmount}</strong></div><div className="summary-line"><span>Validité</span><strong>{link.expiresAt ? new Date(link.expiresAt).toLocaleDateString('fr-FR') : 'Sans expiration'}</strong></div></div>
@@ -1419,10 +1441,21 @@ function PublicPaymentPage() {
       {hasField('operator') && <div className="field"><label>Opérateur Mobile Money</label><div className="mobile-money-options" role="radiogroup" aria-label="Choisir un opérateur Mobile Money">{selectedCustomerCountry.operators.map(option => <label className={`mobile-money-option ${customerOperator === option.name ? 'selected' : ''}`} key={option.name}><input type="radio" name="public-payment-operator" value={option.name} checked={customerOperator === option.name} onChange={event => setCustomerOperator(event.target.value)} required /><img src={`${import.meta.env.BASE_URL}mobile-money/${option.src}`} alt="" /><span>{option.name}</span></label>)}</div></div>}
       {hasField('phone') && <div className="field"><label htmlFor="public-payment-phone">Numéro de téléphone</label><div className="phone-input"><span className="phone-prefix" aria-label={`Indicatif ${selectedCustomerCountry.dialCode}`}>{selectedCustomerCountry.dialCode}</span><input id="public-payment-phone" type="tel" inputMode="numeric" value={customerValues.phone ?? ''} onChange={event => updateCustomerValue('phone', event.target.value.replace(/\D/g, ''))} placeholder="90 00 00 00" autoComplete="tel-national" required /></div></div>}
       {hasField('email') && <div className="field"><label htmlFor="public-payment-email">Adresse e-mail</label><input id="public-payment-email" type="email" value={customerValues.email ?? ''} onChange={event => updateCustomerValue('email', event.target.value)} autoComplete="email" required /></div>}
+       {customerOperator === 'Orange Money' && <div className="field"><label htmlFor="public-payment-otp">Code OTP Mobile Money</label><input id="public-payment-otp" type="password" inputMode="numeric" value={operatorOtp} onChange={event => setOperatorOtp(event.target.value.replace(/\D/g, ''))} autoComplete="one-time-code" required /></div>}
       <div className="public-payment-security"><ShieldCheck size={15} /><span>Vos informations sont nécessaires pour confirmer le paiement.</span></div>
-      <button className="button button-primary button-wide" type="submit">Continuer vers le paiement <ChevronRight size={15} /></button>
+       {paymentError && <div className="form-error"><CircleAlert size={14} /> {paymentError}</div>}
+       {paymentResult ? <div className="payment-result" aria-live="polite"><CheckCircle2 size={20} /><strong>Demande de paiement créée</strong><span>{paymentResult.message}</span>{paymentResult.reference && <code>{paymentResult.reference}</code>}{paymentResult.paymentUrl && <a className="button button-primary button-wide" href={paymentResult.paymentUrl} target="_blank" rel="noreferrer">Ouvrir le paiement sécurisé <ChevronRight size={15} /></a>}</div> : <button className="button button-primary button-wide" type="submit" disabled={paymentSubmitting}>{paymentSubmitting ? 'Initialisation du paiement…' : 'Continuer vers le paiement'} <ChevronRight size={15} /></button>}
     </form>
   </main>;
+}
+
+function RealKyc() {
+  const { profile } = useStore();
+  const status = profile.kycStatus;
+  const verified = status === 'VERIFIE' || status === 'VERIFIED';
+  const pending = status === 'EN_ATTENTE' || status === 'PENDING';
+  const label = verified ? 'Vérifié' : pending ? 'En cours d’examen' : status === 'REFUSE' || status === 'REFUSED' ? 'Refusé' : 'Non vérifié';
+  return <main className="page-wrap"><PageIntro eyebrow="Vérification du compte" title="Votre vérification" subtitle="Cet état provient de votre dossier KYC enregistré côté serveur." action={<span className={`pill ${verified ? 'pill-success' : pending ? 'pill-pending' : 'pill-neutral'}`} style={{ padding: '8px 12px' }}><ShieldCheck size={13} style={{ marginRight: 5 }} /> {label}</span>} /><div className="dashboard-grid" style={{ marginTop: 27 }}><div className="card card-pad"><div className="section-head"><div><h2 className="section-title">État de la vérification</h2><p className="section-note">Aucun document ou statut n’est affiché avant son enregistrement réel.</p></div><ShieldCheck size={24} color="hsl(160 42% 38%)" /></div><div style={{ height: 7, borderRadius: 5, background: 'hsl(160 42% 38% / .12)', overflow: 'hidden', margin: '23px 0 25px' }}><div style={{ width: verified ? '100%' : pending ? '66%' : '0%', height: '100%', background: 'hsl(160 42% 38%)', borderRadius: 5 }} /></div><div className="empty-state"><FileCheck2 size={25} /><strong>{verified ? 'Dossier vérifié' : pending ? 'Dossier en cours d’examen' : 'Aucun dossier KYC enregistré'}</strong><p>{verified ? 'La vérification a été confirmée par les opérations.' : pending ? 'Votre dossier sera mis à jour après décision de l’équipe conformité.' : 'Le dépôt de documents sera disponible lorsque le circuit de collecte sécurisé sera activé.'}</p></div></div><div className="card card-pad"><div className="eyebrow">Documents</div><div className="notice" style={{ marginTop: 16 }}><LockKeyhole size={14} /><span>Les documents ne sont pas préremplis et aucun envoi local ne simule une vérification.</span></div></div></div></main>;
 }
 
 function Kyc() {
@@ -1557,6 +1590,7 @@ function RoutedApp() {
   if (!isSignedIn) return <Redirect to="/" />;
   const admin = location.startsWith('/admin') && data?.profile.role === 'ADMIN';
   if (location.startsWith('/admin') && !admin) return <Redirect to="/app" />;
+  const Kyc = RealKyc;
   return <StoreContext.Provider value={store}><Shell admin={admin} onNotifications={() => setNotificationsOpen(v => !v)}>{admin ? <Switch><Route path="/admin" component={AdminOverview} /><Route path="/admin/kyc" component={AdminKyc} /><Route path="/admin/exchanges" component={AdminExchanges} /><Route path="/admin/transactions" component={AdminTransactions} /><Route component={NotFound} /></Switch> : <Switch><Route path="/app" component={Overview} /><Route path="/app/wallets" component={Wallets} /><Route path="/app/deposit" component={Deposit} /><Route path="/app/withdrawal" component={Withdrawal} /><Route path="/app/transactions" component={Transactions} /><Route path="/app/transfer" component={Transfer} /><Route path="/app/receive" component={Receive} /><Route path="/app/exchange" component={Exchange} /><Route path="/app/payments" component={Payments} /><Route path="/app/payment-links" component={PaymentLinks} /><Route path="/app/qr" component={QrPage} /><Route path="/app/api" component={ApiAccess} /><Route path="/app/api-docs" component={ApiPayinDocs} /><Route path="/app/documents" component={ApiPayinDocs} /><Route path="/app/notifications" component={NotificationsPage} /><Route path="/app/kyc" component={Kyc} /><Route path="/app/security" component={Security} /><Route path="/app/support" component={Support} /><Route path="/app/settings" component={Settings} /><Route component={NotFound} /></Switch>}</Shell>{notificationsOpen && <Notifications onClose={() => setNotificationsOpen(false)} />}{toastText && <div className="toast" data-testid="status-toast">{toastText}</div>}</StoreContext.Provider>;
 }
 

@@ -148,6 +148,29 @@ paths:
           description: Payment link not found
         "410":
           description: Payment link no longer available
+  /v1/public/payment-links/{token}/payments:
+    post:
+      operationId: createPublicPayment
+      tags: [public]
+      summary: Starts a real payment for a public payment link
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublicPaymentInput"
+      responses:
+        "201":
+          description: Payment initiated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationResult"
   /v1/payment-links/{id}:
     patch:
       operationId: updatePaymentLink
@@ -564,6 +587,17 @@ components:
         notifyApp: { type: boolean }
         notifyEmail: { type: boolean }
         notifyWebhook: { type: boolean }
+    PublicPaymentInput:
+      type: object
+      required: [amount, fullName, country, operator, phone, email]
+      properties:
+        amount: { type: number, exclusiveMinimum: 0 }
+        fullName: { type: string, minLength: 2 }
+        country: { type: string, minLength: 2 }
+        operator: { type: string, minLength: 2 }
+        phone: { type: string, minLength: 8 }
+        email: { type: string, minLength: 3 }
+        operatorOtp: { type: string }
     MoneyOperationInput:
       type: object
       required: [walletId, amount]

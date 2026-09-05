@@ -298,6 +298,22 @@ export interface PaymentLinkInput {
   notifyWebhook: boolean;
 }
 
+export interface PublicPaymentInput {
+  /** @exclusiveMinimum 0 */
+  amount: number;
+  /** @minLength 2 */
+  fullName: string;
+  /** @minLength 2 */
+  country: string;
+  /** @minLength 2 */
+  operator: string;
+  /** @minLength 8 */
+  phone: string;
+  /** @minLength 3 */
+  email: string;
+  operatorOtp?: string;
+}
+
 export type MoneyOperationInputMethod = typeof MoneyOperationInputMethod[keyof typeof MoneyOperationInputMethod];
 
 

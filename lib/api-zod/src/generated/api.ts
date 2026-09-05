@@ -286,6 +286,49 @@ export const GetPublicPaymentLinkResponse = zod.object({
 
 
 /**
+ * @summary Starts a real payment for a public payment link
+ */
+export const CreatePublicPaymentParams = zod.object({
+  "token": zod.coerce.string()
+})
+
+export const createPublicPaymentBodyAmountExclusiveMin = 0;
+
+export const createPublicPaymentBodyFullNameMin = 2;
+
+export const createPublicPaymentBodyCountryMin = 2;
+
+export const createPublicPaymentBodyOperatorMin = 2;
+
+export const createPublicPaymentBodyPhoneMin = 8;
+
+export const createPublicPaymentBodyEmailMin = 3;
+
+
+
+export const CreatePublicPaymentBody = zod.object({
+  "amount": zod.number().gt(createPublicPaymentBodyAmountExclusiveMin),
+  "fullName": zod.string().min(createPublicPaymentBodyFullNameMin),
+  "country": zod.string().min(createPublicPaymentBodyCountryMin),
+  "operator": zod.string().min(createPublicPaymentBodyOperatorMin),
+  "phone": zod.string().min(createPublicPaymentBodyPhoneMin),
+  "email": zod.string().min(createPublicPaymentBodyEmailMin),
+  "operatorOtp": zod.string().optional()
+})
+
+export const CreatePublicPaymentResponse = zod.object({
+  "ok": zod.boolean(),
+  "message": zod.string(),
+  "reference": zod.string().nullish(),
+  "status": zod.string().optional(),
+  "paymentUrl": zod.string().nullish(),
+  "expiresAt": zod.coerce.date().optional(),
+  "fee": zod.number().optional(),
+  "netAmount": zod.number().optional()
+})
+
+
+/**
  * @summary Updates an owned payment link
  */
 export const UpdatePaymentLinkParams = zod.object({

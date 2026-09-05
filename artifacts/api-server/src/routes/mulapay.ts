@@ -10,6 +10,7 @@ import {
   DecideKycParams,
   CreateExchangeBody,
   CreatePaymentLinkBody,
+  CreatePublicPaymentBody,
   CreateTransferBody,
   GetBootstrapResponse,
   GetAdminSummaryResponse,
@@ -136,7 +137,8 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
     if (payload.status === "success" && transaction.status !== "Completed") {
       const wallet = await tx.query.wallets.findFirst({ where: eq(wallets.id, transaction.walletId ?? "") });
       if (!wallet) throw new Error("WALLET_NOT_FOUND");
-      const netAmount = payload.net_amount ?? transaction.netAmount ?? Math.round(transaction.amount * 0.965);
+      const netAmount = payload.net_amount ?? transaction.netAmount;
+      if (netAmount == null) throw new Error("MISSING_PROVIDER_NET_AMOUNT");
       await tx
         .update(wallets)
         .set({
@@ -153,12 +155,16 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
         entryType: "CREDIT",
         amount: netAmount,
         currency: transaction.currency,
-        description: `Dépôt Mulapay confirmé · ${payload.reference}`,
+        description: `${transaction.type === "Payment" ? "Paiement par lien" : "Dépôt Mulapay"} confirmé · ${payload.reference}`,
       });
+      const paymentLinkId = transaction.providerOrderId?.match(/^paylink_(.+)_[0-9a-f-]{36}$/i)?.[1];
+      if (transaction.type === "Payment" && paymentLinkId) {
+        await tx.update(paymentLinks).set({ payments: sql`${paymentLinks.payments} + 1` }).where(eq(paymentLinks.id, paymentLinkId));
+      }
       await tx.insert(notifications).values({
         id: crypto.randomUUID(),
         userId: transaction.userId,
-        title: "Dépôt confirmé",
+        title: transaction.type === "Payment" ? "Paiement reçu" : "Dépôt confirmé",
         body: `${netAmount.toLocaleString("fr-FR")} ${transaction.currency} ont été crédités sur le wallet ${wallet.country}.`,
         read: false,
       });
@@ -168,7 +174,8 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
     if (payload.status === "reversed" && transaction.status === "Completed") {
       const wallet = await tx.query.wallets.findFirst({ where: eq(wallets.id, transaction.walletId ?? "") });
       if (!wallet) throw new Error("WALLET_NOT_FOUND");
-      const netAmount = transaction.netAmount ?? Math.round(transaction.amount * 0.965);
+      const netAmount = transaction.netAmount;
+      if (netAmount == null) throw new Error("MISSING_PROVIDER_NET_AMOUNT");
       await tx.update(wallets).set({ balance: sql`${wallets.balance} - ${netAmount}` }).where(eq(wallets.id, wallet.id));
       await tx.update(transactions).set({ status: "Reversed" }).where(eq(transactions.id, transaction.id));
       await tx.insert(ledgerEntries).values({
@@ -258,11 +265,11 @@ router.use(async (req, res, next) => {
 });
 
 const COUNTRY_WALLETS = [
-  { country: "Togo", code: "TG", currency: "XOF", balance: 482500, pending: 12500 },
-  { country: "Bénin", code: "BJ", currency: "XOF", balance: 218000, pending: 0 },
-  { country: "Côte d’Ivoire", code: "CI", currency: "XOF", balance: 175250, pending: 48000 },
+  { country: "Togo", code: "TG", currency: "XOF", balance: 0, pending: 0 },
+  { country: "Bénin", code: "BJ", currency: "XOF", balance: 0, pending: 0 },
+  { country: "Côte d’Ivoire", code: "CI", currency: "XOF", balance: 0, pending: 0 },
   { country: "Burkina Faso", code: "BF", currency: "XOF", balance: 0, pending: 0 },
-  { country: "Sénégal", code: "SN", currency: "XOF", balance: 94000, pending: 0 },
+  { country: "Sénégal", code: "SN", currency: "XOF", balance: 0, pending: 0 },
   { country: "Mali", code: "ML", currency: "XOF", balance: 0, pending: 0 },
   { country: "Niger", code: "NE", currency: "XOF", balance: 0, pending: 0 },
 ];
@@ -418,79 +425,15 @@ router.get("/v1/bootstrap", async (req, res) => {
 });
 
 router.post("/v1/transfers", async (req, res) => {
-  const input = CreateTransferBody.parse(req.body);
-  const user = await ensureUser(req);
-  const settings = await getPlatformSettings();
-  const fee = Math.round(input.amount * Number(settings.feePercentage) / 100);
-  const debitAmount = input.feePayer === "sender" ? input.amount + fee : input.amount;
-  const netAmount = input.feePayer === "recipient" ? Math.max(0, input.amount - fee) : input.amount;
-  const source = await db.query.wallets.findFirst({
-    where: input.country
-      ? and(eq(wallets.userId, user.id), eq(wallets.country, input.country), eq(wallets.status, "Active"))
-      : and(eq(wallets.userId, user.id), eq(wallets.currency, input.currency), eq(wallets.status, "Active")),
-  });
-  if (!source || source.balance < debitAmount) {
-    res.status(400).json({ error: "Solde disponible insuffisant pour ce transfert." });
-    return;
-  }
-  const id = crypto.randomUUID();
-  const ref = reference("MP");
-  await db.transaction(async (tx) => {
-    await tx.update(wallets).set({ balance: sql`${wallets.balance} - ${debitAmount}` }).where(eq(wallets.id, source.id));
-    await tx.insert(transactions).values({ id, userId: user.id, walletId: source.id, type: "Sent", status: "Completed", amount: debitAmount, currency: input.currency, country: source.country, counterparty: input.counterparty, reference: ref, fee, netAmount });
-    await tx.insert(ledgerEntries).values({ id: crypto.randomUUID(), userId: user.id, walletId: source.id, transactionId: id, entryType: "DEBIT", amount: debitAmount, currency: input.currency, description: `Transfer to ${input.counterparty}` });
-  });
-  res.status(201).json(CreateTransferResponse.parse({ ok: true, message: "Transfert exécuté.", reference: ref, fee, netAmount }));
+  res.status(501).json({ error: "Les transferts ne sont pas encore connectés à un service de paiement réel. Aucun wallet n’a été débité." });
 });
 
 router.post("/v1/exchanges", async (req, res) => {
-  const input = CreateExchangeBody.parse(req.body);
-  const user = await ensureUser(req);
-  const settings = await getPlatformSettings();
-  const fee = Math.round(input.amount * Number(settings.feePercentage) / 100);
-  const receivedAmount = Math.max(0, input.amount - fee);
-  const source = await db.query.wallets.findFirst({ where: and(eq(wallets.userId, user.id), eq(wallets.country, input.source), eq(wallets.status, "Active")) });
-  const destination = await db.query.wallets.findFirst({ where: and(eq(wallets.userId, user.id), eq(wallets.country, input.destination), eq(wallets.status, "Active")) });
-  if (!source || !destination || source.balance < input.amount) {
-    res.status(400).json({ error: "Wallet source introuvable ou solde insuffisant." });
-    return;
-  }
-  await db.insert(exchanges).values({ id: crypto.randomUUID(), userId: user.id, source: `${source.country} · ${source.currency}`, destination: `${destination.country} · ${destination.currency}`, amount: input.amount, rate: "1", receivedAmount, status: "PENDING_ADMIN" });
-  await db.insert(notifications).values({ id: crypto.randomUUID(), userId: user.id, title: "Demande d’échange envoyée", body: `${source.country} vers ${destination.country} est en attente de validation opérations.`, read: false });
-  res.status(201).json(CreateExchangeResponse.parse({ ok: true, message: "Demande d’échange envoyée pour validation.", reference: null }));
+  res.status(501).json({ error: "Les échanges ne sont pas encore connectés à un service de paiement réel. Aucun wallet n’a été débité ni crédité." });
 });
 
 router.patch("/v1/exchanges/:id/decision", requireAdmin, async (req, res) => {
-  const params = DecideExchangeParams.parse(req.params);
-  const input = DecideExchangeBody.parse(req.body);
-  const exchange = await db.query.exchanges.findFirst({ where: eq(exchanges.id, params.id) });
-  if (!exchange) {
-    res.status(404).json({ error: "Demande d’échange introuvable." });
-    return;
-  }
-  const accepted = input.decision === "APPROVED";
-  await db.transaction(async (tx) => {
-    await tx.update(exchanges).set({ status: accepted ? "COMPLETED" : "REJECTED" }).where(eq(exchanges.id, exchange.id));
-    if (accepted) {
-      const userId = exchange.userId;
-      const sourceCountry = exchange.source.split(" · ")[0];
-      const destinationCountry = exchange.destination.split(" · ")[0];
-      const sourceWallet = await tx.query.wallets.findFirst({ where: and(eq(wallets.userId, userId), eq(wallets.country, sourceCountry)) });
-      const destinationWallet = await tx.query.wallets.findFirst({ where: and(eq(wallets.userId, userId), eq(wallets.country, destinationCountry)) });
-      if (!sourceWallet || !destinationWallet || sourceWallet.balance < exchange.amount) throw new Error("Solde insuffisant au moment de la validation.");
-      await tx.update(wallets).set({ balance: sql`${wallets.balance} - ${exchange.amount}` }).where(eq(wallets.id, sourceWallet.id));
-      await tx.update(wallets).set({ balance: sql`${wallets.balance} + ${exchange.receivedAmount}` }).where(eq(wallets.id, destinationWallet.id));
-      const ref = reference("EX");
-      const txId = crypto.randomUUID();
-      await tx.insert(transactions).values({ id: txId, userId, walletId: destinationWallet.id, type: "Exchange", status: "Completed", amount: exchange.receivedAmount, currency: destinationWallet.currency, country: destinationWallet.country, counterparty: exchange.source, reference: ref });
-      await tx.insert(ledgerEntries).values([
-        { id: crypto.randomUUID(), userId, walletId: sourceWallet.id, transactionId: txId, entryType: "DEBIT", amount: exchange.amount, currency: sourceWallet.currency, description: `Exchange to ${destinationWallet.country}` },
-        { id: crypto.randomUUID(), userId, walletId: destinationWallet.id, transactionId: txId, entryType: "CREDIT", amount: exchange.receivedAmount, currency: destinationWallet.currency, description: `Exchange from ${sourceWallet.country}` },
-      ]);
-    }
-    await tx.insert(notifications).values({ id: crypto.randomUUID(), userId: exchange.userId, title: accepted ? "Échange approuvé" : "Échange refusé", body: accepted ? "Votre échange a été finalisé." : input.reason || "Votre demande d’échange a été refusée.", read: false });
-  });
-  res.json(DecideExchangeResponse.parse({ ok: true, message: accepted ? "Échange approuvé et finalisé." : "Échange rejeté.", reference: null }));
+  res.status(501).json({ error: "Les décisions d’échange restent désactivées tant qu’un service de règlement réel n’est pas connecté." });
 });
 
 router.post("/v1/payment-links", async (req, res) => {
@@ -588,6 +531,112 @@ router.get("/v1/public/payment-links/:token", async (req, res) => {
     redirectUrl: link.redirectUrl,
     payments: link.payments,
   });
+});
+
+router.post("/v1/public/payment-links/:token/payments", async (req, res) => {
+  const input = CreatePublicPaymentBody.parse(req.body);
+  const token = req.params.token;
+  if (!/^[a-f0-9]{16}$/i.test(token)) {
+    res.status(404).json({ error: "Lien de paiement introuvable." });
+    return;
+  }
+  const link = await db.query.paymentLinks.findFirst({ where: like(paymentLinks.slug, `%/${token}`) });
+  if (!link) {
+    res.status(404).json({ error: "Lien de paiement introuvable." });
+    return;
+  }
+  const expired = Boolean(link.expiresAt) && new Date(link.expiresAt).getTime() <= Date.now();
+  const exhausted = link.maxPayments !== null && link.payments >= link.maxPayments;
+  if (link.status !== "Active" || expired || exhausted) {
+    res.status(410).json({ error: "Ce lien de paiement n’est plus disponible." });
+    return;
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email)) {
+    res.status(400).json({ error: "L’adresse e-mail est invalide." });
+    return;
+  }
+  if (!input.fullName.trim() || !input.country.trim() || !input.operator.trim() || !input.phone.trim()) {
+    res.status(400).json({ error: "Nom complet, pays, opérateur et téléphone sont obligatoires." });
+    return;
+  }
+  if (link.amountType === "FIXED" && input.amount !== link.amount) {
+    res.status(400).json({ error: "Le montant ne correspond pas à celui demandé par ce lien." });
+    return;
+  }
+  if (input.amount <= 0 || !Number.isInteger(input.amount)) {
+    res.status(400).json({ error: "Le montant doit être un entier positif." });
+    return;
+  }
+  const countryCode = countryCodeForName(input.country);
+  if (!countryCode || countryCode === "NE") {
+    res.status(400).json({ error: "Les paiements ne sont pas encore disponibles dans ce pays." });
+    return;
+  }
+  if (!/^\+[1-9]\d{7,14}$/.test(input.phone)) {
+    res.status(400).json({ error: "Le téléphone doit être au format international." });
+    return;
+  }
+  const ownerWallet = link.walletId
+    ? await db.query.wallets.findFirst({ where: and(eq(wallets.id, link.walletId), eq(wallets.userId, link.userId), eq(wallets.currency, link.currency), eq(wallets.status, "Active")) })
+    : await db.query.wallets.findFirst({ where: and(eq(wallets.userId, link.userId), eq(wallets.code, countryCode), eq(wallets.currency, link.currency), eq(wallets.status, "Active")) });
+  if (!ownerWallet) {
+    res.status(400).json({ error: "Aucun wallet de réception actif ne correspond au pays choisi." });
+    return;
+  }
+  if (input.operator === "Orange Money" && ORANGE_OTP_COUNTRIES.has(countryCode) && !input.operatorOtp) {
+    res.status(400).json({ error: "Le code OTP Orange Money est requis pour ce pays." });
+    return;
+  }
+  const orderIdHeader = req.header("Idempotency-Key");
+  const orderId = orderIdHeader && orderIdHeader.length <= 128 ? orderIdHeader : `paylink_${link.id}_${crypto.randomUUID()}`;
+  const existing = await db.query.transactions.findFirst({ where: eq(transactions.providerOrderId, orderId) });
+  if (existing) {
+    res.status(200).json({ ok: true, message: "Cette demande de paiement existe déjà.", reference: existing.reference, status: existing.status, paymentUrl: existing.paymentUrl, expiresAt: existing.expiresAt?.toISOString() ?? null, fee: existing.fee, netAmount: existing.netAmount });
+    return;
+  }
+  try {
+    const provider = await initiatePayin({
+      amount: input.amount,
+      currency: ownerWallet.currency,
+      countryCode,
+      operator: input.operator,
+      phone: input.phone,
+      orderId,
+      webhookUrl: drimPayWebhookUrl(),
+      description: `Paiement par lien · ${link.productName}`,
+      operatorOtp: input.operatorOtp,
+      metadata: { mulapay_payment_link_id: link.id, customer_name: input.fullName, customer_email: input.email },
+    });
+    await db.transaction(async (tx) => {
+      await tx.update(wallets).set({ pending: sql`${wallets.pending} + ${input.amount}` }).where(eq(wallets.id, ownerWallet.id));
+      await tx.insert(transactions).values({
+        id: crypto.randomUUID(),
+        userId: link.userId,
+        walletId: ownerWallet.id,
+        type: "Payment",
+        // Le crédit du ledger intervient uniquement après le webhook signé.
+        status: "Pending",
+        amount: input.amount,
+        netAmount: provider.net_amount,
+        paymentUrl: provider.payment_url ?? null,
+        expiresAt: provider.expires_at ? new Date(provider.expires_at) : null,
+        fee: provider.fee ?? null,
+        currency: ownerWallet.currency,
+        country: ownerWallet.country,
+        counterparty: `Paiement par lien · ${link.productName}`,
+        reference: provider.reference,
+        providerOrderId: orderId,
+      });
+    });
+    res.status(201).json({ ok: true, message: provider.payment_url ? "Ouvrez le lien de paiement pour confirmer." : "Confirmez le paiement sur votre téléphone.", reference: provider.reference, status: provider.status, paymentUrl: provider.payment_url ?? null, expiresAt: provider.expires_at, fee: provider.fee, netAmount: provider.net_amount });
+  } catch (error) {
+    if (error instanceof DrimPayError) {
+      const isConfigurationError = error.code === "DRIMPAY_NOT_CONFIGURED";
+      res.status(error.statusCode).json({ error: isConfigurationError ? "Le service de paiement n’est pas encore configuré." : error.statusCode >= 500 ? "Le service de paiement est temporairement indisponible." : error.message, code: isConfigurationError ? "PAYMENT_SERVICE_NOT_CONFIGURED" : "PAYMENT_SERVICE_ERROR" });
+      return;
+    }
+    throw error;
+  }
 });
 
 router.get("/v1/payment-links", async (req, res) => {
@@ -829,7 +878,10 @@ router.get("/v1/admin/summary", requireAdmin, async (_req, res) => {
     db.select().from(exchanges).where(eq(exchanges.status, "PENDING_ADMIN")),
     db.select().from(transactions),
   ]);
-  res.json(GetAdminSummaryResponse.parse({ kycAwaiting: kyc.length, exchangeQueue: pendingExchanges.length, volume: allTransactions.reduce((sum, item) => sum + item.amount, 0), successRate: 98.6 }));
+  const settledTransactions = allTransactions.filter(item => ["Completed", "Failed", "Expired", "Cancelled", "Reversed"].includes(item.status));
+  const completedTransactions = allTransactions.filter(item => item.status === "Completed");
+  const successRate = settledTransactions.length ? Number(((completedTransactions.length / settledTransactions.length) * 100).toFixed(1)) : 0;
+  res.json(GetAdminSummaryResponse.parse({ kycAwaiting: kyc.length, exchangeQueue: pendingExchanges.length, volume: allTransactions.reduce((sum, item) => sum + item.amount, 0), successRate }));
 });
 
 router.get("/v1/admin/settings", requireAdmin, async (_req, res) => {
