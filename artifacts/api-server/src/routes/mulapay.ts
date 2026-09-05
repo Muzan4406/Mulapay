@@ -51,6 +51,20 @@ const TERMINAL_PROVIDER_STATUSES = new Set(["success", "failed", "expired", "can
 const PLATFORM_SETTINGS_ID = "global";
 const DEFAULT_FEE_PERCENTAGE = 1;
 
+function firstHeaderValue(value: string | string[] | undefined) {
+  const header = Array.isArray(value) ? value[0] : value;
+  return header?.split(",")[0]?.trim();
+}
+
+function requestOrigin(req: Request) {
+  const forwardedHost = firstHeaderValue(req.headers["x-forwarded-host"]);
+  const host = forwardedHost || req.headers.host;
+  if (!host) throw new Error("Impossible de déterminer le domaine courant.");
+  const forwardedProtocol = firstHeaderValue(req.headers["x-forwarded-proto"]);
+  const protocol = forwardedProtocol || (req.secure ? "https" : "http");
+  return `${protocol}://${host}`;
+}
+
 async function getPlatformSettings() {
   const existing = await db.query.platformSettings.findFirst({ where: eq(platformSettings.id, PLATFORM_SETTINGS_ID) });
   if (existing) return existing;
@@ -501,7 +515,7 @@ router.post("/v1/payment-links", async (req, res) => {
   const link = {
     id: crypto.randomUUID(),
     userId: user.id,
-    slug: `https://pay.mulapay.com/${randomBytes(8).toString("hex")}`,
+    slug: `${requestOrigin(req)}/pay/${randomBytes(8).toString("hex")}`,
     reference,
     productName: input.productName,
     amount: input.amount ?? 0,
