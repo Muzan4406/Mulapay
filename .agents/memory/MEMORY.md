@@ -3,3 +3,4 @@
 - [DrimPay production boundary](drimpay-production.md) — Mulapay exposes only the production Payin workflow; partner docs must not present Sandbox.
 - [DrimPay confirmation boundary](drimpay-confirmation.md) — only a signed webhook may move pending funds into the ledger; missing provider net amounts must fail closed.
 - [AshtechPay webhook boundary](ashtechpay-provider.md) — AshtechPay uses the server API credential for HMAC verification; a separate webhook secret is not required.
+- [Wallet settlement matching](wallet-settlement-matching.md) — provider callbacks must resolve the stored transaction wallet and validate provider country/currency before ledger credit.

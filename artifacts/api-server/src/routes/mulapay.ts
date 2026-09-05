@@ -167,7 +167,9 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
   }
 
   const result = await db.transaction(async (tx) => {
-    const transaction = await tx.query.transactions.findFirst({ where: eq(transactions.reference, payload.reference!) });
+    const transaction = await tx.query.transactions.findFirst({
+      where: and(eq(transactions.reference, payload.reference!), eq(transactions.paymentProvider, "DRIMPAY")),
+    });
     if (!transaction) return { found: false };
     const nextStatus = providerStatusToTransactionStatus(payload.status!);
     const currentIsTerminal = ["Completed", "Failed", "Expired", "Cancelled", "Reversed"].includes(transaction.status);
@@ -308,6 +310,7 @@ async function handleAshtechPayWebhook(req: Request, res: Response) {
     amount?: number;
     total_amount?: number;
     currency?: string;
+    country_code?: string;
   };
   if (!payload.reference || !payload.status || typeof payload.amount !== "number" || !payload.currency) {
     res.status(400).json({ error: "Notification AshtechPay incomplète." });
@@ -337,7 +340,7 @@ async function handleAshtechPayWebhook(req: Request, res: Response) {
       const netAmount = payload.amount;
       if (typeof netAmount !== "number") throw new Error("ASH TECHPAY_NET_AMOUNT_MISSING");
       if (
-        !depositPayloadMatchesWallet(transaction, wallet, payload.country_code ?? wallet.code, payload.currency, "ASHTECHPAY") ||
+        !depositPayloadMatchesWallet(transaction, wallet, payload.country_code ?? wallet.code, payload.currency!, "ASHTECHPAY") ||
         (typeof payload.total_amount === "number" && payload.total_amount !== transaction.amount) ||
         netAmount <= 0 ||
         netAmount > (payload.total_amount ?? transaction.amount)
