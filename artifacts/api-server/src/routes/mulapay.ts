@@ -65,6 +65,19 @@ function requestOrigin(req: Request) {
   return `${protocol}://${host}`;
 }
 
+function presentPaymentLink(req: Request, link: typeof paymentLinks.$inferSelect) {
+  const currentOrigin = requestOrigin(req);
+  let linkUrl: URL;
+  try {
+    linkUrl = new URL(link.slug);
+  } catch {
+    return link;
+  }
+  if (linkUrl.origin === currentOrigin) return link;
+  const token = linkUrl.pathname.split("/").filter(Boolean).pop();
+  return token ? { ...link, slug: `${requestOrigin(req)}/pay/${token}` } : link;
+}
+
 async function getPlatformSettings() {
   const existing = await db.query.platformSettings.findFirst({ where: eq(platformSettings.id, PLATFORM_SETTINGS_ID) });
   if (existing) return existing;
@@ -380,7 +393,7 @@ async function bootstrap(req: Request) {
     wallets: userWallets.map(formatWallet),
     transactions: userTransactions.map(formatTransaction),
     exchanges: userExchanges.map(formatExchange),
-    links: userLinks.map((link) => ({ ...link })),
+    links: userLinks.map((link) => presentPaymentLink(req, link)),
     notifications: userNotifications.map((notification) => ({ id: notification.id, title: notification.title, body: notification.body, read: notification.read })),
     kyc: userKyc ? { id: userKyc.id, userId: userKyc.userId, name: userKyc.name, country: userKyc.country, status: userKyc.status, documents: userKyc.documents, submittedAt: userKyc.submittedAt.toISOString() } : { id: "none", userId: user.id, name: `${user.firstName} ${user.lastName}`, country: user.country, status: user.kycStatus, documents: [], submittedAt: nowLabel() },
     feePercentage: Number(settings.feePercentage),
@@ -540,7 +553,20 @@ router.post("/v1/payment-links", async (req, res) => {
 
 router.get("/v1/payment-links", async (req, res) => {
   const user = await ensureUser(req);
-  res.json(await db.select().from(paymentLinks).where(eq(paymentLinks.userId, user.id)).orderBy(desc(paymentLinks.createdAt)));
+  const links = await db.select().from(paymentLinks).where(eq(paymentLinks.userId, user.id)).orderBy(desc(paymentLinks.createdAt));
+  res.json(links.map((link) => presentPaymentLink(req, link)));
+});
+
+router.delete("/v1/payment-links/:id", async (req, res) => {
+  const user = await ensureUser(req);
+  const [deleted] = await db.delete(paymentLinks)
+    .where(and(eq(paymentLinks.id, req.params.id), eq(paymentLinks.userId, user.id)))
+    .returning({ id: paymentLinks.id });
+  if (!deleted) {
+    res.status(404).json({ error: "Lien de paiement introuvable." });
+    return;
+  }
+  res.json({ ok: true, message: "Lien de paiement supprimé définitivement.", reference: null });
 });
 
 router.post("/v1/deposits", async (req, res) => {

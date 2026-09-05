@@ -3,7 +3,7 @@ import {
   Activity, ArrowDown, ArrowDownLeft, ArrowLeft, ArrowRightLeft, ArrowRight, ArrowUpRight, Banknote, Bell, Check, CheckCircle2,
   ChevronDown, ChevronRight, CircleAlert, Clock3, Copy, Download, Eye, FileCheck2, Globe2, Info, LayoutDashboard,
   Link2, ListFilter, LockKeyhole, LogOut, Menu, MoreHorizontal, Plus, QrCode, RefreshCw, Search,
-  Send, Settings2, ShieldCheck, WalletCards, X
+  Send, Settings2, ShieldCheck, Trash2, WalletCards, X
 } from 'lucide-react';
 import { Link, Redirect, Route, Router as WouterRouter, Switch, useLocation } from 'wouter';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -20,6 +20,7 @@ import {
   useCreateExchange,
   useCreatePaymentLink,
   useCreateTransfer,
+  useDeletePaymentLink,
   useDecideExchange,
   useDecideKyc,
   useGetAdminSummary,
@@ -1156,12 +1157,12 @@ function Exchange() {
 function PaymentLinks() {
   const { links, wallets, toast } = useStore();
   const createPaymentLink = useCreatePaymentLink();
+  const deletePaymentLink = useDeletePaymentLink();
   const [productName, setProductName] = useState('');
   const [description, setDescription] = useState('');
   const [walletId, setWalletId] = useState('all');
   const [amountType, setAmountType] = useState<'FIXED' | 'CUSTOMER_CHOOSES'>('FIXED');
   const [amount, setAmount] = useState('');
-  const [customerFields, setCustomerFields] = useState<string[]>(['full_name', 'phone', 'email']);
   const [validity, setValidity] = useState('30d');
   const [customDate, setCustomDate] = useState('');
   const [paymentLimit, setPaymentLimit] = useState<'unlimited' | 'limited'>('unlimited');
@@ -1176,7 +1177,6 @@ function PaymentLinks() {
   const [copiedId, setCopiedId] = useState('');
   const [qrLink, setQrLink] = useState<PaymentLink | null>(null);
 
-  const toggleCustomerField = (field: string) => setCustomerFields(current => current.includes(field) ? current.filter(item => item !== field) : [...current, field]);
   const expiryValue = () => {
     if (validity === 'never') return '';
     if (validity === 'custom') return customDate ? new Date(`${customDate}T23:59:59`).toISOString() : '';
@@ -1207,6 +1207,18 @@ function PaymentLinks() {
     await copyLink(link);
     toast('Lien copié, prêt à être partagé.');
   };
+  const removeLink = (link: PaymentLink) => {
+    if (!window.confirm(`Supprimer définitivement le lien « ${link.productName || link.description || 'ce paiement'} » ? Cette action est irréversible.`)) return;
+    deletePaymentLink.mutate({ id: link.id }, {
+      onSuccess: () => {
+        if (createdLink?.id === link.id) setCreatedLink(null);
+        if (qrLink?.id === link.id) setQrLink(null);
+        void queryClient.invalidateQueries({ queryKey: getGetBootstrapQueryKey() });
+        toast('Lien de paiement supprimé définitivement.');
+      },
+      onError: () => toast('Le lien de paiement n’a pas pu être supprimé.'),
+    });
+  };
   const submit = (event: FormEvent) => {
     event.preventDefault();
     setFormError('');
@@ -1230,7 +1242,7 @@ function PaymentLinks() {
       description: cleanDescription,
       walletId: walletId === 'all' ? null : walletId,
       amountType,
-      customerFields: customerFields as PaymentLinkInput['customerFields'],
+      customerFields: ['full_name', 'country', 'operator', 'phone', 'email'] as PaymentLinkInput['customerFields'],
       expiresAt: expiryValue(),
       maxPayments: paymentLimit === 'limited' ? Number(maxPayments) : null,
       afterPaymentAction,
@@ -1247,7 +1259,6 @@ function PaymentLinks() {
         setWalletId('all');
         setAmountType('FIXED');
         setAmount('');
-        setCustomerFields(['full_name', 'phone', 'email']);
         setValidity('30d');
         setCustomDate('');
         setPaymentLimit('unlimited');
@@ -1266,7 +1277,6 @@ function PaymentLinks() {
   };
   const renderLinkAmount = (link: PaymentLink) => link.amountType === 'CUSTOMER_CHOOSES' ? 'Montant libre' : money(link.amount, link.currency);
   const renderLinkExpiry = (link: PaymentLink) => expiryLabel(link.expiresAt);
-  const customerFieldLabels: Record<string, string> = { full_name: 'Nom complet', country: 'Pays', operator: 'Opérateur', phone: 'Téléphone', email: 'Adresse e-mail' };
   const today = new Date().toISOString().slice(0, 10);
 
   return <main className="page-wrap payment-links-page">
@@ -1275,7 +1285,7 @@ function PaymentLinks() {
       <div className="payment-success-icon"><CheckCircle2 size={22} /></div>
       <div className="payment-success-copy"><span className="eyebrow">Lien créé avec succès</span><h2>{createdLink.productName}</h2><p>Votre lien est actif. Copiez-le ou partagez-le directement avec votre client.</p>
         <div className="generated-link"><Link2 size={15} /><code>{createdLink.slug}</code><button className="button button-primary button-sm" onClick={() => copyLink(createdLink)} data-testid="button-copy-created-link">{copiedId === createdLink.id ? <><Check size={13} /> Lien copié !</> : <><Copy size={13} /> Copier</>}</button></div>
-        <div className="success-actions"><a className="button button-ghost button-sm" href={createdLink.slug} target="_blank" rel="noreferrer"><Eye size={13} /> Aperçu du lien</a><button className="button button-ghost button-sm" onClick={() => shareLink(createdLink)}><Send size={13} /> Partager</button><button className="button button-ghost button-sm" onClick={() => setQrLink(createdLink)}><QrCode size={13} /> QR Code</button><span className="reference-chip">Réf. {createdLink.reference ?? '—'}</span></div>
+        <div className="success-actions"><a className="button button-ghost button-sm" href={createdLink.slug} target="_blank" rel="noreferrer"><Eye size={13} /> Aperçu du lien</a><button className="button button-ghost button-sm" onClick={() => shareLink(createdLink)}><Send size={13} /> Partager</button><button className="button button-ghost button-sm" onClick={() => setQrLink(createdLink)}><QrCode size={13} /> QR Code</button><button className="button button-danger button-sm" onClick={() => removeLink(createdLink)} disabled={deletePaymentLink.isPending}><Trash2 size={13} /> Supprimer</button><span className="reference-chip">Réf. {createdLink.reference ?? '—'}</span></div>
       </div>
       <button className="payment-success-close" aria-label="Masquer la confirmation" onClick={() => setCreatedLink(null)}><X size={16} /></button>
     </section>}
@@ -1291,28 +1301,25 @@ function PaymentLinks() {
           <div className="choice-grid"><label className={`choice-card ${amountType === 'FIXED' ? 'selected' : ''}`}><input type="radio" name="amount-type" checked={amountType === 'FIXED'} onChange={() => setAmountType('FIXED')} /><span className="choice-radio" /><span><strong>Montant fixe</strong><small>Le client paie exactement le montant indiqué.</small></span></label><label className={`choice-card ${amountType === 'CUSTOMER_CHOOSES' ? 'selected' : ''}`}><input type="radio" name="amount-type" checked={amountType === 'CUSTOMER_CHOOSES'} onChange={() => setAmountType('CUSTOMER_CHOOSES')} /><span className="choice-radio" /><span><strong>Montant choisi par le client</strong><small>Le client saisit le montant au moment du paiement.</small></span></label></div>
           {amountType === 'FIXED' && <div className="field amount-field"><label htmlFor="link-amount">Montant à payer <b>*</b></label><div className="input-prefix"><span>{wallets.find(wallet => wallet.id === walletId)?.currency ?? wallets[0]?.currency ?? 'XOF'}</span><input id="link-amount" type="number" min="1" step="1" value={amount} onChange={event => setAmount(event.target.value)} placeholder="0" required data-testid="input-link-amount" /></div></div>}
         </div>
-        <div className="builder-section"><div className="builder-section-title"><span className="section-index">03</span><div><h3>Informations du client</h3><p>Décidez des informations à demander au moment du paiement.</p></div></div>
-          <div className="customer-fields-grid">{Object.entries(customerFieldLabels).map(([field, label]) => <label className={`toggle-row ${customerFields.includes(field) ? 'checked' : ''}`} key={field}><input type="checkbox" checked={customerFields.includes(field)} onChange={() => toggleCustomerField(field)} /><span className="toggle-check">{customerFields.includes(field) && <Check size={12} />}</span><span>{label}</span></label>)}</div>
-        </div>
-        <div className="builder-section"><div className="builder-section-title"><span className="section-index">04</span><div><h3>Règles du lien</h3><p>Gardez la main sur sa durée de vie et son nombre d’utilisations.</p></div></div>
+         <div className="builder-section"><div className="builder-section-title"><span className="section-index">03</span><div><h3>Règles du lien</h3><p>Gardez la main sur sa durée de vie et son nombre d’utilisations.</p></div></div>
           <div className="field"><label htmlFor="link-validity">Validité du lien</label><select id="link-validity" value={validity} onChange={event => setValidity(event.target.value)} data-testid="select-link-expiry"><option value="never">Sans expiration</option><option value="24h">24 heures</option><option value="7d">7 jours</option><option value="30d">30 jours</option><option value="custom">Date personnalisée</option></select></div>
           {validity === 'custom' && <div className="field"><label htmlFor="link-custom-date">Date de fin</label><input id="link-custom-date" type="date" min={today} value={customDate} onChange={event => setCustomDate(event.target.value)} /></div>}
           <div className="field"><label>Nombre de paiements</label><div className="inline-choice"><label className={`mini-choice ${paymentLimit === 'unlimited' ? 'selected' : ''}`}><input type="radio" name="payment-limit" checked={paymentLimit === 'unlimited'} onChange={() => setPaymentLimit('unlimited')} />Illimité</label><label className={`mini-choice ${paymentLimit === 'limited' ? 'selected' : ''}`}><input type="radio" name="payment-limit" checked={paymentLimit === 'limited'} onChange={() => setPaymentLimit('limited')} />Limité</label></div></div>
           {paymentLimit === 'limited' && <div className="field"><label htmlFor="link-max-payments">Nombre maximum</label><input id="link-max-payments" type="number" min="1" step="1" value={maxPayments} onChange={event => setMaxPayments(event.target.value)} placeholder="Ex. 25" /></div>}
         </div>
-        <div className="builder-section"><div className="builder-section-title"><span className="section-index">05</span><div><h3>Après le paiement</h3><p>Choisissez l’expérience qui suit la confirmation.</p></div></div>
+         <div className="builder-section"><div className="builder-section-title"><span className="section-index">04</span><div><h3>Après le paiement</h3><p>Choisissez l’expérience qui suit la confirmation.</p></div></div>
           <div className="choice-stack"><label className={`choice-card compact ${afterPaymentAction === 'CONFIRMATION' ? 'selected' : ''}`}><input type="radio" name="after-payment" checked={afterPaymentAction === 'CONFIRMATION'} onChange={() => setAfterPaymentAction('CONFIRMATION')} /><span className="choice-radio" /><span><strong>Confirmation Mulapay</strong><small>Votre client voit une confirmation claire après le paiement.</small></span></label><label className={`choice-card compact ${afterPaymentAction === 'REDIRECT' ? 'selected' : ''}`}><input type="radio" name="after-payment" checked={afterPaymentAction === 'REDIRECT'} onChange={() => setAfterPaymentAction('REDIRECT')} /><span className="choice-radio" /><span><strong>Rediriger vers une URL</strong><small>Retour vers votre site ou votre page de confirmation.</small></span></label></div>
           {afterPaymentAction === 'REDIRECT' && <div className="field redirect-field"><label htmlFor="link-redirect-url">URL HTTPS ou HTTP <b>*</b></label><input id="link-redirect-url" type="url" value={redirectUrl} onChange={event => setRedirectUrl(event.target.value)} placeholder="https://votre-site.com/merci" required /></div>}
         </div>
-        <div className="builder-section builder-section-last"><div className="builder-section-title"><span className="section-index">06</span><div><h3>Notifications</h3><p>Recevez les informations importantes au bon endroit.</p></div></div>
+         <div className="builder-section builder-section-last"><div className="builder-section-title"><span className="section-index">05</span><div><h3>Notifications</h3><p>Recevez les informations importantes au bon endroit.</p></div></div>
           <div className="notification-options"><label className="toggle-row checked"><input type="checkbox" checked={notifyApp} onChange={event => setNotifyApp(event.target.checked)} /><span className="toggle-check">{notifyApp && <Check size={12} />}</span><span><strong>Notification Mulapay</strong><small>Dans votre espace de travail</small></span></label><label className="toggle-row checked"><input type="checkbox" checked={notifyEmail} onChange={event => setNotifyEmail(event.target.checked)} /><span className="toggle-check">{notifyEmail && <Check size={12} />}</span><span><strong>Notification e-mail</strong><small>À l’adresse de votre compte</small></span></label><label className="toggle-row"><input type="checkbox" checked={notifyWebhook} onChange={event => setNotifyWebhook(event.target.checked)} /><span className="toggle-check">{notifyWebhook && <Check size={12} />}</span><span><strong>Webhook</strong><small>Pour votre intégration technique</small></span></label></div>
         </div>
         <div className="builder-footer"><div className="reference-field"><span>Référence du paiement</span><strong>{createdLink?.reference ?? 'MP-LINK-••••••••'}</strong><small>Générée automatiquement · non modifiable</small></div><div className="builder-submit">{formError && <div className="form-error"><CircleAlert size={14} /> {formError}</div>}<button type="submit" className="button button-primary" disabled={createPaymentLink.isPending} data-testid="button-submit-link">{createPaymentLink.isPending ? 'Création en cours…' : <><Link2 size={15} /> Créer le lien de paiement</>}</button></div></div>
       </form>
-      <aside className="payment-builder-aside"><div className="payment-preview card"><div className="preview-top"><div><span className="eyebrow">Aperçu</span><h2>Ce que votre client verra</h2></div><Eye size={17} /></div><div className="preview-payment"><div className="preview-brand"><span className="preview-mark">M</span><span>Mulapay</span><ShieldCheck size={13} /></div><div className="preview-product"><span className="preview-label">Paiement demandé</span><strong>{productName.trim() || 'Votre produit ou service'}</strong><p>{description.trim() || 'La description de votre paiement apparaîtra ici.'}</p></div><div className="preview-amount"><span>{amountType === 'FIXED' ? 'Montant' : 'Montant libre'}</span><strong>{amountType === 'FIXED' && amount ? money(Number(amount), wallets.find(wallet => wallet.id === walletId)?.currency ?? wallets[0]?.currency ?? 'XOF') : amountType === 'FIXED' ? '—' : 'Au choix'}</strong></div><div className="preview-detail"><span><Clock3 size={13} /> {validity === 'never' ? 'Sans expiration' : validity === 'custom' && customDate ? `Jusqu’au ${new Date(`${customDate}T12:00:00`).toLocaleDateString('fr-FR')}` : `Valide ${validity === '24h' ? '24 heures' : validity === '7d' ? '7 jours' : '30 jours'}`}</span><span><ShieldCheck size={13} /> Paiement sécurisé</span></div><div className="preview-button">Continuer vers le paiement <ArrowRight size={14} /></div></div><div className="preview-note"><LockKeyhole size={14} /><span>Les données client sont transmises de façon sécurisée et uniquement selon les champs sélectionnés.</span></div></div><div className="payment-help card"><div className="help-icon"><Info size={16} /></div><div><strong>Un lien pour chaque besoin</strong><p>Montant fixe pour une facture, montant libre pour un don ou une contribution.</p></div></div></aside>
+       <aside className="payment-builder-aside"><div className="payment-preview card"><div className="preview-top"><div><span className="eyebrow">Aperçu</span><h2>Ce que votre client verra</h2></div><Eye size={17} /></div><div className="preview-payment"><div className="preview-brand"><span className="preview-mark">M</span><span>Mulapay</span><ShieldCheck size={13} /></div><div className="preview-product"><span className="preview-label">Paiement demandé</span><strong>{productName.trim() || 'Votre produit ou service'}</strong><p>{description.trim() || 'La description de votre paiement apparaîtra ici.'}</p></div><div className="preview-amount"><span>{amountType === 'FIXED' ? 'Montant' : 'Montant libre'}</span><strong>{amountType === 'FIXED' && amount ? money(Number(amount), wallets.find(wallet => wallet.id === walletId)?.currency ?? wallets[0]?.currency ?? 'XOF') : amountType === 'FIXED' ? '—' : 'Au choix'}</strong></div><div className="preview-detail"><span><Clock3 size={13} /> {validity === 'never' ? 'Sans expiration' : validity === 'custom' && customDate ? `Jusqu’au ${new Date(`${customDate}T12:00:00`).toLocaleDateString('fr-FR')}` : `Valide ${validity === '24h' ? '24 heures' : validity === '7d' ? '7 jours' : '30 jours'}`}</span><span><ShieldCheck size={13} /> Paiement sécurisé</span></div><div className="preview-button">Continuer vers le paiement <ArrowRight size={14} /></div></div></div></aside>
     </div>
     <section className="existing-links-section"><div className="section-head"><div><span className="eyebrow">Votre activité</span><h2 className="section-title">Liens existants</h2><p className="section-note">{links.length ? `${links.length} lien${links.length > 1 ? 's' : ''} enregistré${links.length > 1 ? 's' : ''}` : 'Vos liens créés apparaîtront ici.'}</p></div><span className="link-count-badge">{links.length}</span></div>
-       {links.length === 0 ? <div className="empty-state card payment-links-empty"><Link2 size={25} /><strong>Aucun lien pour le moment</strong><p>Configurez votre premier lien ci-dessus pour commencer à recevoir des paiements.</p></div> : <div className="links-table card"><div className="links-table-head"><span>Produit / service</span><span>Montant</span><span>Référence</span><span>Statut</span><span>Validité</span><span>Paiements</span><span>Actions</span></div>{links.map(link => <div className="links-table-row" key={link.id} data-testid={`card-payment-link-${link.id}`}><div className="link-product"><span className="link-product-icon"><Link2 size={14} /></span><span><strong>{link.productName || link.description || 'Lien de paiement'}</strong><small>{link.description || 'Sans description'}</small></span></div><strong className="table-amount">{renderLinkAmount(link)}</strong><code>{link.reference || '—'}</code><span className={`pill ${link.status === 'Active' ? 'pill-success' : link.status === 'Expired' ? 'pill-danger' : 'pill-neutral'}`}>{statusLabel(link.status)}</span><span className="table-muted">{renderLinkExpiry(link)}</span><span className="table-muted">{link.payments}{link.maxPayments ? ` / ${link.maxPayments}` : ''}</span><div className="link-actions"><a className="icon-button" href={link.slug} target="_blank" rel="noreferrer" title="Aperçu du lien" data-testid={`button-preview-link-${link.id}`}><Eye size={15} /></a><button className="icon-button" title={copiedId === link.id ? 'Lien copié' : 'Copier le lien'} onClick={() => copyLink(link)} data-testid={`button-copy-link-${link.id}`}>{copiedId === link.id ? <Check size={15} /> : <Copy size={15} />}</button><button className="icon-button" title="Partager le lien" onClick={() => shareLink(link)} data-testid={`button-share-link-${link.id}`}><Send size={15} /></button><button className="icon-button" title="Afficher le QR code" onClick={() => setQrLink(link)} data-testid={`button-qr-link-${link.id}`}><QrCode size={15} /></button></div></div>)}</div>}
+       {links.length === 0 ? <div className="empty-state card payment-links-empty"><Link2 size={25} /><strong>Aucun lien pour le moment</strong><p>Configurez votre premier lien ci-dessus pour commencer à recevoir des paiements.</p></div> : <div className="links-table card"><div className="links-table-head"><span>Produit / service</span><span>Montant</span><span>Référence</span><span>Statut</span><span>Validité</span><span>Paiements</span><span>Actions</span></div>{links.map(link => <div className="links-table-row" key={link.id} data-testid={`card-payment-link-${link.id}`}><div className="link-product"><span className="link-product-icon"><Link2 size={14} /></span><span><strong>{link.productName || link.description || 'Lien de paiement'}</strong><small>{link.description || 'Sans description'}</small></span></div><strong className="table-amount">{renderLinkAmount(link)}</strong><code>{link.reference || '—'}</code><span className={`pill ${link.status === 'Active' ? 'pill-success' : link.status === 'Expired' ? 'pill-danger' : 'pill-neutral'}`}>{statusLabel(link.status)}</span><span className="table-muted">{renderLinkExpiry(link)}</span><span className="table-muted">{link.payments}{link.maxPayments ? ` / ${link.maxPayments}` : ''}</span><div className="link-actions"><a className="icon-button" href={link.slug} target="_blank" rel="noreferrer" title="Aperçu du lien" data-testid={`button-preview-link-${link.id}`}><Eye size={15} /></a><button className="icon-button" title={copiedId === link.id ? 'Lien copié' : 'Copier le lien'} onClick={() => copyLink(link)} data-testid={`button-copy-link-${link.id}`}>{copiedId === link.id ? <Check size={15} /> : <Copy size={15} />}</button><button className="icon-button" title="Partager le lien" onClick={() => shareLink(link)} data-testid={`button-share-link-${link.id}`}><Send size={15} /></button><button className="icon-button" title="Afficher le QR code" onClick={() => setQrLink(link)} data-testid={`button-qr-link-${link.id}`}><QrCode size={15} /></button><button className="icon-button" title="Supprimer définitivement" onClick={() => removeLink(link)} disabled={deletePaymentLink.isPending} data-testid={`button-delete-link-${link.id}`}><Trash2 size={15} /></button></div></div>)}</div>}
     </section>
     {qrLink && <div className="payment-modal-backdrop" role="presentation" onClick={() => setQrLink(null)}><div className="payment-qr-modal card" role="dialog" aria-modal="true" aria-label="QR Code du lien" onClick={event => event.stopPropagation()}><button className="payment-success-close" aria-label="Fermer" onClick={() => setQrLink(null)}><X size={16} /></button><span className="eyebrow">À partager en présentiel</span><h2>QR Code du paiement</h2><p>{qrLink.productName}</p><div className="qr-box payment-qr-visual">{Array.from({ length: 81 }, (_, index) => <i key={index} />)}</div><code>{qrLink.slug}</code><button className="button button-primary button-wide" onClick={() => copyLink(qrLink)}>{copiedId === qrLink.id ? <><Check size={14} /> Lien copié !</> : <><Copy size={14} /> Copier le lien</>}</button></div></div>}
   </main>;

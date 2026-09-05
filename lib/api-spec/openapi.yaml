@@ -127,6 +127,20 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/PaymentLink"
+  /v1/payment-links/{id}:
+    delete:
+      operationId: deletePaymentLink
+      tags: [wallet]
+      summary: Permanently deletes a payment link
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Payment link deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationResult"
   /v1/deposits:
     post:
       operationId: createDeposit

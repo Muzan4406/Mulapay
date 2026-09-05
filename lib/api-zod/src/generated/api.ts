@@ -261,6 +261,25 @@ export const ListPaymentLinksResponse = zod.array(ListPaymentLinksResponseItem)
 
 
 /**
+ * @summary Permanently deletes a payment link
+ */
+export const DeletePaymentLinkParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const DeletePaymentLinkResponse = zod.object({
+  "ok": zod.boolean(),
+  "message": zod.string(),
+  "reference": zod.string().nullish(),
+  "status": zod.string().optional(),
+  "paymentUrl": zod.string().nullish(),
+  "expiresAt": zod.coerce.date().optional(),
+  "fee": zod.number().optional(),
+  "netAmount": zod.number().optional()
+})
+
+
+/**
  * @summary Starts a provider-backed deposit
  */
 export const createDepositBodyAmountExclusiveMin = 0;
