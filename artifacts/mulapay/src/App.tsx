@@ -1331,6 +1331,10 @@ function PublicPaymentPage() {
   const token = location.split('/').filter(Boolean).pop() ?? '';
   const [link, setLink] = useState<PublicPaymentLink | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [customerCountry, setCustomerCountry] = useState(mobileMoneyCountryOptions[0].country);
+  const [customerOperator, setCustomerOperator] = useState(mobileMoneyCountryOptions[0].operators[0]?.name ?? '');
+  const [customerValues, setCustomerValues] = useState<Record<string, string>>({});
+  const [amount, setAmount] = useState('');
 
   useEffect(() => {
     let mounted = true;
@@ -1352,21 +1356,30 @@ function PublicPaymentPage() {
   }, [token]);
 
   if (state === 'loading') return <div className="loading-screen">Chargement du paiement…</div>;
-  if (state === 'error' || !link) return <main className="public-payment-page"><div className="public-payment-card card"><Logo /><span className="eyebrow">Lien indisponible</span><h1>Ce lien de paiement n’est plus disponible</h1><p>Vérifiez l’adresse reçue ou demandez un nouveau lien au commerçant.</p><Link className="button button-primary" href="/">Retour à Mulapay</Link></div></main>;
+  if (state === 'error' || !link) return <main className="page-wrap public-payment-page"><div className="public-payment-header"><Logo /></div><PageIntro eyebrow="Paiement Mulapay" title="Lien indisponible" subtitle="Vérifiez l’adresse reçue ou demandez un nouveau lien au commerçant." /><div className="card card-pad public-payment-unavailable"><CircleAlert size={22} /><strong>Ce lien de paiement n’est plus disponible.</strong><Link className="button button-primary" href="/">Retour à Mulapay</Link></div></main>;
 
+  const selectedCustomerCountry = mobileMoneyCountryOptions.find(option => option.country === customerCountry) ?? mobileMoneyCountryOptions[0];
+  const hasField = (name: string) => link.customerFields.includes(name);
+  const updateCustomerValue = (name: string, value: string) => setCustomerValues(values => ({ ...values, [name]: value }));
   const fixedAmount = link.amountType === 'FIXED' ? money(link.amount, link.currency) : 'Montant libre';
-  return <main className="public-payment-page">
-    <div className="public-payment-card card">
-      <div className="public-payment-brand"><span className="preview-mark">M</span><strong>Mulapay</strong><ShieldCheck size={16} /></div>
-      <span className="eyebrow">Paiement sécurisé</span>
-      <h1>{link.productName}</h1>
-      {link.description && <p className="public-payment-description">{link.description}</p>}
-      <div className="public-payment-amount"><span>{link.amountType === 'FIXED' ? 'Montant à payer' : 'Montant choisi par vous'}</span><strong>{fixedAmount}</strong></div>
-      <div className="public-payment-details"><span><Clock3 size={14} /> {link.expiresAt ? `Valide jusqu’au ${new Date(link.expiresAt).toLocaleDateString('fr-FR')}` : 'Sans expiration'}</span><span><ShieldCheck size={14} /> Paiement protégé par Mulapay</span></div>
-      <div className="public-payment-fields"><h2>Vos informations</h2><p>Ces informations sont nécessaires pour effectuer le paiement.</p>{link.customerFields.map(field => <label key={field}>{({ full_name: 'Nom complet', country: 'Pays', operator: 'Opérateur', phone: 'Téléphone', email: 'Adresse e-mail' } as Record<string, string>)[field] ?? field}<input required /></label>)}</div>
-      <button className="button button-primary button-wide" type="button">Continuer vers le paiement <ChevronRight size={15} /></button>
-      <small className="public-payment-reference">Réf. {link.reference ?? '—'}</small>
-    </div>
+
+  return <main className="page-wrap public-payment-page">
+    <div className="public-payment-header"><Logo /></div>
+    <PageIntro eyebrow="Paiement Mulapay" title={link.productName} subtitle={link.description || 'Effectuez votre paiement Mobile Money en toute sécurité.'} />
+    <form className="card card-pad deposit-form public-payment-form" onSubmit={event => event.preventDefault()}>
+      <div className="public-payment-order">
+        <div className="section-head"><div><span className="eyebrow">Détails du paiement</span><h2 className="section-title">{link.productName}</h2><p className="section-note">Référence {link.reference ?? '—'}</p></div><ShieldCheck size={21} color="hsl(160 42% 38%)" /></div>
+        <div className="summary-box" style={{ marginTop: 18 }}><div className="summary-line"><span>{link.amountType === 'FIXED' ? 'Montant à payer' : 'Montant choisi par vous'}</span><strong>{fixedAmount}</strong></div><div className="summary-line"><span>Validité</span><strong>{link.expiresAt ? new Date(link.expiresAt).toLocaleDateString('fr-FR') : 'Sans expiration'}</strong></div></div>
+      </div>
+      {link.amountType === 'CUSTOMER_CHOOSES' && <div className="field"><label htmlFor="public-payment-amount">Montant</label><div className="input-prefix"><span>{link.currency}</span><input id="public-payment-amount" type="number" min="1" step="1" value={amount} onChange={event => setAmount(event.target.value)} placeholder="0" required /></div></div>}
+      {hasField('full_name') && <div className="field"><label htmlFor="public-payment-full-name">Nom complet</label><input id="public-payment-full-name" value={customerValues.full_name ?? ''} onChange={event => updateCustomerValue('full_name', event.target.value)} autoComplete="name" required /></div>}
+      {hasField('country') && <div className="field"><label htmlFor="public-payment-country">Pays</label><div className="country-select"><img src={`${import.meta.env.BASE_URL}countries/${selectedCustomerCountry.flagSrc}`} alt="" /><select id="public-payment-country" value={customerCountry} onChange={event => { setCustomerCountry(event.target.value); const next = mobileMoneyCountryOptions.find(option => option.country === event.target.value); setCustomerOperator(next?.operators[0]?.name ?? ''); }} required>{mobileMoneyCountryOptions.map(option => <option key={option.country} value={option.country} disabled={option.code === 'NE'}>{option.country} · {option.dialCode}{option.code === 'NE' ? ' · bientôt disponible' : ''}</option>)}</select><ChevronDown className="country-select-chevron" size={16} aria-hidden="true" /></div></div>}
+      {hasField('operator') && <div className="field"><label>Opérateur Mobile Money</label><div className="mobile-money-options" role="radiogroup" aria-label="Choisir un opérateur Mobile Money">{selectedCustomerCountry.operators.map(option => <label className={`mobile-money-option ${customerOperator === option.name ? 'selected' : ''}`} key={option.name}><input type="radio" name="public-payment-operator" value={option.name} checked={customerOperator === option.name} onChange={event => setCustomerOperator(event.target.value)} required /><img src={`${import.meta.env.BASE_URL}mobile-money/${option.src}`} alt="" /><span>{option.name}</span></label>)}</div></div>}
+      {hasField('phone') && <div className="field"><label htmlFor="public-payment-phone">Numéro de téléphone</label><div className="phone-input"><span className="phone-prefix" aria-label={`Indicatif ${selectedCustomerCountry.dialCode}`}>{selectedCustomerCountry.dialCode}</span><input id="public-payment-phone" type="tel" inputMode="numeric" value={customerValues.phone ?? ''} onChange={event => updateCustomerValue('phone', event.target.value.replace(/\D/g, ''))} placeholder="90 00 00 00" autoComplete="tel-national" required /></div></div>}
+      {hasField('email') && <div className="field"><label htmlFor="public-payment-email">Adresse e-mail</label><input id="public-payment-email" type="email" value={customerValues.email ?? ''} onChange={event => updateCustomerValue('email', event.target.value)} autoComplete="email" required /></div>}
+      <div className="public-payment-security"><ShieldCheck size={15} /><span>Vos informations sont nécessaires pour confirmer le paiement.</span></div>
+      <button className="button button-primary button-wide" type="submit">Continuer vers le paiement <ChevronRight size={15} /></button>
+    </form>
   </main>;
 }
 
