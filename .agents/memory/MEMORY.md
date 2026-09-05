@@ -1,3 +1,4 @@
 - [Mulapay auth and ledger](auth-and-ledger.md) — Clerk sessions front a persisted Drizzle wallet/ledger; development fallback must not reach production.
 - [Clerk custom flows](clerk-custom-flows.md) — the current Clerk React SDK uses Future resources and verification methods for custom auth screens.
 - [DrimPay production boundary](drimpay-production.md) — Mulapay exposes only the production Payin workflow; partner docs must not present Sandbox.
+- [DrimPay confirmation boundary](drimpay-confirmation.md) — only a signed webhook may move pending funds into the ledger; missing provider net amounts must fail closed.
