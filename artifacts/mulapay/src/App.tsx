@@ -2,7 +2,7 @@ import { createContext, type FormEvent, type ReactNode, useContext, useEffect, u
 import {
   Activity, ArrowDown, ArrowDownLeft, ArrowLeft, ArrowRightLeft, ArrowRight, ArrowUpRight, Banknote, Bell, Check, CheckCircle2,
   ChevronDown, ChevronRight, CircleAlert, Clock3, Copy, Download, Eye, FileCheck2, Globe2, Info, LayoutDashboard,
-  Link2, ListFilter, LockKeyhole, LogOut, Menu, MoreHorizontal, Plus, QrCode, RefreshCw, Search,
+  Link2, ListFilter, LockKeyhole, LogOut, Menu, MoreHorizontal, Pencil, Plus, QrCode, RefreshCw, Search,
   Send, Settings2, ShieldCheck, Trash2, WalletCards, X
 } from 'lucide-react';
 import { Link, Redirect, Route, Router as WouterRouter, Switch, useLocation } from 'wouter';
@@ -21,6 +21,7 @@ import {
   useCreatePaymentLink,
   useCreateTransfer,
   useDeletePaymentLink,
+  useUpdatePaymentLink,
   useDecideExchange,
   useDecideKyc,
   useGetAdminSummary,
@@ -1159,6 +1160,7 @@ function PaymentLinks() {
   const { links, wallets, toast } = useStore();
   const createPaymentLink = useCreatePaymentLink();
   const deletePaymentLink = useDeletePaymentLink();
+  const updatePaymentLink = useUpdatePaymentLink();
   const [productName, setProductName] = useState('');
   const [description, setDescription] = useState('');
   const [walletId, setWalletId] = useState('all');
@@ -1174,6 +1176,7 @@ function PaymentLinks() {
   const [notifyEmail, setNotifyEmail] = useState(true);
   const [notifyWebhook, setNotifyWebhook] = useState(false);
   const [createdLink, setCreatedLink] = useState<PaymentLink | null>(null);
+  const [editingLink, setEditingLink] = useState<PaymentLink | null>(null);
   const [formError, setFormError] = useState('');
   const [copiedId, setCopiedId] = useState('');
   const [qrLink, setQrLink] = useState<PaymentLink | null>(null);

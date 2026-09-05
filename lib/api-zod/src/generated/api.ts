@@ -286,6 +286,60 @@ export const GetPublicPaymentLinkResponse = zod.object({
 
 
 /**
+ * @summary Updates an owned payment link
+ */
+export const UpdatePaymentLinkParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const updatePaymentLinkBodyAmountMin = 0;
+
+export const updatePaymentLinkBodyProductNameMin = 2;
+
+
+
+
+export const UpdatePaymentLinkBody = zod.object({
+  "amount": zod.number().min(updatePaymentLinkBodyAmountMin).nullish(),
+  "currency": zod.string(),
+  "productName": zod.string().min(updatePaymentLinkBodyProductNameMin),
+  "description": zod.string(),
+  "walletId": zod.string().nullable(),
+  "amountType": zod.enum(['FIXED', 'CUSTOMER_CHOOSES']),
+  "customerFields": zod.array(zod.enum(['full_name', 'country', 'operator', 'phone', 'email'])),
+  "expiresAt": zod.string(),
+  "maxPayments": zod.number().min(1).nullable(),
+  "afterPaymentAction": zod.enum(['CONFIRMATION', 'REDIRECT']),
+  "redirectUrl": zod.string().nullable(),
+  "notifyApp": zod.boolean(),
+  "notifyEmail": zod.boolean(),
+  "notifyWebhook": zod.boolean()
+})
+
+export const UpdatePaymentLinkResponse = zod.object({
+  "id": zod.string(),
+  "slug": zod.string(),
+  "reference": zod.string().nullable(),
+  "productName": zod.string(),
+  "amount": zod.number(),
+  "currency": zod.string(),
+  "description": zod.string(),
+  "walletId": zod.string().nullable(),
+  "amountType": zod.enum(['FIXED', 'CUSTOMER_CHOOSES']),
+  "customerFields": zod.array(zod.enum(['full_name', 'country', 'operator', 'phone', 'email'])),
+  "status": zod.string(),
+  "expiresAt": zod.string(),
+  "maxPayments": zod.number().nullable(),
+  "afterPaymentAction": zod.enum(['CONFIRMATION', 'REDIRECT']),
+  "redirectUrl": zod.string().nullable(),
+  "notifyApp": zod.boolean(),
+  "notifyEmail": zod.boolean(),
+  "notifyWebhook": zod.boolean(),
+  "payments": zod.number()
+})
+
+
+/**
  * @summary Permanently deletes a payment link
  */
 export const DeletePaymentLinkParams = zod.object({

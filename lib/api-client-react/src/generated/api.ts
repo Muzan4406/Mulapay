@@ -660,6 +660,78 @@ export function useGetPublicPaymentLink<TData = Awaited<ReturnType<typeof getPub
 
 
 
+export const getUpdatePaymentLinkUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/payment-links/${id}`
+}
+
+/**
+ * @summary Updates an owned payment link
+ */
+export const updatePaymentLink = async (id: string,
+    paymentLinkInput: PaymentLinkInput, options?: Parameters<typeof customFetch>[1]): Promise<PaymentLink> => {
+
+  return customFetch<PaymentLink>(getUpdatePaymentLinkUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(paymentLinkInput)
+  }
+);}
+
+
+
+
+
+export const getUpdatePaymentLinkMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePaymentLink>>, TError,{id: string;data: BodyType<PaymentLinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updatePaymentLink>>, TError,{id: string;data: BodyType<PaymentLinkInput>}, TContext> => {
+
+const mutationKey = ['updatePaymentLink'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updatePaymentLink>>, {id: string;data: BodyType<PaymentLinkInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updatePaymentLink(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdatePaymentLinkMutationResult = NonNullable<Awaited<ReturnType<typeof updatePaymentLink>>>
+    export type UpdatePaymentLinkMutationBody = BodyType<PaymentLinkInput>
+    export type UpdatePaymentLinkMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Updates an owned payment link
+ */
+export const useUpdatePaymentLink = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePaymentLink>>, TError,{id: string;data: BodyType<PaymentLinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updatePaymentLink>>,
+        TError,
+        {id: string;data: BodyType<PaymentLinkInput>},
+        TContext
+      > => {
+      return useMutation(getUpdatePaymentLinkMutationOptions(options));
+    }
+
 export const getDeletePaymentLinkUrl = (id: string,) => {
 
 
