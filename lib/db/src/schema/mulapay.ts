@@ -4,6 +4,7 @@ import {
   jsonb,
   numeric,
   index,
+  unique,
   pgTable,
   text,
   timestamp,
@@ -69,6 +70,7 @@ export const transactions = pgTable(
     amount: integer("amount").notNull(),
     currency: text("currency").notNull(),
     country: text("country").notNull(),
+    paymentProvider: text("payment_provider").notNull().default("DRIMPAY"),
     counterparty: text("counterparty").notNull(),
     reference: text("reference").notNull().unique(),
     providerOrderId: text("provider_order_id").unique(),
@@ -79,6 +81,23 @@ export const transactions = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [index("mulapay_transactions_user_idx").on(table.userId)],
+);
+
+export const paymentProviderRoutes = pgTable(
+  "mulapay_payment_provider_routes",
+  {
+    id: text("id").primaryKey(),
+    countryCode: text("country_code").notNull(),
+    country: text("country").notNull(),
+    operator: text("operator").notNull(),
+    providerOperator: text("provider_operator").notNull(),
+    provider: text("provider").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    unique("mulapay_provider_route_country_operator_idx").on(table.countryCode, table.operator),
+  ],
 );
 
 export const exchanges = pgTable(

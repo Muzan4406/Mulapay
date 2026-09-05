@@ -20,6 +20,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AdminPaymentProviders,
   AdminSettings,
   AdminSummary,
   BadRequestResponse,
@@ -33,6 +34,8 @@ import type {
   OperationResult,
   PaymentLink,
   PaymentLinkInput,
+  PaymentProviderRoute,
+  PaymentProviderRouteInput,
   PublicPaymentInput,
   PublicPaymentLink,
   Transaction,
@@ -1383,6 +1386,231 @@ export const useUpdateAdminSettings = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getUpdateAdminSettingsMutationOptions(options));
+    }
+
+export const getListAdminPaymentProvidersUrl = () => {
+
+
+
+
+  return `/api/v1/admin/payment-providers`
+}
+
+/**
+ * @summary Lists payment provider configuration status
+ */
+export const listAdminPaymentProviders = async ( options?: Parameters<typeof customFetch>[1]): Promise<AdminPaymentProviders> => {
+
+  return customFetch<AdminPaymentProviders>(getListAdminPaymentProvidersUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminPaymentProvidersQueryKey = () => {
+    return [
+    `/api/v1/admin/payment-providers`
+    ] as const;
+    }
+
+
+export const getListAdminPaymentProvidersQueryOptions = <TData = Awaited<ReturnType<typeof listAdminPaymentProviders>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminPaymentProviders>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminPaymentProvidersQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminPaymentProviders>>> = ({ signal }) => listAdminPaymentProviders({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminPaymentProviders>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminPaymentProvidersQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminPaymentProviders>>>
+export type ListAdminPaymentProvidersQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Lists payment provider configuration status
+ */
+
+export function useListAdminPaymentProviders<TData = Awaited<ReturnType<typeof listAdminPaymentProviders>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminPaymentProviders>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminPaymentProvidersQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListAdminPaymentProviderRoutesUrl = () => {
+
+
+
+
+  return `/api/v1/admin/payment-provider-routes`
+}
+
+/**
+ * @summary Lists country and operator provider routes
+ */
+export const listAdminPaymentProviderRoutes = async ( options?: Parameters<typeof customFetch>[1]): Promise<PaymentProviderRoute[]> => {
+
+  return customFetch<PaymentProviderRoute[]>(getListAdminPaymentProviderRoutesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminPaymentProviderRoutesQueryKey = () => {
+    return [
+    `/api/v1/admin/payment-provider-routes`
+    ] as const;
+    }
+
+
+export const getListAdminPaymentProviderRoutesQueryOptions = <TData = Awaited<ReturnType<typeof listAdminPaymentProviderRoutes>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminPaymentProviderRoutes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminPaymentProviderRoutesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminPaymentProviderRoutes>>> = ({ signal }) => listAdminPaymentProviderRoutes({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminPaymentProviderRoutes>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminPaymentProviderRoutesQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminPaymentProviderRoutes>>>
+export type ListAdminPaymentProviderRoutesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Lists country and operator provider routes
+ */
+
+export function useListAdminPaymentProviderRoutes<TData = Awaited<ReturnType<typeof listAdminPaymentProviderRoutes>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminPaymentProviderRoutes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminPaymentProviderRoutesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpsertAdminPaymentProviderRouteUrl = () => {
+
+
+
+
+  return `/api/v1/admin/payment-provider-routes`
+}
+
+/**
+ * @summary Selects a provider for a country and operator
+ */
+export const upsertAdminPaymentProviderRoute = async (paymentProviderRouteInput: PaymentProviderRouteInput, options?: Parameters<typeof customFetch>[1]): Promise<PaymentProviderRoute> => {
+
+  return customFetch<PaymentProviderRoute>(getUpsertAdminPaymentProviderRouteUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(paymentProviderRouteInput)
+  }
+);}
+
+
+
+
+
+export const getUpsertAdminPaymentProviderRouteMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof upsertAdminPaymentProviderRoute>>, TError,{data: BodyType<PaymentProviderRouteInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof upsertAdminPaymentProviderRoute>>, TError,{data: BodyType<PaymentProviderRouteInput>}, TContext> => {
+
+const mutationKey = ['upsertAdminPaymentProviderRoute'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof upsertAdminPaymentProviderRoute>>, {data: BodyType<PaymentProviderRouteInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  upsertAdminPaymentProviderRoute(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpsertAdminPaymentProviderRouteMutationResult = NonNullable<Awaited<ReturnType<typeof upsertAdminPaymentProviderRoute>>>
+    export type UpsertAdminPaymentProviderRouteMutationBody = BodyType<PaymentProviderRouteInput>
+    export type UpsertAdminPaymentProviderRouteMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Selects a provider for a country and operator
+ */
+export const useUpsertAdminPaymentProviderRoute = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof upsertAdminPaymentProviderRoute>>, TError,{data: BodyType<PaymentProviderRouteInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof upsertAdminPaymentProviderRoute>>,
+        TError,
+        {data: BodyType<PaymentProviderRouteInput>},
+        TContext
+      > => {
+      return useMutation(getUpsertAdminPaymentProviderRouteMutationOptions(options));
     }
 
 export const getListAdminKycUrl = () => {

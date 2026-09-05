@@ -130,7 +130,10 @@ export const CreateTransferResponse = zod.object({
   "paymentUrl": zod.string().nullish(),
   "expiresAt": zod.coerce.date().optional(),
   "fee": zod.number().optional(),
-  "netAmount": zod.number().optional()
+  "netAmount": zod.number().optional(),
+  "provider": zod.string().nullish(),
+  "otpRequired": zod.boolean().optional(),
+  "ussdCode": zod.string().nullish()
 })
 
 
@@ -155,7 +158,10 @@ export const CreateExchangeResponse = zod.object({
   "paymentUrl": zod.string().nullish(),
   "expiresAt": zod.coerce.date().optional(),
   "fee": zod.number().optional(),
-  "netAmount": zod.number().optional()
+  "netAmount": zod.number().optional(),
+  "provider": zod.string().nullish(),
+  "otpRequired": zod.boolean().optional(),
+  "ussdCode": zod.string().nullish()
 })
 
 
@@ -179,7 +185,10 @@ export const DecideExchangeResponse = zod.object({
   "paymentUrl": zod.string().nullish(),
   "expiresAt": zod.coerce.date().optional(),
   "fee": zod.number().optional(),
-  "netAmount": zod.number().optional()
+  "netAmount": zod.number().optional(),
+  "provider": zod.string().nullish(),
+  "otpRequired": zod.boolean().optional(),
+  "ussdCode": zod.string().nullish()
 })
 
 
@@ -324,7 +333,10 @@ export const CreatePublicPaymentResponse = zod.object({
   "paymentUrl": zod.string().nullish(),
   "expiresAt": zod.coerce.date().optional(),
   "fee": zod.number().optional(),
-  "netAmount": zod.number().optional()
+  "netAmount": zod.number().optional(),
+  "provider": zod.string().nullish(),
+  "otpRequired": zod.boolean().optional(),
+  "ussdCode": zod.string().nullish()
 })
 
 
@@ -397,7 +409,10 @@ export const DeletePaymentLinkResponse = zod.object({
   "paymentUrl": zod.string().nullish(),
   "expiresAt": zod.coerce.date().optional(),
   "fee": zod.number().optional(),
-  "netAmount": zod.number().optional()
+  "netAmount": zod.number().optional(),
+  "provider": zod.string().nullish(),
+  "otpRequired": zod.boolean().optional(),
+  "ussdCode": zod.string().nullish()
 })
 
 
@@ -416,6 +431,7 @@ export const CreateDepositBody = zod.object({
   "operator": zod.string().optional(),
   "phone": zod.string().optional(),
   "operatorOtp": zod.string().optional(),
+  "providerReference": zod.string().optional(),
   "feePayer": zod.enum(['sender', 'recipient']).optional()
 })
 
@@ -427,7 +443,10 @@ export const CreateDepositResponse = zod.object({
   "paymentUrl": zod.string().nullish(),
   "expiresAt": zod.coerce.date().optional(),
   "fee": zod.number().optional(),
-  "netAmount": zod.number().optional()
+  "netAmount": zod.number().optional(),
+  "provider": zod.string().nullish(),
+  "otpRequired": zod.boolean().optional(),
+  "ussdCode": zod.string().nullish()
 })
 
 
@@ -446,6 +465,7 @@ export const CreateWithdrawalBody = zod.object({
   "operator": zod.string().optional(),
   "phone": zod.string().optional(),
   "operatorOtp": zod.string().optional(),
+  "providerReference": zod.string().optional(),
   "feePayer": zod.enum(['sender', 'recipient']).optional()
 })
 
@@ -457,7 +477,10 @@ export const CreateWithdrawalResponse = zod.object({
   "paymentUrl": zod.string().nullish(),
   "expiresAt": zod.coerce.date().optional(),
   "fee": zod.number().optional(),
-  "netAmount": zod.number().optional()
+  "netAmount": zod.number().optional(),
+  "provider": zod.string().nullish(),
+  "otpRequired": zod.boolean().optional(),
+  "ussdCode": zod.string().nullish()
 })
 
 
@@ -476,7 +499,10 @@ export const MarkNotificationReadResponse = zod.object({
   "paymentUrl": zod.string().nullish(),
   "expiresAt": zod.coerce.date().optional(),
   "fee": zod.number().optional(),
-  "netAmount": zod.number().optional()
+  "netAmount": zod.number().optional(),
+  "provider": zod.string().nullish(),
+  "otpRequired": zod.boolean().optional(),
+  "ussdCode": zod.string().nullish()
 })
 
 
@@ -549,6 +575,58 @@ export const UpdateAdminSettingsResponse = zod.object({
 
 
 /**
+ * @summary Lists payment provider configuration status
+ */
+export const ListAdminPaymentProvidersResponse = zod.object({
+  "providers": zod.array(zod.object({
+  "id": zod.enum(['DRIMPAY', 'ASHTECHPAY']),
+  "label": zod.string(),
+  "configured": zod.boolean()
+}))
+})
+
+
+/**
+ * @summary Lists country and operator provider routes
+ */
+export const ListAdminPaymentProviderRoutesResponseItem = zod.object({
+  "id": zod.string(),
+  "countryCode": zod.string(),
+  "country": zod.string(),
+  "operator": zod.string(),
+  "providerOperator": zod.string(),
+  "provider": zod.enum(['DRIMPAY', 'ASHTECHPAY']),
+  "enabled": zod.boolean(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListAdminPaymentProviderRoutesResponse = zod.array(ListAdminPaymentProviderRoutesResponseItem)
+
+
+/**
+ * @summary Selects a provider for a country and operator
+ */
+export const UpsertAdminPaymentProviderRouteBody = zod.object({
+  "countryCode": zod.string(),
+  "country": zod.string(),
+  "operator": zod.string(),
+  "providerOperator": zod.string(),
+  "provider": zod.enum(['DRIMPAY', 'ASHTECHPAY']),
+  "enabled": zod.boolean().optional()
+})
+
+export const UpsertAdminPaymentProviderRouteResponse = zod.object({
+  "id": zod.string(),
+  "countryCode": zod.string(),
+  "country": zod.string(),
+  "operator": zod.string(),
+  "providerOperator": zod.string(),
+  "provider": zod.enum(['DRIMPAY', 'ASHTECHPAY']),
+  "enabled": zod.boolean(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
  * @summary Lists KYC cases for operations
  */
 export const ListAdminKycResponseItem = zod.object({
@@ -583,7 +661,10 @@ export const DecideKycResponse = zod.object({
   "paymentUrl": zod.string().nullish(),
   "expiresAt": zod.coerce.date().optional(),
   "fee": zod.number().optional(),
-  "netAmount": zod.number().optional()
+  "netAmount": zod.number().optional(),
+  "provider": zod.string().nullish(),
+  "otpRequired": zod.boolean().optional(),
+  "ussdCode": zod.string().nullish()
 })
 
 

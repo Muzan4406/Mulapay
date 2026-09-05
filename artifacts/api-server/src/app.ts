@@ -33,7 +33,7 @@ app.use(cors({ credentials: true, origin: true }));
 app.use(
   express.json({
     verify: (req, _res, buffer) => {
-      if ((req as express.Request).path === "/api/v1/webhooks/drimpay") {
+      if (["/api/v1/webhooks/drimpay", "/api/v1/webhooks/ashtechpay"].includes((req as express.Request).path)) {
         (req as express.Request & { rawBody?: Buffer }).rawBody = Buffer.from(buffer);
       }
     },

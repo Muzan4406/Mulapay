@@ -17,5 +17,6 @@ export interface MoneyOperationInput {
   operator?: string;
   phone?: string;
   operatorOtp?: string;
+  providerReference?: string;
   feePayer?: MoneyOperationInputFeePayer;
 }

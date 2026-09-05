@@ -17,4 +17,9 @@ export interface OperationResult {
   expiresAt?: Date;
   fee?: number;
   netAmount?: number;
+  /** @nullable */
+  provider?: string | null;
+  otpRequired?: boolean;
+  /** @nullable */
+  ussdCode?: string | null;
 }

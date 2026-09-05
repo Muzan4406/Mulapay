@@ -6,6 +6,9 @@
  * OpenAPI spec version: 0.2.0
  */
 
+export * from './adminPaymentProvider';
+export * from './adminPaymentProviderId';
+export * from './adminPaymentProviders';
 export * from './adminSettings';
 export * from './adminSummary';
 export * from './badRequestResponse';
@@ -31,6 +34,10 @@ export * from './paymentLinkInput';
 export * from './paymentLinkInputAfterPaymentAction';
 export * from './paymentLinkInputAmountType';
 export * from './paymentLinkInputCustomerFieldsItem';
+export * from './paymentProviderRoute';
+export * from './paymentProviderRouteInput';
+export * from './paymentProviderRouteInputProvider';
+export * from './paymentProviderRouteProvider';
 export * from './profile';
 export * from './publicPaymentInput';
 export * from './publicPaymentLink';

@@ -313,6 +313,49 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AdminSettings"
+  /v1/admin/payment-providers:
+    get:
+      operationId: listAdminPaymentProviders
+      tags: [admin]
+      summary: Lists payment provider configuration status
+      responses:
+        "200":
+          description: Provider status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminPaymentProviders"
+  /v1/admin/payment-provider-routes:
+    get:
+      operationId: listAdminPaymentProviderRoutes
+      tags: [admin]
+      summary: Lists country and operator provider routes
+      responses:
+        "200":
+          description: Provider routes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PaymentProviderRoute"
+    put:
+      operationId: upsertAdminPaymentProviderRoute
+      tags: [admin]
+      summary: Selects a provider for a country and operator
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentProviderRouteInput"
+      responses:
+        "200":
+          description: Provider route saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentProviderRoute"
   /v1/admin/kyc:
     get:
       operationId: listAdminKyc
@@ -550,6 +593,9 @@ components:
         expiresAt: { type: string, format: date-time }
         fee: { type: number }
         netAmount: { type: number }
+        provider: { type: ["string", "null"] }
+        otpRequired: { type: boolean }
+        ussdCode: { type: ["string", "null"] }
     TransferInput:
       type: object
       required: [amount, currency, counterparty, feePayer]
@@ -609,6 +655,7 @@ components:
         operator: { type: string }
         phone: { type: string }
         operatorOtp: { type: string }
+        providerReference: { type: string }
         feePayer: { type: string, enum: [sender, recipient] }
     KycInput:
       type: object
@@ -635,3 +682,40 @@ components:
         exchangeQueue: { type: number }
         volume: { type: number }
         successRate: { type: number }
+    AdminPaymentProvider:
+      type: object
+      required: [id, label, configured]
+      properties:
+        id: { type: string, enum: [DRIMPAY, ASHTECHPAY] }
+        label: { type: string }
+        configured: { type: boolean }
+    AdminPaymentProviders:
+      type: object
+      required: [providers]
+      properties:
+        providers:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminPaymentProvider"
+    PaymentProviderRoute:
+      type: object
+      required: [id, countryCode, country, operator, providerOperator, provider, enabled, updatedAt]
+      properties:
+        id: { type: string }
+        countryCode: { type: string }
+        country: { type: string }
+        operator: { type: string }
+        providerOperator: { type: string }
+        provider: { type: string, enum: [DRIMPAY, ASHTECHPAY] }
+        enabled: { type: boolean }
+        updatedAt: { type: string, format: date-time }
+    PaymentProviderRouteInput:
+      type: object
+      required: [countryCode, country, operator, providerOperator, provider]
+      properties:
+        countryCode: { type: string }
+        country: { type: string }
+        operator: { type: string }
+        providerOperator: { type: string }
+        provider: { type: string, enum: [DRIMPAY, ASHTECHPAY] }
+        enabled: { type: boolean }

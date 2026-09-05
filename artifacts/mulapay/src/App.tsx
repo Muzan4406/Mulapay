@@ -16,6 +16,8 @@ import {
   getGetBootstrapQueryKey,
   getGetAdminSummaryQueryKey,
   getGetAdminSettingsQueryKey,
+  getListAdminPaymentProviderRoutesQueryKey,
+  getListAdminPaymentProvidersQueryKey,
   getListAdminKycQueryKey,
   getListAdminTransactionsQueryKey,
   useCreateExchange,
@@ -29,10 +31,13 @@ import {
   useGetAdminSettings,
   useGetBootstrap,
   useListAdminKyc,
+  useListAdminPaymentProviderRoutes,
+  useListAdminPaymentProviders,
   useListAdminTransactions,
   useMarkNotificationRead,
   useSubmitKyc,
   useUpdateAdminSettings,
+  useUpsertAdminPaymentProviderRoute,
 } from '@workspace/api-client-react';
 import type { PaymentLink as ApiPaymentLink, PaymentLinkInput } from '@workspace/api-client-react';
 import { Toaster } from '@/components/ui/toaster';
@@ -48,6 +53,7 @@ type Notification = { id: string; title: string; body: string; read: boolean };
 type ApiKey = { id: string; name: string; keyPrefix: string; scopes: string[]; lastUsedAt: string | null; revokedAt: string | null; createdAt: string };
 type AdminKycCase = { id: string; userId: string; name: string; country: string; status: string; documents: string[]; submittedAt: string };
 type AdminSummary = { kycAwaiting: number; exchangeQueue: number; volume: number; successRate: number };
+type PaymentProviderId = 'DRIMPAY' | 'ASHTECHPAY';
 type Store = {
   profile: { id: string; firstName: string; lastName: string; email: string; role: string; country: string; kycStatus: string };
   wallets: Wallet[]; transactions: Transaction[]; exchanges: Exchange[]; links: PaymentLink[]; notifications: Notification[];
@@ -1534,10 +1540,72 @@ function AdminFeeSettings() {
   </div>;
 }
 
+function AdminPaymentRouting() {
+  const { toast } = useStore();
+  const providersQuery = useListAdminPaymentProviders({ query: { queryKey: getListAdminPaymentProvidersQueryKey(), retry: false } });
+  const routesQuery = useListAdminPaymentProviderRoutes({ query: { queryKey: getListAdminPaymentProviderRoutesQueryKey(), retry: false } });
+  const saveMutation = useUpsertAdminPaymentProviderRoute();
+  const [countryCode, setCountryCode] = useState(mobileMoneyCountryOptions[0].code);
+  const [operator, setOperator] = useState(mobileMoneyCountryOptions[0].operators[0].name);
+  const [providerOperator, setProviderOperator] = useState(mobileMoneyCountryOptions[0].operators[0].name);
+  const [provider, setProvider] = useState<PaymentProviderId>('DRIMPAY');
+  const selectedCountry = mobileMoneyCountryOptions.find(item => item.code === countryCode) ?? mobileMoneyCountryOptions[0];
+  const ashtechReady = providersQuery.data?.providers.some(item => item.id === 'ASHTECHPAY' && item.configured) ?? false;
+
+  useEffect(() => {
+    const nextOperator = selectedCountry.operators[0]?.name ?? '';
+    setOperator(nextOperator);
+    setProviderOperator(nextOperator);
+  }, [selectedCountry]);
+
+  const save = (event: FormEvent) => {
+    event.preventDefault();
+    saveMutation.mutate({
+      data: {
+        countryCode: selectedCountry.code,
+        country: selectedCountry.country,
+        operator,
+        providerOperator: providerOperator.trim(),
+        provider,
+        enabled: true,
+      },
+    }, {
+      onSuccess: () => {
+        void queryClient.invalidateQueries({ queryKey: getListAdminPaymentProviderRoutesQueryKey() });
+        toast('Le routage du fournisseur a été enregistré.');
+      },
+      onError: () => toast('Le routage n’a pas pu être enregistré.'),
+    });
+  };
+
+  return <div className="card card-pad" style={{ marginTop: 17 }}>
+    <div className="section-head">
+      <div><h2 className="section-title">Routage des paiements</h2><p className="section-note">Choisissez quel partenaire traite chaque pays et opérateur. Les clés restent uniquement dans les secrets serveur.</p></div>
+      <span className="pill pill-success">Production</span>
+    </div>
+    <div className="summary-box" style={{ marginTop: 16 }}>
+      {providersQuery.data?.providers.map(item => <div className="summary-line" key={item.id}><span>{item.label}</span><strong>{item.configured ? 'Configuré' : 'Secrets manquants'}</strong></div>)}
+      {!providersQuery.data && <div className="activity-meta">Vérification de la configuration…</div>}
+    </div>
+    <form onSubmit={save} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12, marginTop: 18 }}>
+      <div className="field" style={{ marginBottom: 0 }}><label>Pays</label><select value={countryCode} onChange={event => setCountryCode(event.target.value)}>{mobileMoneyCountryOptions.map(item => <option key={item.code} value={item.code}>{item.country}</option>)}</select></div>
+      <div className="field" style={{ marginBottom: 0 }}><label>Opérateur Mulapay</label><select value={operator} onChange={event => setOperator(event.target.value)}>{selectedCountry.operators.map(item => <option key={item.name} value={item.name}>{item.name}</option>)}</select></div>
+      <div className="field" style={{ marginBottom: 0 }}><label>Fournisseur</label><select value={provider} onChange={event => setProvider(event.target.value as PaymentProviderId)}><option value="DRIMPAY">DrimPay</option><option value="ASHTECHPAY" disabled={!ashtechReady}>AshtechPay{ashtechReady ? '' : ' · secrets manquants'}</option></select></div>
+      <div className="field" style={{ marginBottom: 0 }}><label>Opérateur chez le fournisseur</label><input value={providerOperator} onChange={event => setProviderOperator(event.target.value)} placeholder="Ex. Wave Money" required /></div>
+      <div style={{ display: 'flex', alignItems: 'end' }}><button className="button button-primary" type="submit" disabled={saveMutation.isPending || !providerOperator.trim()}>{saveMutation.isPending ? 'Enregistrement…' : 'Enregistrer le routage'}</button></div>
+    </form>
+    <div style={{ marginTop: 22 }}>
+      <div className="eyebrow">Routages enregistrés</div>
+      {(routesQuery.data ?? []).map(route => <button key={route.id} type="button" className="case-row" style={{ width: '100%', border: 0, textAlign: 'left', background: 'transparent', marginTop: 8 }} onClick={() => { setCountryCode(route.countryCode); setOperator(route.operator); setProviderOperator(route.providerOperator); setProvider(route.provider); }}><div className="case-person"><div className="person-initial"><Globe2 size={15} /></div><div><div className="case-name">{route.country} · {route.operator}</div><div className="case-meta">{route.provider === 'ASHTECHPAY' ? 'AshtechPay' : 'DrimPay'} · opérateur fournisseur : {route.providerOperator}</div></div></div><ChevronRight size={16} color="hsl(203 18% 46%)" /></button>)}
+      {routesQuery.data?.length === 0 && <p className="section-note" style={{ marginTop: 10 }}>Aucun routage spécifique. DrimPay reste le fournisseur par défaut tant qu’aucune règle n’est enregistrée.</p>}
+    </div>
+  </div>;
+}
+
 function AdminOverview() {
   const { exchanges, transactions, adminSummary } = useStore();
   const pendingExchanges = exchanges.filter(exchange => exchange.status === 'Pending review').length;
-  return <main className="page-wrap"><PageIntro eyebrow="Opérations sécurisées" title="Vue d’ensemble des opérations" subtitle="Une vue des contrôles et mouvements réellement enregistrés dans Mulapay." action={<Link href="/admin/exchanges" className="button button-primary" data-testid="button-admin-review"><Eye size={15} /> Ouvrir la file</Link>} /><div className="admin-grid"><div className="card admin-stat"><div className="metric-label">KYC à examiner <FileCheck2 size={15} /></div><div className="metric-value">{adminSummary?.kycAwaiting ?? 0}</div><div className="activity-meta">Dossiers persistés</div></div><div className="card admin-stat"><div className="metric-label">File des échanges <RefreshCw size={15} /></div><div className="metric-value">{pendingExchanges}</div><div className="activity-meta">Décision requise</div></div><div className="card admin-stat"><div className="metric-label">Volume enregistré <ArrowUpRight size={15} /></div><div className="metric-value">{money(adminSummary?.volume ?? 0).replace(' XOF', '')}<small>XOF</small></div><div className="activity-meta">Ledger Mulapay</div></div><div className="card admin-stat"><div className="metric-label">Taux de réussite <Activity size={15} /></div><div className="metric-value">{String(adminSummary?.successRate ?? 0).replace('.', ',')}<small>%</small></div><div className="activity-meta">Calculé par le serveur</div></div></div><div className="dashboard-grid"><div className="card card-pad"><div className="section-head"><div><h2 className="section-title">Files de contrôle</h2><p className="section-note">Les dossiers et opérations nécessitant une décision.</p></div></div><Link href="/admin/exchanges" className="case-row" data-testid="link-admin-exchange-case"><div className="case-person"><div className="person-initial"><RefreshCw size={15} /></div><div><div className="case-name">Demandes d’échange</div><div className="case-meta">{pendingExchanges} demande(s) en attente</div></div></div><ChevronRight size={16} color="hsl(203 18% 46%)" /></Link><Link href="/admin/kyc" className="case-row" style={{ marginTop: 10 }} data-testid="link-admin-kyc-case"><div className="case-person"><div className="person-initial"><FileCheck2 size={15} /></div><div><div className="case-name">Dossiers KYC</div><div className="case-meta">{adminSummary?.kycAwaiting ?? 0} dossier(s) en attente</div></div></div><ChevronRight size={16} color="hsl(203 18% 46%)" /></Link></div><div className="card card-pad"><div className="section-head"><div><h2 className="section-title">État du système</h2><p className="section-note">Données courantes du serveur</p></div><span className="pill pill-success">Opérationnel</span></div><div className="summary-box"><div className="summary-line"><span>Transactions chargées</span><strong>{transactions.length}</strong></div><div className="summary-line"><span>Échanges en attente</span><strong>{pendingExchanges}</strong></div><div className="summary-line"><span>Actions échouées</span><strong>—</strong></div></div><div className="activity-meta" style={{ marginTop: 15 }}><Activity size={12} style={{ verticalAlign: 'middle', marginRight: 5 }} /> Actualisé depuis l’API</div></div></div><AdminFeeSettings /><div className="card card-pad" style={{ marginTop: 17 }}><div className="section-head"><div><h2 className="section-title">Derniers mouvements</h2><p className="section-note">Sur tous les wallets par pays</p></div><Link href="/admin/transactions" className="eyebrow" data-testid="link-admin-all-transactions">Voir le ledger</Link></div>{transactions.slice(0, 3).map(t => <TransactionRow transaction={t} key={t.id} />)}</div></main>;
+  return <main className="page-wrap"><PageIntro eyebrow="Opérations sécurisées" title="Vue d’ensemble des opérations" subtitle="Une vue des contrôles et mouvements réellement enregistrés dans Mulapay." action={<Link href="/admin/exchanges" className="button button-primary" data-testid="button-admin-review"><Eye size={15} /> Ouvrir la file</Link>} /><div className="admin-grid"><div className="card admin-stat"><div className="metric-label">KYC à examiner <FileCheck2 size={15} /></div><div className="metric-value">{adminSummary?.kycAwaiting ?? 0}</div><div className="activity-meta">Dossiers persistés</div></div><div className="card admin-stat"><div className="metric-label">File des échanges <RefreshCw size={15} /></div><div className="metric-value">{pendingExchanges}</div><div className="activity-meta">Décision requise</div></div><div className="card admin-stat"><div className="metric-label">Volume enregistré <ArrowUpRight size={15} /></div><div className="metric-value">{money(adminSummary?.volume ?? 0).replace(' XOF', '')}<small>XOF</small></div><div className="activity-meta">Ledger Mulapay</div></div><div className="card admin-stat"><div className="metric-label">Taux de réussite <Activity size={15} /></div><div className="metric-value">{String(adminSummary?.successRate ?? 0).replace('.', ',')}<small>%</small></div><div className="activity-meta">Calculé par le serveur</div></div></div><div className="dashboard-grid"><div className="card card-pad"><div className="section-head"><div><h2 className="section-title">Files de contrôle</h2><p className="section-note">Les dossiers et opérations nécessitant une décision.</p></div></div><Link href="/admin/exchanges" className="case-row" data-testid="link-admin-exchange-case"><div className="case-person"><div className="person-initial"><RefreshCw size={15} /></div><div><div className="case-name">Demandes d’échange</div><div className="case-meta">{pendingExchanges} demande(s) en attente</div></div></div><ChevronRight size={16} color="hsl(203 18% 46%)" /></Link><Link href="/admin/kyc" className="case-row" style={{ marginTop: 10 }} data-testid="link-admin-kyc-case"><div className="case-person"><div className="person-initial"><FileCheck2 size={15} /></div><div><div className="case-name">Dossiers KYC</div><div className="case-meta">{adminSummary?.kycAwaiting ?? 0} dossier(s) en attente</div></div></div><ChevronRight size={16} color="hsl(203 18% 46%)" /></Link></div><div className="card card-pad"><div className="section-head"><div><h2 className="section-title">État du système</h2><p className="section-note">Données courantes du serveur</p></div><span className="pill pill-success">Opérationnel</span></div><div className="summary-box"><div className="summary-line"><span>Transactions chargées</span><strong>{transactions.length}</strong></div><div className="summary-line"><span>Échanges en attente</span><strong>{pendingExchanges}</strong></div><div className="summary-line"><span>Actions échouées</span><strong>—</strong></div></div><div className="activity-meta" style={{ marginTop: 15 }}><Activity size={12} style={{ verticalAlign: 'middle', marginRight: 5 }} /> Actualisé depuis l’API</div></div></div><AdminFeeSettings /><AdminPaymentRouting /><div className="card card-pad" style={{ marginTop: 17 }}><div className="section-head"><div><h2 className="section-title">Derniers mouvements</h2><p className="section-note">Sur tous les wallets par pays</p></div><Link href="/admin/transactions" className="eyebrow" data-testid="link-admin-all-transactions">Voir le ledger</Link></div>{transactions.slice(0, 3).map(t => <TransactionRow transaction={t} key={t.id} />)}</div></main>;
 }
 
 function AdminKyc() {

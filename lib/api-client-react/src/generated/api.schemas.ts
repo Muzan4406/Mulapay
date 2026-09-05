@@ -215,6 +215,11 @@ export interface OperationResult {
   expiresAt?: string;
   fee?: number;
   netAmount?: number;
+  /** @nullable */
+  provider?: string | null;
+  otpRequired?: boolean;
+  /** @nullable */
+  ussdCode?: string | null;
 }
 
 export type TransferInputFeePayer = typeof TransferInputFeePayer[keyof typeof TransferInputFeePayer];
@@ -338,6 +343,7 @@ export interface MoneyOperationInput {
   operator?: string;
   phone?: string;
   operatorOtp?: string;
+  providerReference?: string;
   feePayer?: MoneyOperationInputFeePayer;
 }
 
@@ -367,6 +373,60 @@ export interface AdminSummary {
   exchangeQueue: number;
   volume: number;
   successRate: number;
+}
+
+export type AdminPaymentProviderId = typeof AdminPaymentProviderId[keyof typeof AdminPaymentProviderId];
+
+
+export const AdminPaymentProviderId = {
+  DRIMPAY: 'DRIMPAY',
+  ASHTECHPAY: 'ASHTECHPAY',
+} as const;
+
+export interface AdminPaymentProvider {
+  id: AdminPaymentProviderId;
+  label: string;
+  configured: boolean;
+}
+
+export interface AdminPaymentProviders {
+  providers: AdminPaymentProvider[];
+}
+
+export type PaymentProviderRouteProvider = typeof PaymentProviderRouteProvider[keyof typeof PaymentProviderRouteProvider];
+
+
+export const PaymentProviderRouteProvider = {
+  DRIMPAY: 'DRIMPAY',
+  ASHTECHPAY: 'ASHTECHPAY',
+} as const;
+
+export interface PaymentProviderRoute {
+  id: string;
+  countryCode: string;
+  country: string;
+  operator: string;
+  providerOperator: string;
+  provider: PaymentProviderRouteProvider;
+  enabled: boolean;
+  updatedAt: string;
+}
+
+export type PaymentProviderRouteInputProvider = typeof PaymentProviderRouteInputProvider[keyof typeof PaymentProviderRouteInputProvider];
+
+
+export const PaymentProviderRouteInputProvider = {
+  DRIMPAY: 'DRIMPAY',
+  ASHTECHPAY: 'ASHTECHPAY',
+} as const;
+
+export interface PaymentProviderRouteInput {
+  countryCode: string;
+  country: string;
+  operator: string;
+  providerOperator: string;
+  provider: PaymentProviderRouteInputProvider;
+  enabled?: boolean;
 }
 
 /**
