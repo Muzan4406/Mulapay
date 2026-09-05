@@ -1563,7 +1563,6 @@ function PublicPaymentPage() {
   const fixedAmount = link.amountType === 'FIXED' ? money(link.amount, link.currency) : 'Montant libre';
    const selectedAmount = link.amountType === 'FIXED' ? link.amount : Number(amount) || 0;
    const selectedAmountLabel = selectedAmount > 0 ? money(selectedAmount, link.currency) : `À renseigner en ${link.currency}`;
-   const expiryLabel = link.expiresAt ? new Date(link.expiresAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Sans expiration';
   const submitPayment = async (event: FormEvent) => {
     event.preventDefault();
     setPaymentError('');
@@ -1610,7 +1609,7 @@ function PublicPaymentPage() {
   const paymentFailed = paymentResult ? ['failed', 'expired', 'cancelled', 'reversed'].includes(paymentResult.status.toLowerCase()) : false;
   const paymentOperator = paymentResult?.operator ?? customerOperator;
   const paymentOperatorOption = selectedCustomerCountry.operators.find(option => option.name === paymentOperator);
-  const paymentAmountLabel = money(paymentResult?.netAmount ?? paymentResult?.amount ?? selectedAmount, paymentResult?.currency ?? link.currency);
+  const paymentAmountLabel = money(paymentResult?.amount ?? selectedAmount, paymentResult?.currency ?? link.currency);
 
    return <main className="page-wrap public-payment-page">
      <div className="public-payment-header"><Logo /><div className="public-payment-trust"><LockKeyhole size={13} /> Paiement sécurisé</div></div>
@@ -1622,7 +1621,7 @@ function PublicPaymentPage() {
             <span className="public-payment-result-icon">{paymentCompleted ? <CheckCircle2 size={22} /> : paymentFailed ? <CircleAlert size={22} /> : <RefreshCw size={22} className="loading-spin" />}</span>
             <span className="eyebrow">{paymentCompleted ? 'Paiement confirmé' : paymentFailed ? 'Paiement non confirmé' : 'Paiement en cours'}</span>
             <h2>{paymentCompleted ? 'Votre paiement est confirmé' : paymentFailed ? 'Le paiement n’a pas abouti' : 'Validez sur votre téléphone'}</h2>
-            <p>{paymentCompleted ? `Le commerçant recevra ${money(paymentResult.netAmount ?? paymentResult.amount ?? 0, paymentResult.currency ?? link.currency)} après confirmation du service de paiement.` : paymentFailed ? 'Le service de paiement n’a pas confirmé cette opération dans le délai prévu.' : paymentResult.message ?? 'Ouvrez votre application Mobile Money et validez la demande. Mulapay vérifie automatiquement la confirmation.'}</p>
+            <p>{paymentCompleted ? `Le paiement de ${money(paymentResult.amount ?? 0, paymentResult.currency ?? link.currency)} a été confirmé par le service de paiement.` : paymentFailed ? 'Le service de paiement n’a pas confirmé cette opération dans le délai prévu.' : paymentResult.message ?? 'Ouvrez votre application Mobile Money et validez la demande. Mulapay vérifie automatiquement la confirmation.'}</p>
             <div className="public-payment-amount"><strong>{paymentAmountLabel}</strong><span>via {paymentOperator}</span></div>
             {!paymentCompleted && !paymentFailed && <div className="public-payment-progress"><div><span>Confirmation automatique</span><strong>{paymentSecondsLeft}s</strong></div><span className="public-payment-progress-track"><span style={{ width: `${Math.round((paymentSecondsLeft / 60) * 100)}%` }} /></span></div>}
             {!paymentCompleted && !paymentFailed && paymentResult.paymentUrl && <a className="button button-primary button-wide" href={paymentResult.paymentUrl} target="_blank" rel="noreferrer">Ouvrir le paiement sécurisé <ChevronRight size={15} /></a>}
