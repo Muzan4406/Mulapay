@@ -459,9 +459,9 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
     let redirectTimer: number | undefined;
     const timeout = window.setTimeout(() => {
       setDepositTracking(current => current && !depositStatusIsTerminal(current.status) ? { ...current, status: 'Failed' } : current);
-      toast('Dépôt non confirmé après 30 secondes. Retour au dashboard.');
+      toast('Dépôt non confirmé après 60 secondes. Retour au dashboard.');
       redirectTimer = window.setTimeout(() => setLocation('/app'), 800);
-    }, 30000);
+    }, 60000);
     return () => {
       window.clearTimeout(timeout);
       if (redirectTimer) window.clearTimeout(redirectTimer);
@@ -1527,9 +1527,9 @@ function PublicPaymentPage() {
     if (!paymentResult?.reference || depositStatusIsTerminal(paymentResult.status)) return;
     let redirectTimer: number | undefined;
     const timeout = window.setTimeout(() => {
-      setPaymentResult(current => current && !depositStatusIsTerminal(current.status) ? { ...current, status: 'Failed', message: 'Le paiement n’a pas été confirmé après 30 secondes.' } : current);
-      redirectTimer = window.setTimeout(() => setPaymentStatusError('Le paiement a échoué après 30 secondes sans confirmation.'), 800);
-    }, 30000);
+      setPaymentResult(current => current && !depositStatusIsTerminal(current.status) ? { ...current, status: 'Failed', message: 'Le paiement n’a pas été confirmé après 60 secondes.' } : current);
+      redirectTimer = window.setTimeout(() => setPaymentStatusError('Le paiement a échoué après 60 secondes sans confirmation.'), 800);
+    }, 60000);
     return () => {
       window.clearTimeout(timeout);
       if (redirectTimer) window.clearTimeout(redirectTimer);

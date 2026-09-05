@@ -594,7 +594,7 @@ function formatExchange(exchange: typeof exchanges.$inferSelect) {
 }
 
 async function expireAndReconcilePending(userId: string) {
-  const cutoff = new Date(Date.now() - 30_000);
+  const cutoff = new Date(Date.now() - 60_000);
   const activeStatuses = ["Pending", "Processing"];
   const stale = await db.query.transactions.findMany({
     where: and(eq(transactions.userId, userId), inArray(transactions.status, activeStatuses), lte(transactions.createdAt, cutoff)),
