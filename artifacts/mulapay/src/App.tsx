@@ -314,7 +314,6 @@ const userNav: NavItem[] = [
   { href: '/app/transfer', label: 'Envoyer de l’argent', icon: Send, image: 'transfer.png' },
   { href: '/app/exchange', label: 'Échanger', icon: RefreshCw, image: 'exchange.png' },
   { href: '/app/payment-links', label: 'Liens de paiement', icon: Link2, image: 'payment-links.png' },
-  { href: '/app/qr', label: 'QR Code', icon: QrCode },
 ];
 const adminNav: NavItem[] = [
   { href: '/admin', label: 'Opérations', icon: LayoutDashboard },
