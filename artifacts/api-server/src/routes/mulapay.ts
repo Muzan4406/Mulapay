@@ -115,7 +115,9 @@ function parseDrimPayWebhookSignature(header: string | undefined, rawBody: Buffe
 }
 
 function parseAshtechPayWebhookSignature(headers: { signature?: string; timestamp?: string }, rawBody: Buffer) {
-  const secret = process.env.ASHTECHPAY_WEBHOOK_SECRET;
+  // AshtechPay uses the configured API credential for webhook signing; no
+  // separate webhook secret is required by this integration.
+  const secret = process.env.ASHTECHPAY_API_KEY;
   if (!secret || !headers.signature || !headers.timestamp) return false;
   const expected = `sha256=${createHmac("sha256", secret).update(`${headers.timestamp}.${rawBody.toString("utf8")}`).digest("hex")}`;
   const provided = Buffer.from(headers.signature);
