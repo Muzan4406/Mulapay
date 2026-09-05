@@ -98,6 +98,13 @@ function operatorLogoUrl(operator?: string) {
   return provider ? `${import.meta.env.BASE_URL}mobile-money/${provider.src}` : undefined;
 }
 
+function transactionIsIncoming(transaction: Pick<TransactionView, 'type' | 'counterparty'>) {
+  if (transaction.type === 'Received' || transaction.type === 'Deposit') return true;
+  if (transaction.type !== 'Payment') return false;
+  const counterparty = transaction.counterparty.toLowerCase();
+  return counterparty.includes('paiement par lien') || counterparty.includes('paiement api') || counterparty.includes('paiement reçu') || counterparty.includes('payment link') || counterparty.includes('payin');
+}
+
 function transactionServiceLogo(counterparty: string) {
   const normalized = counterparty.toLowerCase();
   if (normalized.includes('lien')) return dashboardIcon('payment-links.png');
