@@ -54,6 +54,7 @@ type ApiKey = { id: string; name: string; keyPrefix: string; scopes: string[]; l
 type AdminKycCase = { id: string; userId: string; name: string; country: string; status: string; documents: string[]; submittedAt: string };
 type AdminSummary = { kycAwaiting: number; exchangeQueue: number; volume: number; successRate: number };
 type PaymentProviderId = 'DRIMPAY' | 'ASHTECHPAY';
+type DepositTracking = { reference: string; status: string; amount: number; currency: string; fee: number | null; netAmount: number | null; paymentUrl: string | null };
 type Store = {
   profile: { id: string; firstName: string; lastName: string; email: string; role: string; country: string; kycStatus: string };
   wallets: Wallet[]; transactions: Transaction[]; exchanges: Exchange[]; links: PaymentLink[]; notifications: Notification[];
@@ -82,7 +83,11 @@ function calculateFee(amount: number, percentage: number) {
 }
 
 function statusLabel(status: string) {
-  return ({ Active: 'Actif', Pending: 'En attente', Processing: 'En traitement', Completed: 'Effectué', Failed: 'Échoué', Expired: 'Expiré', Cancelled: 'Annulé', Reversed: 'Remboursé', 'Pending review': 'À examiner', Rejected: 'Refusé', EN_ATTENTE: 'En attente', VERIFIED: 'Vérifié', REFUSED: 'Refusé' } as Record<string, string>)[status] ?? status;
+  return ({ Active: 'Actif', Pending: 'En attente', pending: 'En attente', Processing: 'En traitement', Completed: 'Effectué', completed: 'Effectué', success: 'Effectué', Failed: 'Échoué', failed: 'Échoué', Expired: 'Expiré', expired: 'Expiré', Cancelled: 'Annulé', cancelled: 'Annulé', Reversed: 'Remboursé', 'Pending review': 'À examiner', Rejected: 'Refusé', EN_ATTENTE: 'En attente', VERIFIED: 'Vérifié', REFUSED: 'Refusé' } as Record<string, string>)[status] ?? status;
+}
+
+function depositStatusIsTerminal(status: string) {
+  return ['completed', 'failed', 'expired', 'cancelled', 'reversed'].includes(status.toLowerCase());
 }
 
 function movementLabel(type: string) {
@@ -393,6 +398,8 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
   const [operator, setOperator] = useState('');
   const [operatorOtp, setOperatorOtp] = useState('');
   const [paymentUrl, setPaymentUrl] = useState('');
+  const [depositTracking, setDepositTracking] = useState<DepositTracking | null>(null);
+  const [depositStatusError, setDepositStatusError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const isDeposit = kind === 'deposit';
   const selectedCountry = mobileMoneyCountryOptions.find(option => option.country === country) ?? mobileMoneyCountryOptions[0];
@@ -409,6 +416,35 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
     const nextOperator = selectedCountry.operators[0]?.name ?? '';
     setOperator(currentOperator => selectedCountry.operators.some(item => item.name === currentOperator) ? currentOperator : nextOperator);
   }, [country, selectedCountry, wallets]);
+
+  useEffect(() => {
+    if (!isDeposit || !depositTracking?.reference || depositStatusIsTerminal(depositTracking.status)) return;
+    let active = true;
+    const refreshStatus = async () => {
+      try {
+        const response = await fetch(`/api/v1/deposits/${encodeURIComponent(depositTracking.reference)}`);
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error ?? 'Statut indisponible.');
+        if (!active) return;
+        setDepositStatusError('');
+        setDepositTracking(current => current ? {
+          ...current,
+          status: payload.status ?? current.status,
+          fee: typeof payload.fee === 'number' ? payload.fee : current.fee,
+          netAmount: typeof payload.netAmount === 'number' ? payload.netAmount : current.netAmount,
+          paymentUrl: payload.paymentUrl ?? current.paymentUrl,
+        } : current);
+      } catch (error) {
+        if (active) setDepositStatusError(error instanceof Error ? error.message : 'Le statut est momentanément indisponible.');
+      }
+    };
+    void refreshStatus();
+    const interval = window.setInterval(() => void refreshStatus(), 4000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [depositTracking?.reference, depositTracking?.status, isDeposit]);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -429,7 +465,20 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error ?? 'Opération impossible.');
-      toast(payload.message ?? 'Opération créée.');
+      if (isDeposit && payload.reference) {
+        setDepositTracking({
+          reference: payload.reference,
+          status: payload.status ?? 'Pending',
+          amount: Number(amount),
+          currency: selectedWallet?.currency ?? 'XOF',
+          fee: typeof payload.fee === 'number' ? payload.fee : null,
+          netAmount: typeof payload.netAmount === 'number' ? payload.netAmount : null,
+          paymentUrl: payload.paymentUrl ?? null,
+        });
+        setDepositStatusError('');
+      } else {
+        toast(payload.message ?? 'Opération créée.');
+      }
       setPaymentUrl(payload.paymentUrl ?? '');
       setAmount('');
       setPhone('');
@@ -441,6 +490,30 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
     }
   };
   if (isDeposit) {
+    if (depositTracking) {
+      const terminal = depositStatusIsTerminal(depositTracking.status);
+      const completed = depositTracking.status.toLowerCase() === 'completed';
+      const failed = ['failed', 'expired', 'cancelled', 'reversed'].includes(depositTracking.status.toLowerCase());
+      return <main className="page-wrap deposit-page">
+        <PageIntro eyebrow="Suivi du dépôt" title={completed ? 'Dépôt confirmé' : failed ? 'Dépôt non confirmé' : 'Dépôt en attente'} subtitle={completed ? 'Le webhook du fournisseur a confirmé votre dépôt.' : failed ? 'Le fournisseur n’a pas confirmé ce dépôt.' : 'Ne fermez pas cette page : nous suivons la confirmation automatiquement.'} />
+        <div className="card card-pad deposit-status-card" data-testid="deposit-status-card">
+          <div className={`deposit-status-icon ${completed ? 'is-complete' : failed ? 'is-failed' : ''}`}>{completed ? <CheckCircle2 size={28} /> : failed ? <CircleAlert size={28} /> : <Clock3 size={28} />}</div>
+          <span className={`pill ${completed ? 'pill-success' : failed ? 'pill-danger' : 'pill-pending'}`}>{statusLabel(depositTracking.status)}</span>
+          <h2>{completed ? 'Votre wallet est crédité' : failed ? 'La confirmation n’a pas abouti' : 'Confirmation en cours'}</h2>
+          <p className="deposit-status-copy">{completed ? `Le montant net de ${money(depositTracking.netAmount ?? depositTracking.amount, depositTracking.currency)} est maintenant disponible.` : failed ? 'Aucun crédit ne sera appliqué tant que le paiement n’est pas confirmé.' : `Confirmez la demande sur votre téléphone. Mulapay attend le webhook signé du fournisseur.`}</p>
+          <div className="summary-box deposit-status-summary">
+            <div className="summary-line"><span>Montant demandé</span><strong>{money(depositTracking.amount, depositTracking.currency)}</strong></div>
+            <div className="summary-line"><span>Opérateur</span><strong>{operator}</strong></div>
+            <div className="summary-line"><span>Wallet cible</span><strong>{selectedWallet?.country ?? country}</strong></div>
+            <div className="summary-line"><span>Référence</span><code>{depositTracking.reference}</code></div>
+          </div>
+          {depositTracking.paymentUrl && <a className="button button-primary button-wide" href={depositTracking.paymentUrl} target="_blank" rel="noreferrer">Ouvrir le paiement sécurisé <ChevronRight size={15} /></a>}
+          {!terminal && <div className="notice notice-dark deposit-status-waiting"><RefreshCw size={15} /><span>Actualisation automatique toutes les 4 secondes. Le solde changera uniquement après confirmation.</span></div>}
+          {depositStatusError && <div className="notice notice-error"><CircleAlert size={15} /><span>{depositStatusError}</span></div>}
+          {terminal && <button className="button button-ghost button-wide" type="button" onClick={() => { setDepositTracking(null); setPaymentUrl(''); setDepositStatusError(''); }}>Effectuer un autre dépôt</button>}
+        </div>
+      </main>;
+    }
     return <main className="page-wrap deposit-page">
       <PageIntro eyebrow="Mobile Money" title="Dépôt" />
       <form className="card card-pad deposit-form" onSubmit={submit}>

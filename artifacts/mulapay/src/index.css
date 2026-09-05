@@ -227,6 +227,15 @@ h1,h2,h3,p { margin:0; }
 .input-prefix input { padding-left:42px; }
 .deposit-page .section-head { margin-bottom:0; }
 .deposit-form { max-width:680px; margin:25px auto 0; }
+.deposit-status-card { max-width:680px; margin:25px auto 0; display:grid; justify-items:center; gap:11px; text-align:center; }
+.deposit-status-icon { width:64px; height:64px; display:grid; place-items:center; border-radius:20px; background:hsl(39 82% 57% / .18); color:hsl(34 68% 39%); }
+.deposit-status-icon.is-complete { background:hsl(var(--primary) / .12); color:hsl(var(--primary)); }
+.deposit-status-icon.is-failed { background:hsl(var(--destructive) / .1); color:hsl(var(--destructive)); }
+.deposit-status-card h2 { color:hsl(var(--foreground)); font-size:25px; letter-spacing:-.06em; }
+.deposit-status-copy { max-width:460px; color:hsl(var(--muted-foreground)); font-size:11px; line-height:1.55; }
+.deposit-status-summary { width:100%; margin:5px 0 3px; text-align:left; }
+.deposit-status-summary code { max-width:60%; overflow:hidden; color:hsl(var(--foreground)); font-family:var(--font-mono); font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
+.deposit-status-waiting { width:100%; text-align:left; }
 .phone-input { display:flex; align-items:stretch; }
 .phone-prefix { display:flex; align-items:center; padding:0 14px; border:1px solid hsl(var(--input)); border-right:0; border-radius:9px 0 0 9px; background:hsl(var(--muted)); color:hsl(var(--foreground)); font-size:13px; font-weight:700; }
 .phone-input input { min-width:0; border-radius:0 9px 9px 0; }
