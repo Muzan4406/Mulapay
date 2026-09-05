@@ -63,6 +63,16 @@ export const ASHTECHPAY_COUNTRY_CURRENCIES: Record<string, string> = {
   TG: "XOFT",
 };
 
+const ASHTECHPAY_DIAL_CODES: Record<string, string> = {
+  BJ: "229",
+  BF: "226",
+  CI: "225",
+  ML: "223",
+  NE: "227",
+  SN: "221",
+  TG: "228",
+};
+
 export const ASHTECHPAY_OPERATORS: Record<string, string[]> = {
   BJ: ["Celtiis Money", "Coris Money", "Moov Money", "MTN Money"],
   BF: ["Moov Money", "Orange Money (OTP)", "Wallet LigdiCash"],
@@ -78,6 +88,13 @@ export const ASHTECHPAY_OPERATORS: Record<string, string[]> = {
 
 export function ashtechPayCurrencyForCountry(countryCode: string) {
   return ASHTECHPAY_COUNTRY_CURRENCIES[countryCode];
+}
+
+export function ashtechPayPhoneForCountry(phone: string, countryCode: string) {
+  const digits = phone.replace(/\D/g, "");
+  const dialCode = ASHTECHPAY_DIAL_CODES[countryCode];
+  if (dialCode && digits.startsWith(dialCode)) return digits.slice(dialCode.length);
+  return digits;
 }
 
 export function isAshtechPayOperatorSupported(countryCode: string, operator: string) {
@@ -126,6 +143,7 @@ async function request<T>(path: string, init: RequestInit = {}) {
   if (!response.ok) {
     const code = typeof body.error === "string" ? body.error : "ASHTECHPAY_ERROR";
     const message = typeof body.message === "string" ? body.message : `AshtechPay a répondu avec HTTP ${response.status}.`;
+    console.error("AshtechPay request failed", { path, status: response.status, code, message });
     if (code === "otp_required" && typeof body.reference === "string") {
       throw new AshtechPayOtpRequiredError(body.reference, typeof body.ussd_code === "string" ? body.ussd_code : null, message);
     }
