@@ -2,3 +2,4 @@
 - [Clerk custom flows](clerk-custom-flows.md) — the current Clerk React SDK uses Future resources and verification methods for custom auth screens.
 - [DrimPay production boundary](drimpay-production.md) — Mulapay exposes only the production Payin workflow; partner docs must not present Sandbox.
 - [DrimPay confirmation boundary](drimpay-confirmation.md) — only a signed webhook may move pending funds into the ledger; missing provider net amounts must fail closed.
+- [AshtechPay webhook boundary](ashtechpay-provider.md) — AshtechPay uses the server API credential for HMAC verification; a separate webhook secret is not required.

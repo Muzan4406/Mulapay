@@ -32,6 +32,7 @@ import {
   ledgerEntries,
   notifications,
   paymentProviderRoutes,
+  paymentProviderWebhookEvents,
   platformSettings,
   paymentLinks,
   transactions,
@@ -119,6 +120,10 @@ function parseAshtechPayWebhookSignature(headers: { signature?: string; timestam
   // separate webhook secret is required by this integration.
   const secret = process.env.ASHTECHPAY_API_KEY;
   if (!secret || !headers.signature || !headers.timestamp) return false;
+  const numericTimestamp = Number(headers.timestamp);
+  if (!Number.isFinite(numericTimestamp)) return false;
+  const timestampMs = numericTimestamp > 1_000_000_000_000 ? numericTimestamp : numericTimestamp * 1000;
+  if (Math.abs(Date.now() - timestampMs) > 5 * 60 * 1000) return false;
   const expected = `sha256=${createHmac("sha256", secret).update(`${headers.timestamp}.${rawBody.toString("utf8")}`).digest("hex")}`;
   const provided = Buffer.from(headers.signature);
   const calculated = Buffer.from(expected);
@@ -256,6 +261,11 @@ function ashtechStatusToTransactionStatus(status: string) {
 }
 
 async function handleAshtechPayWebhook(req: Request, res: Response) {
+  const eventId = req.header("X-Ashtech-Event-Id");
+  if (!eventId || eventId.length > 200) {
+    res.status(400).json({ error: "Identifiant d’événement AshtechPay manquant." });
+    return;
+  }
   const rawBody = (req as Request & { rawBody?: Buffer }).rawBody;
   if (!rawBody || !parseAshtechPayWebhookSignature({
     signature: req.header("X-Ashtech-Signature") ?? undefined,
@@ -280,13 +290,21 @@ async function handleAshtechPayWebhook(req: Request, res: Response) {
   }
 
   const result = await db.transaction(async (tx) => {
+    const [event] = await tx.insert(paymentProviderWebhookEvents).values({
+      id: crypto.randomUUID(),
+      provider: "ASHTECHPAY",
+      eventId,
+    }).onConflictDoNothing({
+      target: [paymentProviderWebhookEvents.provider, paymentProviderWebhookEvents.eventId],
+    }).returning();
+    if (!event) return { found: true, duplicate: true };
     const transaction = await tx.query.transactions.findFirst({
       where: and(eq(transactions.reference, payload.reference!), eq(transactions.paymentProvider, "ASHTECHPAY")),
     });
-    if (!transaction) return { found: false };
+    if (!transaction) return { found: false, duplicate: false };
     const nextStatus = ashtechStatusToTransactionStatus(payload.status!);
     const currentIsTerminal = ["Completed", "Failed", "Expired", "Cancelled", "Reversed"].includes(transaction.status);
-    if (currentIsTerminal) return { found: true };
+    if (currentIsTerminal) return { found: true, duplicate: false };
 
     if (nextStatus === "Completed") {
       const wallet = await tx.query.wallets.findFirst({ where: eq(wallets.id, transaction.walletId ?? "") });
@@ -319,7 +337,7 @@ async function handleAshtechPayWebhook(req: Request, res: Response) {
         body: `${netAmount.toLocaleString("fr-FR")} ${transaction.currency} ont été crédités sur le wallet ${wallet.country}.`,
         read: false,
       });
-      return { found: true };
+      return { found: true, duplicate: false };
     }
 
     if (nextStatus === "Failed") {
@@ -328,14 +346,14 @@ async function handleAshtechPayWebhook(req: Request, res: Response) {
         .where(eq(wallets.id, transaction.walletId ?? ""));
     }
     await tx.update(transactions).set({ status: nextStatus }).where(eq(transactions.id, transaction.id));
-    return { found: true };
+    return { found: true, duplicate: false };
   });
 
   if (!result.found) {
     res.status(404).json({ error: "Transaction AshtechPay introuvable." });
     return;
   }
-  res.status(200).json({ received: true, event: payload.event ?? null });
+  res.status(200).json({ received: true, duplicate: result.duplicate, event: payload.event ?? null });
 }
 
 router.post("/v1/webhooks/drimpay", handleDrimPayWebhook);

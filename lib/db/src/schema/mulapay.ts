@@ -100,6 +100,17 @@ export const paymentProviderRoutes = pgTable(
   ],
 );
 
+export const paymentProviderWebhookEvents = pgTable(
+  "mulapay_payment_provider_webhook_events",
+  {
+    id: text("id").primaryKey(),
+    provider: text("provider").notNull(),
+    eventId: text("event_id").notNull(),
+    receivedAt: timestamp("received_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [unique("mulapay_provider_webhook_event_unique").on(table.provider, table.eventId)],
+);
+
 export const exchanges = pgTable(
   "mulapay_exchanges",
   {
