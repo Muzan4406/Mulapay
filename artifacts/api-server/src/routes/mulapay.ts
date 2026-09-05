@@ -415,13 +415,16 @@ router.post("/v1/transfers", async (req, res) => {
 router.post("/v1/exchanges", async (req, res) => {
   const input = CreateExchangeBody.parse(req.body);
   const user = await ensureUser(req);
+  const settings = await getPlatformSettings();
+  const fee = Math.round(input.amount * Number(settings.feePercentage) / 100);
+  const receivedAmount = Math.max(0, input.amount - fee);
   const source = await db.query.wallets.findFirst({ where: and(eq(wallets.userId, user.id), eq(wallets.country, input.source), eq(wallets.status, "Active")) });
   const destination = await db.query.wallets.findFirst({ where: and(eq(wallets.userId, user.id), eq(wallets.country, input.destination), eq(wallets.status, "Active")) });
   if (!source || !destination || source.balance < input.amount) {
     res.status(400).json({ error: "Wallet source introuvable ou solde insuffisant." });
     return;
   }
-  await db.insert(exchanges).values({ id: crypto.randomUUID(), userId: user.id, source: `${source.country} · ${source.currency}`, destination: `${destination.country} · ${destination.currency}`, amount: input.amount, rate: "1", receivedAmount: input.amount, status: "PENDING_ADMIN" });
+  await db.insert(exchanges).values({ id: crypto.randomUUID(), userId: user.id, source: `${source.country} · ${source.currency}`, destination: `${destination.country} · ${destination.currency}`, amount: input.amount, rate: "1", receivedAmount, status: "PENDING_ADMIN" });
   await db.insert(notifications).values({ id: crypto.randomUUID(), userId: user.id, title: "Demande d’échange envoyée", body: `${source.country} vers ${destination.country} est en attente de validation opérations.`, read: false });
   res.status(201).json(CreateExchangeResponse.parse({ ok: true, message: "Demande d’échange envoyée pour validation.", reference: null }));
 });

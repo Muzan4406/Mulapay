@@ -1075,10 +1075,87 @@ function Transfer() {
 }
 
 function Exchange() {
-  const { wallets, exchanges, exchange } = useStore();
-  const active = wallets.filter(w => w.status === 'Active'); const [source, setSource] = useState('Togo'); const [destination, setDestination] = useState('Benin'); const [amount, setAmount] = useState('');
-  const submit = (e: FormEvent) => { e.preventDefault(); if (!amount || source === destination) return; exchange({ source, destination, amount: Number(amount) }); setAmount(''); };
-  return <main className="page-wrap"><PageIntro eyebrow="Rééquilibrer comme vous le souhaitez" title="Échange entre wallets" subtitle="Demandez un mouvement entre vos wallets par pays. Chaque échange est examiné par les opérations avant d’être crédité." /><div className="form-layout"><form className="card card-pad" onSubmit={submit}><div className="field"><label htmlFor="exchange-source">Depuis</label><select id="exchange-source" value={source} onChange={e => setSource(e.target.value)} data-testid="select-exchange-source">{active.map(w => <option key={w.code} value={w.country}>{countryLabel(w.country)}</option>)}</select></div><div style={{ display: 'grid', placeItems: 'center', margin: '-5px 0 10px' }}><div style={{ width: 31, height: 31, borderRadius: 10, background: 'hsl(39 78% 89%)', color: 'hsl(160 42% 38%)', display: 'grid', placeItems: 'center' }}><ArrowDownLeft size={15} /></div></div><div className="field"><label htmlFor="exchange-destination">Vers</label><select id="exchange-destination" value={destination} onChange={e => setDestination(e.target.value)} data-testid="select-exchange-destination">{active.map(w => <option key={w.code} value={w.country}>{countryLabel(w.country)}</option>)}</select></div><div className="field"><label htmlFor="exchange-amount">Montant à échanger</label><div className="input-prefix"><span>XOF</span><input id="exchange-amount" type="number" min="1" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" data-testid="input-exchange-amount" /></div></div><div className="summary-box"><div className="summary-line"><span>Taux indicatif</span><strong>1,0000</strong></div><div className="summary-line"><span>Frais de service</span><strong>0 XOF</strong></div><div className="summary-line total"><span>Arrivée estimée</span><strong>{amount ? money(Number(amount)) : '—'}</strong></div></div><button className="button button-primary button-wide" style={{ marginTop: 16 }} type="submit" disabled={!amount || source === destination} data-testid="button-submit-exchange"><RefreshCw size={15} /> Demander une vérification</button></form><div><div className="notice"><Clock3 size={15} /><span>Le délai habituel d’examen est inférieur à un jour ouvré. Votre solde source reste disponible jusqu’à l’approbation.</span></div><div className="card card-pad" style={{ marginTop: 14 }}><div className="section-head"><div><h2 className="section-title">Demandes récentes</h2><p className="section-note">L’historique de vos échanges</p></div></div>{exchanges.map(ex => <div className="activity-row" key={ex.id} data-testid={`row-exchange-${ex.id}`}><div><div className="activity-name">{ex.source} <ChevronRight size={12} style={{ verticalAlign: 'middle' }} /> {ex.destination}</div><div className="activity-meta">{ex.requestedAt} · {new Intl.NumberFormat('fr-FR').format(ex.amount)} XOF</div></div><span className={`pill ${ex.status === 'Completed' ? 'pill-success' : ex.status === 'Rejected' ? 'pill-danger' : 'pill-pending'}`}>{statusLabel(ex.status)}</span></div>)}</div></div></div></main>;
+  const { wallets, exchanges, exchange, feePercentage } = useStore();
+  const active = wallets.filter(wallet => wallet.status === 'Active');
+  const [source, setSource] = useState('Togo');
+  const [destination, setDestination] = useState('Benin');
+  const [amount, setAmount] = useState('');
+  const sourceWallet = active.find(wallet => wallet.country === source);
+  const destinationWallet = active.find(wallet => wallet.country === destination);
+  const exchangeAmount = Number(amount) || 0;
+  const exchangeFee = calculateFee(exchangeAmount, feePercentage);
+  const receivedAmount = Math.max(0, exchangeAmount - exchangeFee);
+
+  useEffect(() => {
+    if (!active.some(wallet => wallet.country === source) && active[0]) setSource(active[0].country);
+    if (!active.some(wallet => wallet.country === destination) && active[1]) setDestination(active[1].country);
+  }, [active, destination, source]);
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    if (!exchangeAmount || source === destination || !sourceWallet || !destinationWallet) return;
+    exchange({ source, destination, amount: exchangeAmount });
+    setAmount('');
+  };
+
+  return <main className="page-wrap exchange-page">
+    <PageIntro eyebrow="Liquidité multi-pays" title="Échange entre wallets" subtitle="Déplacez vos fonds d’un pays à l’autre depuis un seul espace. Le taux de frais appliqué est celui défini par votre administrateur." />
+    <div className="exchange-layout">
+      <form className="card card-pad exchange-card" onSubmit={submit}>
+        <div className="exchange-card-head">
+          <div><span className="eyebrow">Nouveau mouvement</span><h2 className="section-title">Choisissez votre parcours</h2></div>
+          <div className="exchange-card-icon"><ArrowRightLeft size={18} /></div>
+        </div>
+        <div className="exchange-route">
+          <div className="exchange-wallet-field">
+            <div className="exchange-field-label"><span>Depuis</span><small>Wallet source</small></div>
+            <div className="exchange-select-wrap">
+              <div className="exchange-country-mark">{countryLabel(source).slice(0, 2).toUpperCase()}</div>
+              <select id="exchange-source" value={source} onChange={event => setSource(event.target.value)} data-testid="select-exchange-source">
+                {active.map(wallet => <option key={wallet.code} value={wallet.country}>{countryLabel(wallet.country)} · {wallet.currency}</option>)}
+              </select>
+              <ChevronDown size={15} />
+            </div>
+            <div className="exchange-balance">Disponible <strong>{money(sourceWallet?.balance ?? 0, sourceWallet?.currency ?? 'XOF')}</strong></div>
+          </div>
+          <div className="exchange-route-divider"><span><ArrowDown size={16} /></span></div>
+          <div className="exchange-wallet-field">
+            <div className="exchange-field-label"><span>Vers</span><small>Wallet destination</small></div>
+            <div className="exchange-select-wrap">
+              <div className="exchange-country-mark destination">{countryLabel(destination).slice(0, 2).toUpperCase()}</div>
+              <select id="exchange-destination" value={destination} onChange={event => setDestination(event.target.value)} data-testid="select-exchange-destination">
+                {active.map(wallet => <option key={wallet.code} value={wallet.country}>{countryLabel(wallet.country)} · {wallet.currency}</option>)}
+              </select>
+              <ChevronDown size={15} />
+            </div>
+            <div className="exchange-balance">Après échange <strong>{money(receivedAmount, destinationWallet?.currency ?? 'XOF')}</strong></div>
+          </div>
+        </div>
+        <div className="exchange-amount-field">
+          <div className="exchange-field-label"><span>Montant à échanger</span><small>Le montant sera débité du wallet source</small></div>
+          <div className="exchange-amount-input"><input id="exchange-amount" type="number" min="1" value={amount} onChange={event => setAmount(event.target.value)} placeholder="0" data-testid="input-exchange-amount" /><span>{sourceWallet?.currency ?? 'XOF'}</span></div>
+        </div>
+        <div className="exchange-summary" data-testid="exchange-fee-summary">
+          <div className="exchange-summary-head"><span>Récapitulatif</span><span className="exchange-rate">Taux 1,0000</span></div>
+          <div className="exchange-summary-row"><span>Montant débité</span><strong>{exchangeAmount ? money(exchangeAmount, sourceWallet?.currency ?? 'XOF') : '—'}</strong></div>
+          <div className="exchange-summary-row"><span>Frais de service ({feePercentage}%)</span><strong>{exchangeAmount ? money(exchangeFee, sourceWallet?.currency ?? 'XOF') : '—'}</strong></div>
+          <div className="exchange-summary-row exchange-summary-total"><span>Montant reçu après frais</span><strong>{exchangeAmount ? money(receivedAmount, destinationWallet?.currency ?? 'XOF') : '—'}</strong></div>
+        </div>
+        <button className="button button-primary button-wide" style={{ marginTop: 18 }} type="submit" disabled={!exchangeAmount || source === destination || !sourceWallet || !destinationWallet || exchangeAmount > (sourceWallet?.balance ?? 0)} data-testid="button-submit-exchange"><RefreshCw size={15} /> Demander l’échange</button>
+      </form>
+      <section className="exchange-history-card">
+        <div className="exchange-history-hero"><div><span className="eyebrow">Suivi</span><h2>Vos échanges</h2><p>Les demandes validées apparaissent ici dès leur traitement.</p></div><div className="exchange-history-count">{exchanges.length}<small>demande(s)</small></div></div>
+        <div className="exchange-history-list">
+          {exchanges.map(ex => <div className="exchange-history-item" key={ex.id} data-testid={`row-exchange-${ex.id}`}>
+            <div className="exchange-history-route"><span>{ex.source.split(' · ')[0].slice(0, 2).toUpperCase()}</span><div><strong>{ex.source}</strong><small><ArrowRight size={12} /> {ex.destination}</small></div></div>
+            <div className="exchange-history-meta"><strong>{money(ex.receivedAmount)}</strong><span>{ex.requestedAt}</span></div>
+            <span className={`pill ${ex.status === 'Completed' ? 'pill-success' : ex.status === 'Rejected' ? 'pill-danger' : 'pill-pending'}`}>{statusLabel(ex.status)}</span>
+          </div>)}
+          {exchanges.length === 0 && <div className="empty-state exchange-empty"><ArrowRightLeft size={24} /><strong>Aucun échange pour le moment</strong><p>Votre historique apparaîtra ici.</p></div>}
+        </div>
+      </section>
+    </div>
+  </main>;
 }
 
 function PaymentLinks() {
