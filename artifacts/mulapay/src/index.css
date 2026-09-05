@@ -954,6 +954,7 @@ h1,h2,h3,p { margin:0; }
 .public-payment-intro h1 { max-width:650px; margin-top:9px; color:hsl(var(--foreground)); font-size:clamp(28px,4vw,44px); line-height:1.04; letter-spacing:-.06em; }
 .public-payment-intro p { max-width:600px; margin-top:12px; color:hsl(var(--muted-foreground)); font-size:13px; line-height:1.6; }
 .public-payment-layout { display:grid; grid-template-columns:minmax(260px,.78fr) minmax(0,1.22fr); align-items:start; gap:18px; }
+.public-payment-layout-single { grid-template-columns:minmax(0,680px); justify-content:center; }
 .public-payment-summary { position:sticky; top:28px; overflow:hidden; padding:21px; border:1px solid hsl(var(--border)); border-radius:18px; background:hsl(var(--card) / .84); box-shadow:0 18px 45px hsl(205 38% 16% / .07); }
 .public-payment-summary-top { display:flex; align-items:center; gap:11px; padding-bottom:19px; border-bottom:1px solid hsl(var(--border)); }
 .public-payment-summary-top > div { display:grid; gap:5px; min-width:0; }

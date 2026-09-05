@@ -1615,14 +1615,7 @@ function PublicPaymentPage() {
    return <main className="page-wrap public-payment-page">
      <div className="public-payment-header"><Logo /><div className="public-payment-trust"><LockKeyhole size={13} /> Paiement sécurisé</div></div>
      <div className="public-payment-intro"><span className="eyebrow">Paiement Mulapay</span><h1>{link.productName}</h1><p>{link.description || 'Effectuez votre paiement Mobile Money en toute sécurité.'}</p></div>
-     <div className="public-payment-layout">
-       <aside className="public-payment-summary">
-         <div className="public-payment-summary-top"><span className="public-payment-summary-mark"><Link2 size={15} /></span><div><span className="eyebrow">Récapitulatif</span><strong>{link.productName}</strong></div></div>
-         <div className="public-payment-total"><span>{link.amountType === 'FIXED' ? 'Montant à payer' : 'Montant de votre choix'}</span><strong>{selectedAmountLabel}</strong>{link.amountType === 'CUSTOMER_CHOOSES' && <small>Le montant sera confirmé avant le paiement.</small>}</div>
-         <div className="public-payment-details"><div><Clock3 size={14} /><span><small>Validité</small><strong>{expiryLabel}</strong></span></div><div><ShieldCheck size={14} /><span><small>Référence</small><strong>{link.reference ?? '—'}</strong></span></div></div>
-         <div className="public-payment-methods"><span className="eyebrow">Moyens disponibles</span><div><span>Mobile Money</span><span className="public-payment-method-logos">{mobileMoneyProviders.slice(0, 4).map(provider => <img key={provider.name} src={`${import.meta.env.BASE_URL}mobile-money/${provider.src}`} alt={provider.name} />)}</span></div></div>
-         <p className="public-payment-note">Votre paiement est transmis au service de paiement puis crédité au commerçant uniquement après confirmation.</p>
-       </aside>
+     <div className="public-payment-layout public-payment-layout-single">
        <form className="card card-pad deposit-form public-payment-form" onSubmit={submitPayment}>
           {paymentResult ? <div className={`public-payment-result ${paymentCompleted ? 'is-complete' : paymentFailed ? 'is-failed' : ''}`} aria-live="polite">
             <div className="public-payment-provider">{paymentOperatorOption ? <img src={`${import.meta.env.BASE_URL}mobile-money/${paymentOperatorOption.src}`} alt="" /> : <span className="public-payment-provider-fallback"><WalletCards size={18} /></span>}<span><small>Opération Mobile Money</small><strong>{paymentOperator}</strong></span></div>
