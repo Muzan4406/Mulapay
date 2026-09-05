@@ -383,7 +383,11 @@ async function resolveApiKeyUserId(req: Request) {
 }
 
 router.use(async (req, res, next) => {
-  if (req.path.startsWith("/v1/public/payment-links/")) {
+  if (
+    req.path.startsWith("/v1/public/payment-links/") ||
+    req.path === "/v1/webhooks/drimpay" ||
+    req.path === "/v1/webhooks/ashtechpay"
+  ) {
     next();
     return;
   }

@@ -22,3 +22,8 @@ timeoutMs = 20000
 [nix]
 channel = "stable-25_05"
 packages = ["freetype", "gumbo", "harfbuzz", "jbig2dec", "libjpeg_turbo", "mupdf", "openjpeg", "swig", "xcbuild"]
+
+[userenv]
+
+[userenv.shared]
+ASHTECHPAY_WEBHOOK_URL = "https://9dddb1a7-556b-4702-b711-8ad201866319-00-2c3cpfn5kso63.kirk.replit.dev/api/v1/webhooks/ashtechpay"
