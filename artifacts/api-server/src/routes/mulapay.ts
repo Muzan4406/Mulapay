@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { getAuth } from "@clerk/express";
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { and, desc, eq, isNull, like, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, like, lte, sql } from "drizzle-orm";
 import { db } from "@workspace/db";
 import {
   DecideExchangeBody,
@@ -593,8 +593,48 @@ function formatExchange(exchange: typeof exchanges.$inferSelect) {
   return { ...exchange, rate: Number(exchange.rate), requestedAt: exchange.requestedAt.toISOString(), status: exchange.status === "PENDING_ADMIN" ? "Pending review" : exchange.status === "COMPLETED" ? "Completed" : exchange.status === "REJECTED" ? "Rejected" : exchange.status };
 }
 
+async function expireAndReconcilePending(userId: string) {
+  const cutoff = new Date(Date.now() - 30_000);
+  const activeStatuses = ["Pending", "Processing"];
+  const stale = await db.query.transactions.findMany({
+    where: and(eq(transactions.userId, userId), inArray(transactions.status, activeStatuses), lte(transactions.createdAt, cutoff)),
+  });
+
+  for (const transaction of stale) {
+    await db.transaction(async (tx) => {
+      const current = await tx.query.transactions.findFirst({ where: eq(transactions.id, transaction.id) });
+      if (!current || !activeStatuses.includes(current.status) || current.createdAt > cutoff) return;
+      await tx.update(wallets)
+        .set({ pending: sql`GREATEST(${wallets.pending} - ${current.amount}, 0)` })
+        .where(eq(wallets.id, current.walletId ?? ""));
+      await tx.update(transactions).set({ status: "Failed" }).where(eq(transactions.id, current.id));
+    });
+  }
+
+  // Rebuild reservations from live transactions so a timed-out browser cannot
+  // leave an orphaned pending amount on the wallet.
+  const [userWallets, liveTransactions] = await Promise.all([
+    db.select().from(wallets).where(eq(wallets.userId, userId)),
+    db.select({ walletId: transactions.walletId, amount: transactions.amount })
+      .from(transactions)
+      .where(and(eq(transactions.userId, userId), inArray(transactions.status, activeStatuses))),
+  ]);
+  const pendingByWallet = new Map<string, number>();
+  for (const transaction of liveTransactions) {
+    if (!transaction.walletId) continue;
+    pendingByWallet.set(transaction.walletId, (pendingByWallet.get(transaction.walletId) ?? 0) + transaction.amount);
+  }
+  for (const wallet of userWallets) {
+    const pending = pendingByWallet.get(wallet.id) ?? 0;
+    if (wallet.pending !== pending) {
+      await db.update(wallets).set({ pending }).where(eq(wallets.id, wallet.id));
+    }
+  }
+}
+
 async function bootstrap(req: Request) {
   const user = await ensureUser(req);
+  await expireAndReconcilePending(user.id);
   const [userWallets, userTransactions, userExchanges, userLinks, userNotifications, userKyc, settings] = await Promise.all([
     db.select().from(wallets).where(eq(wallets.userId, user.id)),
     db.select().from(transactions).where(eq(transactions.userId, user.id)).orderBy(desc(transactions.createdAt)),
@@ -902,6 +942,7 @@ router.get("/v1/public/payment-links/:token/payments/:reference", async (req, re
     res.status(404).json({ error: "Lien de paiement introuvable." });
     return;
   }
+  await expireAndReconcilePending(link.userId);
   const transaction = await db.query.transactions.findFirst({
     where: and(
       eq(transactions.reference, req.params.reference),
@@ -1174,6 +1215,7 @@ router.post("/v1/deposits", async (req, res) => {
 
 router.get("/v1/deposits/:reference", async (req, res) => {
   const user = await ensureUser(req);
+  await expireAndReconcilePending(user.id);
   const transaction = await db.query.transactions.findFirst({
     where: and(eq(transactions.reference, req.params.reference), eq(transactions.userId, user.id), eq(transactions.type, "Deposit")),
   });
@@ -1197,6 +1239,7 @@ router.get("/v1/deposits/:reference", async (req, res) => {
 
 router.get("/v1/payments/:reference", async (req, res) => {
   const user = await ensureUser(req);
+  await expireAndReconcilePending(user.id);
   const transaction = await db.query.transactions.findFirst({
     where: and(eq(transactions.reference, req.params.reference), eq(transactions.userId, user.id), eq(transactions.type, "Payment")),
   });

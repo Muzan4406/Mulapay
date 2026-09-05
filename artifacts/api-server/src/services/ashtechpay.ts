@@ -83,7 +83,7 @@ export const ASHTECHPAY_OPERATORS: Record<string, string[]> = {
   NE: ["Airtel Money"],
   CD: ["Afri Money", "Airtel", "Mpesa Money", "Orange", "Vodacom"],
   SN: ["E-money", "Free Money", "Orange Money (OTP)", "Wave Money"],
-  TG: ["Flooz (Moov)", "T-Money"],
+  TG: ["Moov Money", "T-Money"],
 };
 
 export function ashtechPayCurrencyForCountry(countryCode: string) {
