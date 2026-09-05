@@ -1,6 +1,6 @@
 import { createContext, type FormEvent, type ReactNode, useContext, useEffect, useState } from 'react';
 import {
-  Activity, ArrowDownLeft, ArrowLeft, ArrowRightLeft, ArrowRight, ArrowUpRight, Banknote, Bell, Check, CheckCircle2,
+  Activity, ArrowDown, ArrowDownLeft, ArrowLeft, ArrowRightLeft, ArrowRight, ArrowUpRight, Banknote, Bell, Check, CheckCircle2,
   ChevronDown, ChevronRight, CircleAlert, Clock3, Copy, Download, Eye, FileCheck2, Globe2, Info, LayoutDashboard,
   Link2, ListFilter, LockKeyhole, LogOut, Menu, MoreHorizontal, Plus, QrCode, RefreshCw, Search,
   Send, Settings2, ShieldCheck, WalletCards, X
@@ -1110,7 +1110,7 @@ function Exchange() {
           <div className="exchange-wallet-field">
             <div className="exchange-field-label"><span>Depuis</span><small>Wallet source</small></div>
             <div className="exchange-select-wrap">
-              <div className="exchange-country-mark">{countryLabel(source).slice(0, 2).toUpperCase()}</div>
+              <img className="exchange-country-flag" src={countryFlagUrl(source)} alt={`Drapeau ${countryLabel(source)}`} />
               <select id="exchange-source" value={source} onChange={event => setSource(event.target.value)} data-testid="select-exchange-source">
                 {active.map(wallet => <option key={wallet.code} value={wallet.country}>{countryLabel(wallet.country)} · {wallet.currency}</option>)}
               </select>
@@ -1122,7 +1122,7 @@ function Exchange() {
           <div className="exchange-wallet-field">
             <div className="exchange-field-label"><span>Vers</span><small>Wallet destination</small></div>
             <div className="exchange-select-wrap">
-              <div className="exchange-country-mark destination">{countryLabel(destination).slice(0, 2).toUpperCase()}</div>
+              <img className="exchange-country-flag destination" src={countryFlagUrl(destination)} alt={`Drapeau ${countryLabel(destination)}`} />
               <select id="exchange-destination" value={destination} onChange={event => setDestination(event.target.value)} data-testid="select-exchange-destination">
                 {active.map(wallet => <option key={wallet.code} value={wallet.country}>{countryLabel(wallet.country)} · {wallet.currency}</option>)}
               </select>
