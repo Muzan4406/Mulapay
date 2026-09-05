@@ -28,7 +28,7 @@ import type {
   HealthStatus,
   KycInput,
   KycVerification,
-  ManualMoneyInput,
+  MoneyOperationInput,
   OperationResult,
   PaymentLink,
   PaymentLinkInput,
@@ -441,7 +441,7 @@ export const getCreatePaymentLinkUrl = () => {
 }
 
 /**
- * @summary Creates a simulated payment link
+ * @summary Creates a payment link
  */
 export const createPaymentLink = async (paymentLinkInput: PaymentLinkInput, options?: Parameters<typeof customFetch>[1]): Promise<PaymentLink> => {
 
@@ -490,7 +490,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type CreatePaymentLinkMutationError = ErrorType<unknown>
 
     /**
- * @summary Creates a simulated payment link
+ * @summary Creates a payment link
  */
 export const useCreatePaymentLink = <TError = ErrorType<unknown>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPaymentLink>>, TError,{data: BodyType<PaymentLinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -580,25 +580,25 @@ export function useListPaymentLinks<TData = Awaited<ReturnType<typeof listPaymen
 
 
 
-export const getCreateManualDepositUrl = () => {
+export const getCreateDepositUrl = () => {
 
 
 
 
-  return `/api/v1/deposits/manual`
+  return `/api/v1/deposits`
 }
 
 /**
- * @summary Records a deposit request for manual review
+ * @summary Starts a provider-backed deposit
  */
-export const createManualDeposit = async (manualMoneyInput: ManualMoneyInput, options?: Parameters<typeof customFetch>[1]): Promise<OperationResult> => {
+export const createDeposit = async (moneyOperationInput: MoneyOperationInput, options?: Parameters<typeof customFetch>[1]): Promise<OperationResult> => {
 
-  return customFetch<OperationResult>(getCreateManualDepositUrl(),
+  return customFetch<OperationResult>(getCreateDepositUrl(),
   {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(manualMoneyInput)
+    body: JSON.stringify(moneyOperationInput)
   }
 );}
 
@@ -606,11 +606,11 @@ export const createManualDeposit = async (manualMoneyInput: ManualMoneyInput, op
 
 
 
-export const getCreateManualDepositMutationOptions = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createManualDeposit>>, TError,{data: BodyType<ManualMoneyInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof createManualDeposit>>, TError,{data: BodyType<ManualMoneyInput>}, TContext> => {
+export const getCreateDepositMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createDeposit>>, TError,{data: BodyType<MoneyOperationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createDeposit>>, TError,{data: BodyType<MoneyOperationInput>}, TContext> => {
 
-const mutationKey = ['createManualDeposit'];
+const mutationKey = ['createDeposit'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -620,10 +620,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createManualDeposit>>, {data: BodyType<ManualMoneyInput>}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createDeposit>>, {data: BodyType<MoneyOperationInput>}> = (props) => {
           const {data} = props ?? {};
 
-          return  createManualDeposit(data,requestOptions)
+          return  createDeposit(data,requestOptions)
         }
 
 
@@ -633,43 +633,43 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type CreateManualDepositMutationResult = NonNullable<Awaited<ReturnType<typeof createManualDeposit>>>
-    export type CreateManualDepositMutationBody = BodyType<ManualMoneyInput>
-    export type CreateManualDepositMutationError = ErrorType<unknown>
+    export type CreateDepositMutationResult = NonNullable<Awaited<ReturnType<typeof createDeposit>>>
+    export type CreateDepositMutationBody = BodyType<MoneyOperationInput>
+    export type CreateDepositMutationError = ErrorType<unknown>
 
     /**
- * @summary Records a deposit request for manual review
+ * @summary Starts a provider-backed deposit
  */
-export const useCreateManualDeposit = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createManualDeposit>>, TError,{data: BodyType<ManualMoneyInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+export const useCreateDeposit = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createDeposit>>, TError,{data: BodyType<MoneyOperationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
-        Awaited<ReturnType<typeof createManualDeposit>>,
+        Awaited<ReturnType<typeof createDeposit>>,
         TError,
-        {data: BodyType<ManualMoneyInput>},
+        {data: BodyType<MoneyOperationInput>},
         TContext
       > => {
-      return useMutation(getCreateManualDepositMutationOptions(options));
+      return useMutation(getCreateDepositMutationOptions(options));
     }
 
-export const getCreateManualWithdrawalUrl = () => {
+export const getCreateWithdrawalUrl = () => {
 
 
 
 
-  return `/api/v1/withdrawals/manual`
+  return `/api/v1/withdrawals`
 }
 
 /**
- * @summary Records a withdrawal request for manual review
+ * @summary Starts a provider-backed withdrawal
  */
-export const createManualWithdrawal = async (manualMoneyInput: ManualMoneyInput, options?: Parameters<typeof customFetch>[1]): Promise<OperationResult> => {
+export const createWithdrawal = async (moneyOperationInput: MoneyOperationInput, options?: Parameters<typeof customFetch>[1]): Promise<OperationResult> => {
 
-  return customFetch<OperationResult>(getCreateManualWithdrawalUrl(),
+  return customFetch<OperationResult>(getCreateWithdrawalUrl(),
   {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(manualMoneyInput)
+    body: JSON.stringify(moneyOperationInput)
   }
 );}
 
@@ -677,11 +677,11 @@ export const createManualWithdrawal = async (manualMoneyInput: ManualMoneyInput,
 
 
 
-export const getCreateManualWithdrawalMutationOptions = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createManualWithdrawal>>, TError,{data: BodyType<ManualMoneyInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof createManualWithdrawal>>, TError,{data: BodyType<ManualMoneyInput>}, TContext> => {
+export const getCreateWithdrawalMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createWithdrawal>>, TError,{data: BodyType<MoneyOperationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createWithdrawal>>, TError,{data: BodyType<MoneyOperationInput>}, TContext> => {
 
-const mutationKey = ['createManualWithdrawal'];
+const mutationKey = ['createWithdrawal'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -691,10 +691,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createManualWithdrawal>>, {data: BodyType<ManualMoneyInput>}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createWithdrawal>>, {data: BodyType<MoneyOperationInput>}> = (props) => {
           const {data} = props ?? {};
 
-          return  createManualWithdrawal(data,requestOptions)
+          return  createWithdrawal(data,requestOptions)
         }
 
 
@@ -704,22 +704,22 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type CreateManualWithdrawalMutationResult = NonNullable<Awaited<ReturnType<typeof createManualWithdrawal>>>
-    export type CreateManualWithdrawalMutationBody = BodyType<ManualMoneyInput>
-    export type CreateManualWithdrawalMutationError = ErrorType<unknown>
+    export type CreateWithdrawalMutationResult = NonNullable<Awaited<ReturnType<typeof createWithdrawal>>>
+    export type CreateWithdrawalMutationBody = BodyType<MoneyOperationInput>
+    export type CreateWithdrawalMutationError = ErrorType<unknown>
 
     /**
- * @summary Records a withdrawal request for manual review
+ * @summary Starts a provider-backed withdrawal
  */
-export const useCreateManualWithdrawal = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createManualWithdrawal>>, TError,{data: BodyType<ManualMoneyInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+export const useCreateWithdrawal = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createWithdrawal>>, TError,{data: BodyType<MoneyOperationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
-        Awaited<ReturnType<typeof createManualWithdrawal>>,
+        Awaited<ReturnType<typeof createWithdrawal>>,
         TError,
-        {data: BodyType<ManualMoneyInput>},
+        {data: BodyType<MoneyOperationInput>},
         TContext
       > => {
-      return useMutation(getCreateManualWithdrawalMutationOptions(options));
+      return useMutation(getCreateWithdrawalMutationOptions(options));
     }
 
 export const getMarkNotificationReadUrl = (id: string,) => {

@@ -30,7 +30,15 @@ app.use(
 );
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 app.use(cors({ credentials: true, origin: true }));
-app.use(express.json());
+app.use(
+  express.json({
+    verify: (req, _res, buffer) => {
+      if ((req as express.Request).path === "/api/v1/webhooks/drimpay") {
+        (req as express.Request & { rawBody?: Buffer }).rawBody = Buffer.from(buffer);
+      }
+    },
+  }),
+);
 app.use(express.urlencoded({ extended: true }));
 app.use(
   clerkMiddleware((req) => ({

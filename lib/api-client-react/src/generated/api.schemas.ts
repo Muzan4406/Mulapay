@@ -99,6 +99,12 @@ export interface OperationResult {
   message: string;
   /** @nullable */
   reference?: string | null;
+  status?: string;
+  /** @nullable */
+  paymentUrl?: string | null;
+  expiresAt?: string;
+  fee?: number;
+  netAmount?: number;
 }
 
 export interface TransferInput {
@@ -126,10 +132,31 @@ export interface PaymentLinkInput {
   expiresAt: string;
 }
 
-export interface ManualMoneyInput {
+export type MoneyOperationInputMethod = typeof MoneyOperationInputMethod[keyof typeof MoneyOperationInputMethod];
+
+
+export const MoneyOperationInputMethod = {
+  mobile_money: 'mobile_money',
+} as const;
+
+export type MoneyOperationInputFeePayer = typeof MoneyOperationInputFeePayer[keyof typeof MoneyOperationInputFeePayer];
+
+
+export const MoneyOperationInputFeePayer = {
+  sender: 'sender',
+  recipient: 'recipient',
+} as const;
+
+export interface MoneyOperationInput {
   walletId: string;
   /** @exclusiveMinimum 0 */
   amount: number;
+  method?: MoneyOperationInputMethod;
+  country?: string;
+  operator?: string;
+  phone?: string;
+  operatorOtp?: string;
+  feePayer?: MoneyOperationInputFeePayer;
 }
 
 export interface KycInput {

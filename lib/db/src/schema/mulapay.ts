@@ -48,6 +48,8 @@ export const transactions = pgTable(
     country: text("country").notNull(),
     counterparty: text("counterparty").notNull(),
     reference: text("reference").notNull().unique(),
+    providerOrderId: text("provider_order_id").unique(),
+    netAmount: integer("net_amount"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [index("mulapay_transactions_user_idx").on(table.userId)],

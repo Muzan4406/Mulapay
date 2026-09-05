@@ -63,7 +63,7 @@ function money(value: number, currency = 'XOF') {
 }
 
 function statusLabel(status: string) {
-  return ({ Active: 'Actif', Pending: 'En attente', Completed: 'Effectué', 'Pending review': 'À examiner', Rejected: 'Refusé', EN_ATTENTE: 'En attente', VERIFIED: 'Vérifié', REFUSED: 'Refusé' } as Record<string, string>)[status] ?? status;
+  return ({ Active: 'Actif', Pending: 'En attente', Processing: 'En traitement', Completed: 'Effectué', Failed: 'Échoué', Expired: 'Expiré', Cancelled: 'Annulé', Reversed: 'Remboursé', 'Pending review': 'À examiner', Rejected: 'Refusé', EN_ATTENTE: 'En attente', VERIFIED: 'Vérifié', REFUSED: 'Refusé' } as Record<string, string>)[status] ?? status;
 }
 
 function movementLabel(type: string) {
@@ -117,13 +117,13 @@ const landingCountries = [
 ];
 
 const mobileMoneyCountryOptions = [
-  { country: 'Togo', flagSrc: 'togo.png', dialCode: '+228', operators: [{ name: 'Mixx by Yas', src: 'mixx_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }] },
-  { country: 'Bénin', flagSrc: 'benin.png', dialCode: '+229', operators: [{ name: 'MTN MoMo', src: 'mtn-momo_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }] },
-  { country: 'Côte d’Ivoire', flagSrc: 'cote-divoire.png', dialCode: '+225', operators: [{ name: 'Orange Money', src: 'orange-money_no_bg.png' }, { name: 'MTN MoMo', src: 'mtn-momo_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }, { name: 'Wave', src: 'wave_no_bg.png' }] },
-  { country: 'Burkina Faso', flagSrc: 'burkina-faso.png', dialCode: '+226', operators: [{ name: 'Orange Money', src: 'orange-money_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }, { name: 'Airtel Money', src: 'airtel-money_no_bg.png' }] },
-  { country: 'Sénégal', flagSrc: 'senegal.png', dialCode: '+221', operators: [{ name: 'Wave', src: 'wave_no_bg.png' }, { name: 'Orange Money', src: 'orange-money_no_bg.png' }] },
-  { country: 'Mali', flagSrc: 'mali.png', dialCode: '+223', operators: [{ name: 'Orange Money', src: 'orange-money_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }, { name: 'Airtel Money', src: 'airtel-money_no_bg.png' }] },
-  { country: 'Niger', flagSrc: 'niger.png', dialCode: '+227', operators: [{ name: 'Airtel Money', src: 'airtel-money_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }, { name: 'Orange Money', src: 'orange-money_no_bg.png' }] },
+  { code: 'TG', country: 'Togo', flagSrc: 'togo.png', dialCode: '+228', operators: [{ name: 'Mixx by Yas', src: 'mixx_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }] },
+  { code: 'BJ', country: 'Bénin', flagSrc: 'benin.png', dialCode: '+229', operators: [{ name: 'MTN MoMo', src: 'mtn-momo_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }] },
+  { code: 'CI', country: 'Côte d’Ivoire', flagSrc: 'cote-divoire.png', dialCode: '+225', operators: [{ name: 'Orange Money', src: 'orange-money_no_bg.png' }, { name: 'MTN MoMo', src: 'mtn-momo_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }, { name: 'Wave', src: 'wave_no_bg.png' }] },
+  { code: 'BF', country: 'Burkina Faso', flagSrc: 'burkina-faso.png', dialCode: '+226', operators: [{ name: 'Orange Money', src: 'orange-money_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }, { name: 'Airtel Money', src: 'airtel-money_no_bg.png' }] },
+  { code: 'SN', country: 'Sénégal', flagSrc: 'senegal.png', dialCode: '+221', operators: [{ name: 'Wave', src: 'wave_no_bg.png' }, { name: 'Orange Money', src: 'orange-money_no_bg.png' }] },
+  { code: 'ML', country: 'Mali', flagSrc: 'mali.png', dialCode: '+223', operators: [{ name: 'Orange Money', src: 'orange-money_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }, { name: 'Airtel Money', src: 'airtel-money_no_bg.png' }] },
+  { code: 'NE', country: 'Niger', flagSrc: 'niger.png', dialCode: '+227', operators: [{ name: 'Airtel Money', src: 'airtel-money_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }, { name: 'Orange Money', src: 'orange-money_no_bg.png' }] },
 ];
 
 const landingFeatures = [
@@ -329,7 +329,9 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
   const [amount, setAmount] = useState('');
   const [phone, setPhone] = useState('');
   const [operator, setOperator] = useState('');
+  const [operatorOtp, setOperatorOtp] = useState('');
   const [feePayer, setFeePayer] = useState<'sender' | 'recipient'>('sender');
+  const [paymentUrl, setPaymentUrl] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const isDeposit = kind === 'deposit';
   const selectedCountry = mobileMoneyCountryOptions.find(option => option.country === country) ?? mobileMoneyCountryOptions[0];
@@ -358,14 +360,17 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
           country,
           operator,
           phone: `${selectedCountry.dialCode}${phone.replace(/\D/g, '')}`,
+          ...(isDeposit && operatorOtp ? { operatorOtp } : {}),
           ...(isDeposit ? {} : { feePayer }),
         }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error ?? 'Opération impossible.');
       toast(payload.message ?? 'Opération créée.');
+      setPaymentUrl(payload.paymentUrl ?? '');
       setAmount('');
       setPhone('');
+      setOperatorOtp('');
     } catch (error) {
       toast(error instanceof Error ? error.message : 'Opération impossible.');
     } finally {
@@ -381,7 +386,7 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
           <div className="country-select">
             <img src={`${import.meta.env.BASE_URL}countries/${selectedCountry.flagSrc}`} alt="" />
             <select id="deposit-country" value={country} onChange={event => setCountry(event.target.value)} required>
-              {mobileMoneyCountryOptions.map(option => <option key={option.country} value={option.country}>{option.country} · {option.dialCode}</option>)}
+              {mobileMoneyCountryOptions.map(option => <option key={option.country} value={option.country} disabled={option.code === 'NE'}>{option.country} · {option.dialCode}{option.code === 'NE' ? ' · bientôt disponible' : ''}</option>)}
             </select>
             <ChevronDown className="country-select-chevron" size={16} aria-hidden="true" />
           </div>
@@ -403,6 +408,11 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
             <input id="deposit-phone" type="tel" inputMode="numeric" value={phone} onChange={event => setPhone(event.target.value.replace(/\D/g, ''))} placeholder="90 00 00 00" autoComplete="tel-national" required />
           </div>
         </div>
+        {selectedCountry.code && ['CI', 'SN', 'BF', 'ML'].includes(selectedCountry.code) && operator === 'Orange Money' && <div className="field">
+          <label htmlFor="deposit-operator-otp">Code OTP Orange Money</label>
+          <input id="deposit-operator-otp" type="text" inputMode="numeric" value={operatorOtp} onChange={event => setOperatorOtp(event.target.value.replace(/\D/g, ''))} placeholder="Code reçu après le code USSD" required />
+          <p className="field-hint">Générez d’abord le code selon les instructions DrimPay de votre pays.</p>
+        </div>}
         <div className="field">
           <label htmlFor="deposit-amount">Montant</label>
           <div className="input-prefix">
@@ -414,6 +424,7 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
           {submitting ? 'Traitement…' : 'Déposer maintenant'} <ChevronRight size={15} />
         </button>
       </form>
+      {paymentUrl && <div className="notice" style={{ marginTop: 18 }}><Info size={15} /><span>Votre paiement Wave attend votre confirmation.</span><a className="button button-primary button-sm" href={paymentUrl} target="_blank" rel="noreferrer">Ouvrir Wave <ChevronRight size={14} /></a></div>}
     </main>;
   }
 
@@ -505,7 +516,7 @@ function ApiAccess() {
 }
 
 function ApiPayinDocs() {
-  return <main className="page-wrap"><PageIntro eyebrow="Documentation partenaire" title="Documentation API Payin" subtitle="Intégrez l’encaissement Mobile Money dans vos sites et applications avec l’API Mulapay." action={<Link href="/app/api" className="button button-primary"><Settings2 size={15} /> Gérer l’accès API</Link>} /><div className="api-docs-grid"><div className="card card-pad"><div className="section-head"><div><h2 className="section-title">Démarrer un Payin</h2><p className="section-note">Initialisez une demande de dépôt auprès d’un opérateur Mobile Money.</p></div><img className="api-docs-icon" src={dashboardIcon('documents.png')} alt="" /></div><div className="api-endpoint"><span className="api-method">POST</span><code>/api/v1/deposits</code></div><pre className="api-code">{`{\n  "walletId": "wallet_togo",\n  "amount": 10000,\n  "method": "mobile_money",\n  "country": "Togo",\n  "operator": "Mixx by Yas",\n  "phone": "+22890000000"\n}`}</pre></div><div className="card card-pad"><h2 className="section-title">En-têtes requis</h2><div className="step-list" style={{ marginTop: 14 }}><div className="step"><div className="step-number">01</div><div><div className="step-title">Authentification</div><div className="step-copy">Utilisez une clé API partenaire avec les scopes autorisés.</div></div></div><div className="step"><div className="step-number">02</div><div><div className="step-title">Idempotence</div><div className="step-copy">Envoyez une valeur unique dans <code>Idempotency-Key</code> pour chaque tentative.</div></div></div><div className="step"><div className="step-number">03</div><div><div className="step-title">Confirmation</div><div className="step-copy">Le résultat final est confirmé par le prestataire et un webhook signé.</div></div></div></div></div></div><div className="card card-pad api-docs-endpoints"><div className="section-head"><div><h2 className="section-title">Endpoints disponibles</h2><p className="section-note">Les opérations financières restent bloquées tant que le prestataire Drimpay n’est pas configuré.</p></div><Link href="/app/transactions" className="button button-ghost button-sm">Voir l’historique</Link></div><div className="api-endpoint-list"><div><span className="api-method">POST</span><code>/api/v1/deposits</code><span>Créer un Payin</span></div><div><span className="api-method api-method-muted">POST</span><code>/api/v1/withdrawals</code><span>Créer un retrait</span></div><div><span className="api-method api-method-muted">POST</span><code>/api/v1/payment-links</code><span>Créer un lien de paiement</span></div></div></div></main>;
+  return <main className="page-wrap"><PageIntro eyebrow="Documentation partenaire" title="Documentation API Payin" subtitle="Encaissez du Mobile Money sans redirection : Mulapay transmet la demande à DrimPay et crédite le wallet local après webhook signé." action={<Link href="/app/api" className="button button-primary"><Settings2 size={15} /> Gérer l’accès API</Link>} /><div className="api-docs-grid"><div className="card card-pad"><div className="section-head"><div><h2 className="section-title">Démarrer un Payin</h2><p className="section-note">Initialisez une collecte sur le wallet correspondant au pays du client.</p></div><img className="api-docs-icon" src={dashboardIcon('documents.png')} alt="" /></div><div className="api-endpoint"><span className="api-method">POST</span><code>/api/v1/deposits</code></div><pre className="api-code">{`{\n  "walletId": "wallet_togo",\n  "amount": 10000,\n  "method": "mobile_money",\n  "country": "Togo",\n  "operator": "Mixx by Yas",\n  "phone": "+22890000000"\n}`}</pre><p className="section-note" style={{ marginTop: 14 }}>Mulapay transmet ensuite <code>country_code</code>, <code>operator</code>, <code>order_id</code> et <code>webhook_url</code> à DrimPay.</p></div><div className="card card-pad"><h2 className="section-title">Sécurité et confirmation</h2><div className="step-list" style={{ marginTop: 14 }}><div className="step"><div className="step-number">01</div><div><div className="step-title">Clé côté serveur</div><div className="step-copy">La clé DrimPay n’est jamais envoyée au navigateur. Mulapay utilise un secret Replit côté API.</div></div></div><div className="step"><div className="step-number">02</div><div><div className="step-title">Idempotence</div><div className="step-copy">Envoyez une valeur unique dans <code>Idempotency-Key</code>. Une nouvelle tentative ne crée pas de double débit.</div></div></div><div className="step"><div className="step-number">03</div><div><div className="step-title">Webhook HMAC</div><div className="step-copy">Mulapay vérifie <code>X-DrimPay-Signature</code> et refuse les signatures de plus de cinq minutes.</div></div></div></div></div></div><div className="card card-pad api-docs-endpoints"><div className="section-head"><div><h2 className="section-title">Flux et opérateurs</h2><p className="section-note">Le statut passe par En attente, En traitement, Effectué, Échoué, Expiré ou Remboursé.</p></div><Link href="/app/transactions" className="button button-ghost button-sm">Voir l’historique</Link></div><div className="api-endpoint-list"><div><span className="api-method">POST</span><code>/api/v1/deposits</code><span>Créer un Payin DrimPay</span></div><div><span className="api-method api-method-muted">POST</span><code>/api/v1/webhooks/drimpay</code><span>Recevoir les statuts signés</span></div><div><span className="api-method api-method-muted">POST</span><code>/api/v1/withdrawals</code><span>Non couvert par l’API Payin actuelle</span></div></div><div className="notice" style={{ marginTop: 18 }}><Info size={15} /><span>Wave renvoie un <code>payment_url</code>. Orange Money peut demander un <code>operatorOtp</code> en Côte d’Ivoire, au Sénégal, au Burkina Faso et au Mali.</span></div></div></main>;
 }
 
 function NotificationsPage() {

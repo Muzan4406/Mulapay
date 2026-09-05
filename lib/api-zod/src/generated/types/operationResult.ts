@@ -11,4 +11,10 @@ export interface OperationResult {
   message: string;
   /** @nullable */
   reference?: string | null;
+  status?: string;
+  /** @nullable */
+  paymentUrl?: string | null;
+  expiresAt?: Date;
+  fee?: number;
+  netAmount?: number;
 }

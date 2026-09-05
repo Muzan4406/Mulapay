@@ -106,7 +106,12 @@ export const CreateTransferBody = zod.object({
 export const CreateTransferResponse = zod.object({
   "ok": zod.boolean(),
   "message": zod.string(),
-  "reference": zod.string().nullish()
+  "reference": zod.string().nullish(),
+  "status": zod.string().optional(),
+  "paymentUrl": zod.string().nullish(),
+  "expiresAt": zod.coerce.date().optional(),
+  "fee": zod.number().optional(),
+  "netAmount": zod.number().optional()
 })
 
 
@@ -126,7 +131,12 @@ export const CreateExchangeBody = zod.object({
 export const CreateExchangeResponse = zod.object({
   "ok": zod.boolean(),
   "message": zod.string(),
-  "reference": zod.string().nullish()
+  "reference": zod.string().nullish(),
+  "status": zod.string().optional(),
+  "paymentUrl": zod.string().nullish(),
+  "expiresAt": zod.coerce.date().optional(),
+  "fee": zod.number().optional(),
+  "netAmount": zod.number().optional()
 })
 
 
@@ -145,12 +155,17 @@ export const DecideExchangeBody = zod.object({
 export const DecideExchangeResponse = zod.object({
   "ok": zod.boolean(),
   "message": zod.string(),
-  "reference": zod.string().nullish()
+  "reference": zod.string().nullish(),
+  "status": zod.string().optional(),
+  "paymentUrl": zod.string().nullish(),
+  "expiresAt": zod.coerce.date().optional(),
+  "fee": zod.number().optional(),
+  "netAmount": zod.number().optional()
 })
 
 
 /**
- * @summary Creates a simulated payment link
+ * @summary Creates a payment link
  */
 export const createPaymentLinkBodyAmountExclusiveMin = 0;
 
@@ -194,40 +209,62 @@ export const ListPaymentLinksResponse = zod.array(ListPaymentLinksResponseItem)
 
 
 /**
- * @summary Records a deposit request for manual review
+ * @summary Starts a provider-backed deposit
  */
-export const createManualDepositBodyAmountExclusiveMin = 0;
+export const createDepositBodyAmountExclusiveMin = 0;
 
 
 
-export const CreateManualDepositBody = zod.object({
+export const CreateDepositBody = zod.object({
   "walletId": zod.string(),
-  "amount": zod.number().gt(createManualDepositBodyAmountExclusiveMin)
+  "amount": zod.number().gt(createDepositBodyAmountExclusiveMin),
+  "method": zod.enum(['mobile_money']).optional(),
+  "country": zod.string().optional(),
+  "operator": zod.string().optional(),
+  "phone": zod.string().optional(),
+  "operatorOtp": zod.string().optional(),
+  "feePayer": zod.enum(['sender', 'recipient']).optional()
 })
 
-export const CreateManualDepositResponse = zod.object({
+export const CreateDepositResponse = zod.object({
   "ok": zod.boolean(),
   "message": zod.string(),
-  "reference": zod.string().nullish()
+  "reference": zod.string().nullish(),
+  "status": zod.string().optional(),
+  "paymentUrl": zod.string().nullish(),
+  "expiresAt": zod.coerce.date().optional(),
+  "fee": zod.number().optional(),
+  "netAmount": zod.number().optional()
 })
 
 
 /**
- * @summary Records a withdrawal request for manual review
+ * @summary Starts a provider-backed withdrawal
  */
-export const createManualWithdrawalBodyAmountExclusiveMin = 0;
+export const createWithdrawalBodyAmountExclusiveMin = 0;
 
 
 
-export const CreateManualWithdrawalBody = zod.object({
+export const CreateWithdrawalBody = zod.object({
   "walletId": zod.string(),
-  "amount": zod.number().gt(createManualWithdrawalBodyAmountExclusiveMin)
+  "amount": zod.number().gt(createWithdrawalBodyAmountExclusiveMin),
+  "method": zod.enum(['mobile_money']).optional(),
+  "country": zod.string().optional(),
+  "operator": zod.string().optional(),
+  "phone": zod.string().optional(),
+  "operatorOtp": zod.string().optional(),
+  "feePayer": zod.enum(['sender', 'recipient']).optional()
 })
 
-export const CreateManualWithdrawalResponse = zod.object({
+export const CreateWithdrawalResponse = zod.object({
   "ok": zod.boolean(),
   "message": zod.string(),
-  "reference": zod.string().nullish()
+  "reference": zod.string().nullish(),
+  "status": zod.string().optional(),
+  "paymentUrl": zod.string().nullish(),
+  "expiresAt": zod.coerce.date().optional(),
+  "fee": zod.number().optional(),
+  "netAmount": zod.number().optional()
 })
 
 
@@ -241,7 +278,12 @@ export const MarkNotificationReadParams = zod.object({
 export const MarkNotificationReadResponse = zod.object({
   "ok": zod.boolean(),
   "message": zod.string(),
-  "reference": zod.string().nullish()
+  "reference": zod.string().nullish(),
+  "status": zod.string().optional(),
+  "paymentUrl": zod.string().nullish(),
+  "expiresAt": zod.coerce.date().optional(),
+  "fee": zod.number().optional(),
+  "netAmount": zod.number().optional()
 })
 
 
@@ -308,7 +350,12 @@ export const DecideKycBody = zod.object({
 export const DecideKycResponse = zod.object({
   "ok": zod.boolean(),
   "message": zod.string(),
-  "reference": zod.string().nullish()
+  "reference": zod.string().nullish(),
+  "status": zod.string().optional(),
+  "paymentUrl": zod.string().nullish(),
+  "expiresAt": zod.coerce.date().optional(),
+  "fee": zod.number().optional(),
+  "netAmount": zod.number().optional()
 })
 
 

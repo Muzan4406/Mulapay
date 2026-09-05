@@ -395,6 +395,11 @@ components:
         ok: { type: boolean }
         message: { type: string }
         reference: { type: ["string", "null"] }
+        status: { type: string }
+        paymentUrl: { type: ["string", "null"] }
+        expiresAt: { type: string, format: date-time }
+        fee: { type: number }
+        netAmount: { type: number }
     TransferInput:
       type: object
       required: [amount, currency, counterparty]
@@ -428,6 +433,7 @@ components:
         country: { type: string }
         operator: { type: string }
         phone: { type: string }
+        operatorOtp: { type: string }
         feePayer: { type: string, enum: [sender, recipient] }
     KycInput:
       type: object
