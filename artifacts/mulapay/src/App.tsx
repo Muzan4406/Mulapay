@@ -31,6 +31,7 @@ import {
   useSubmitKyc,
   useUpdateAdminSettings,
 } from '@workspace/api-client-react';
+import type { PaymentLink as ApiPaymentLink, PaymentLinkInput } from '@workspace/api-client-react';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
@@ -39,7 +40,7 @@ type Wallet = { id: string; country: string; code: string; currency: string; bal
 type Transaction = { id: string; type: string; status: string; amount: number; currency: string; country: string; counterparty: string; createdAt: string; reference: string };
 type TransactionView = Transaction & { isExample?: boolean };
 type Exchange = { id: string; source: string; destination: string; amount: number; rate: number; receivedAmount: number; status: string; requestedAt: string };
-type PaymentLink = { id: string; slug: string; amount: number; currency: string; description: string; status: string; expiresAt: string; payments: number };
+type PaymentLink = ApiPaymentLink;
 type Notification = { id: string; title: string; body: string; read: boolean };
 type ApiKey = { id: string; name: string; keyPrefix: string; scopes: string[]; lastUsedAt: string | null; revokedAt: string | null; createdAt: string };
 type AdminKycCase = { id: string; userId: string; name: string; country: string; status: string; documents: string[]; submittedAt: string };
@@ -51,7 +52,7 @@ type Store = {
   transfer: (data: { amount: number; currency: string; country: string; counterparty: string; note: string; feePayer: 'sender' | 'recipient' }) => void;
   exchange: (data: { source: string; destination: string; amount: number }) => void;
   setExchangeStatus: (id: string, status: string) => void;
-  addLink: (data: { amount: number; currency: string; description: string; expiresAt: string }) => void;
+  addLink: (data: PaymentLinkInput) => void;
   markRead: (id: string) => void;
   submitKyc: (documents: string[]) => void;
   decideKyc: (id: string, accepted: boolean) => void;
@@ -1154,9 +1155,152 @@ function Exchange() {
 }
 
 function PaymentLinks() {
-  const { links, addLink, toast } = useStore(); const [amount, setAmount] = useState(''); const [description, setDescription] = useState(''); const [expiresAt, setExpiresAt] = useState('30 Jun 2024'); const [showForm, setShowForm] = useState(false);
-  const submit = (e: FormEvent) => { e.preventDefault(); if (!amount || !description) return; addLink({ amount: Number(amount), currency: 'XOF', description, expiresAt }); setAmount(''); setDescription(''); setShowForm(false); };
-  return <main className="page-wrap"><PageIntro eyebrow="Être payé, simplement" title="Liens de paiement" subtitle="Créez une demande à partager avec un client ou un proche. Chaque lien est enregistré dans votre compte et peut être suivi." action={<button className="button button-primary" onClick={() => setShowForm(v => !v)} data-testid="button-new-payment-link"><Plus size={15} /> Nouveau lien de paiement</button>} /><div className="notice"><QrCode size={15} /><span>Les liens actifs sont enregistrés côté serveur. Les paiements ne sont comptabilisés qu’après confirmation du prestataire.</span></div>{showForm && <form className="card card-pad" style={{ marginTop: 18, maxWidth: 700 }} onSubmit={submit}><div className="section-title" style={{ marginBottom: 17 }}>Créer un lien de paiement</div><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}><div className="field"><label>Montant</label><div className="input-prefix"><span>XOF</span><input type="number" min="1" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" data-testid="input-link-amount" /></div></div><div className="field"><label>Expiration</label><select value={expiresAt} onChange={e => setExpiresAt(e.target.value)} data-testid="select-link-expiry"><option>30 Jun 2024</option><option>15 Jul 2024</option><option>Jamais</option></select></div></div><div className="field"><label>Description</label><input value={description} onChange={e => setDescription(e.target.value)} placeholder="À quoi correspond ce paiement ?" data-testid="input-link-description" /></div><div style={{ display: 'flex', gap: 8 }}><button type="submit" className="button button-primary" disabled={!amount || !description} data-testid="button-submit-link">Créer le lien</button><button type="button" className="button button-ghost" onClick={() => setShowForm(false)} data-testid="button-cancel-link">Annuler</button></div></form>}<div className="section-head" style={{ marginTop: 29 }}><div><h2 className="section-title">Vos liens</h2><p className="section-note">{links.length} liens actifs · à partager partout</p></div></div><div className="link-list">{links.map(link => <div className="card link-card" key={link.id} data-testid={`card-payment-link-${link.id}`}><div><span className={`pill ${link.status === 'Active' ? 'pill-success' : 'pill-neutral'}`}>{statusLabel(link.status)}</span><div className="section-title" style={{ marginTop: 10 }}>{link.description}</div><div className="link-slug">{link.slug}</div><div className="activity-meta" style={{ marginTop: 8 }}>{money(link.amount, link.currency)} · expire le {link.expiresAt} · {link.payments} paiement(s)</div></div><div style={{ display: 'flex', gap: 7 }}><button className="icon-button" title="Copier le lien" onClick={() => toast('Lien copié dans le presse-papiers.')} data-testid={`button-copy-link-${link.id}`}><Copy size={15} /></button><button className="icon-button" title="Afficher le QR code" onClick={() => toast('Ouvrez la page QR Code pour afficher votre code.')} data-testid={`button-qr-link-${link.id}`}><QrCode size={15} /></button><button className="icon-button" title="Plus d’options" onClick={() => toast('Les options du lien seront disponibles prochainement.')} data-testid={`button-more-link-${link.id}`}><MoreHorizontal size={15} /></button></div></div>)}</div></main>;
+  const { links, wallets, toast } = useStore();
+  const createPaymentLink = useCreatePaymentLink();
+  const [productName, setProductName] = useState('');
+  const [description, setDescription] = useState('');
+  const [walletId, setWalletId] = useState('all');
+  const [amountType, setAmountType] = useState<'FIXED' | 'CUSTOMER_CHOOSES'>('FIXED');
+  const [amount, setAmount] = useState('');
+  const [customerFields, setCustomerFields] = useState<string[]>(['full_name', 'phone', 'email']);
+  const [validity, setValidity] = useState('30d');
+  const [customDate, setCustomDate] = useState('');
+  const [paymentLimit, setPaymentLimit] = useState<'unlimited' | 'limited'>('unlimited');
+  const [maxPayments, setMaxPayments] = useState('');
+  const [afterPaymentAction, setAfterPaymentAction] = useState<'CONFIRMATION' | 'REDIRECT'>('CONFIRMATION');
+  const [redirectUrl, setRedirectUrl] = useState('');
+  const [notifyApp, setNotifyApp] = useState(true);
+  const [notifyEmail, setNotifyEmail] = useState(true);
+  const [notifyWebhook, setNotifyWebhook] = useState(false);
+  const [createdLink, setCreatedLink] = useState<PaymentLink | null>(null);
+  const [formError, setFormError] = useState('');
+  const [copiedId, setCopiedId] = useState('');
+  const [qrLink, setQrLink] = useState<PaymentLink | null>(null);
+
+  const toggleCustomerField = (field: string) => setCustomerFields(current => current.includes(field) ? current.filter(item => item !== field) : [...current, field]);
+  const expiryValue = () => {
+    if (validity === 'never') return '';
+    if (validity === 'custom') return customDate ? new Date(`${customDate}T23:59:59`).toISOString() : '';
+    const hours = validity === '24h' ? 24 : validity === '7d' ? 24 * 7 : 24 * 30;
+    return new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+  };
+  const expiryLabel = (value: string) => {
+    if (!value) return 'Sans expiration';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? value : `Le ${date.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}`;
+  };
+  const copyLink = async (link: PaymentLink) => {
+    try {
+      await navigator.clipboard.writeText(link.slug);
+      setCopiedId(link.id);
+      window.setTimeout(() => setCopiedId(current => current === link.id ? '' : current), 2200);
+    } catch {
+      toast('La copie automatique n’est pas disponible sur cet appareil.');
+    }
+  };
+  const shareLink = async (link: PaymentLink) => {
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: link.productName, text: link.description || link.productName, url: link.slug });
+        return;
+      } catch { /* Le partage peut être annulé sans message d’erreur. */ }
+    }
+    await copyLink(link);
+    toast('Lien copié, prêt à être partagé.');
+  };
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    setFormError('');
+    const cleanName = productName.trim();
+    const cleanDescription = description.trim();
+    if (cleanName.length < 2) { setFormError('Indiquez le nom du produit ou du service.'); return; }
+    if (amountType === 'FIXED' && (!amount || Number(amount) <= 0)) { setFormError('Indiquez un montant fixe supérieur à zéro.'); return; }
+    if (validity === 'custom' && !expiryValue()) { setFormError('Choisissez une date de fin de validité.'); return; }
+    if (paymentLimit === 'limited' && (!maxPayments || !Number.isInteger(Number(maxPayments)) || Number(maxPayments) < 1)) { setFormError('La limite doit être un nombre entier positif.'); return; }
+    if (afterPaymentAction === 'REDIRECT') {
+      try {
+        const url = new URL(redirectUrl);
+        if (!['http:', 'https:'].includes(url.protocol)) throw new Error('protocol');
+      } catch { setFormError('Saisissez une URL de redirection valide en HTTP ou HTTPS.'); return; }
+    }
+    const selectedWallet = wallets.find(wallet => wallet.id === walletId);
+    const data: PaymentLinkInput = {
+      amount: amountType === 'FIXED' ? Number(amount) : null,
+      currency: selectedWallet?.currency ?? wallets[0]?.currency ?? 'XOF',
+      productName: cleanName,
+      description: cleanDescription,
+      walletId: walletId === 'all' ? null : walletId,
+      amountType,
+      customerFields: customerFields as PaymentLinkInput['customerFields'],
+      expiresAt: expiryValue(),
+      maxPayments: paymentLimit === 'limited' ? Number(maxPayments) : null,
+      afterPaymentAction,
+      redirectUrl: afterPaymentAction === 'REDIRECT' ? redirectUrl.trim() : null,
+      notifyApp,
+      notifyEmail,
+      notifyWebhook,
+    };
+    createPaymentLink.mutate({ data }, {
+      onSuccess: link => {
+        setCreatedLink(link);
+        void queryClient.invalidateQueries({ queryKey: getGetBootstrapQueryKey() });
+        toast('Votre lien de paiement est prêt à être partagé.');
+      },
+      onError: () => setFormError('Le lien n’a pas pu être créé. Vérifiez les informations saisies et réessayez.'),
+    });
+  };
+  const renderLinkAmount = (link: PaymentLink) => link.amountType === 'CUSTOMER_CHOOSES' ? 'Montant libre' : money(link.amount, link.currency);
+  const renderLinkExpiry = (link: PaymentLink) => expiryLabel(link.expiresAt);
+  const customerFieldLabels: Record<string, string> = { full_name: 'Nom complet', country: 'Pays', operator: 'Opérateur', phone: 'Téléphone', email: 'Adresse e-mail' };
+  const today = new Date().toISOString().slice(0, 10);
+
+  return <main className="page-wrap payment-links-page">
+    <PageIntro eyebrow="Recevoir à distance" title="Créez un lien de paiement" subtitle="Un parcours clair pour encaisser en quelques secondes. Configurez ce que votre client voit, puis partagez le lien où vous voulez." action={<span className="payment-trust-badge"><ShieldCheck size={15} /> Paiements protégés par Mulapay</span>} />
+    {createdLink && <section className="payment-success card" aria-live="polite">
+      <div className="payment-success-icon"><CheckCircle2 size={22} /></div>
+      <div className="payment-success-copy"><span className="eyebrow">Lien créé avec succès</span><h2>{createdLink.productName}</h2><p>Votre lien est actif. Copiez-le ou partagez-le directement avec votre client.</p>
+        <div className="generated-link"><Link2 size={15} /><code>{createdLink.slug}</code><button className="button button-primary button-sm" onClick={() => copyLink(createdLink)} data-testid="button-copy-created-link">{copiedId === createdLink.id ? <><Check size={13} /> Lien copié !</> : <><Copy size={13} /> Copier</>}</button></div>
+        <div className="success-actions"><button className="button button-ghost button-sm" onClick={() => shareLink(createdLink)}><Send size={13} /> Partager</button><button className="button button-ghost button-sm" onClick={() => setQrLink(createdLink)}><QrCode size={13} /> QR Code</button><span className="reference-chip">Réf. {createdLink.reference ?? '—'}</span></div>
+      </div>
+      <button className="payment-success-close" aria-label="Masquer la confirmation" onClick={() => setCreatedLink(null)}><X size={16} /></button>
+    </section>}
+    <div className="payment-builder-layout">
+      <form className="payment-builder card" onSubmit={submit}>
+        <div className="builder-header"><div><span className="eyebrow">Nouveau lien</span><h2>Les informations du paiement</h2><p>Les champs marqués d’un astérisque sont obligatoires.</p></div><div className="builder-step"><span>01</span><small>Configuration</small></div></div>
+        <div className="builder-section"><div className="builder-section-title"><span className="section-index">01</span><div><h3>Le produit ou service</h3><p>Présentez clairement ce que votre client va payer.</p></div></div>
+          <div className="field"><label htmlFor="link-product-name">Nom du produit ou service <b>*</b></label><input id="link-product-name" value={productName} onChange={event => setProductName(event.target.value)} placeholder="Ex. Abonnement mensuel" required data-testid="input-link-product-name" /></div>
+          <div className="field"><label htmlFor="link-description">Description <span>(facultatif)</span></label><textarea id="link-description" value={description} onChange={event => setDescription(event.target.value)} placeholder="Ajoutez quelques détails utiles pour votre client" data-testid="input-link-description" /></div>
+        </div>
+        <div className="builder-section"><div className="builder-section-title"><span className="section-index">02</span><div><h3>Montant et réception</h3><p>Choisissez la destination des fonds et le type de montant.</p></div></div>
+          <div className="field"><label htmlFor="link-wallet">Wallet de réception</label><select id="link-wallet" value={walletId} onChange={event => setWalletId(event.target.value)} data-testid="select-link-wallet"><option value="all">Tous les wallets disponibles</option>{wallets.map(wallet => <option key={wallet.id} value={wallet.id}>{countryLabel(wallet.country)} · {wallet.currency}</option>)}</select><span className="field-hint">Mulapay dirigera le paiement vers le wallet choisi.</span></div>
+          <div className="choice-grid"><label className={`choice-card ${amountType === 'FIXED' ? 'selected' : ''}`}><input type="radio" name="amount-type" checked={amountType === 'FIXED'} onChange={() => setAmountType('FIXED')} /><span className="choice-radio" /><span><strong>Montant fixe</strong><small>Le client paie exactement le montant indiqué.</small></span></label><label className={`choice-card ${amountType === 'CUSTOMER_CHOOSES' ? 'selected' : ''}`}><input type="radio" name="amount-type" checked={amountType === 'CUSTOMER_CHOOSES'} onChange={() => setAmountType('CUSTOMER_CHOOSES')} /><span className="choice-radio" /><span><strong>Montant choisi par le client</strong><small>Le client saisit le montant au moment du paiement.</small></span></label></div>
+          {amountType === 'FIXED' && <div className="field amount-field"><label htmlFor="link-amount">Montant à payer <b>*</b></label><div className="input-prefix"><span>{wallets.find(wallet => wallet.id === walletId)?.currency ?? wallets[0]?.currency ?? 'XOF'}</span><input id="link-amount" type="number" min="1" step="1" value={amount} onChange={event => setAmount(event.target.value)} placeholder="0" required data-testid="input-link-amount" /></div></div>}
+        </div>
+        <div className="builder-section"><div className="builder-section-title"><span className="section-index">03</span><div><h3>Informations du client</h3><p>Décidez des informations à demander au moment du paiement.</p></div></div>
+          <div className="customer-fields-grid">{Object.entries(customerFieldLabels).map(([field, label]) => <label className={`toggle-row ${customerFields.includes(field) ? 'checked' : ''}`} key={field}><input type="checkbox" checked={customerFields.includes(field)} onChange={() => toggleCustomerField(field)} /><span className="toggle-check">{customerFields.includes(field) && <Check size={12} />}</span><span>{label}</span></label>)}</div>
+        </div>
+        <div className="builder-section"><div className="builder-section-title"><span className="section-index">04</span><div><h3>Règles du lien</h3><p>Gardez la main sur sa durée de vie et son nombre d’utilisations.</p></div></div>
+          <div className="field"><label htmlFor="link-validity">Validité du lien</label><select id="link-validity" value={validity} onChange={event => setValidity(event.target.value)} data-testid="select-link-expiry"><option value="never">Sans expiration</option><option value="24h">24 heures</option><option value="7d">7 jours</option><option value="30d">30 jours</option><option value="custom">Date personnalisée</option></select></div>
+          {validity === 'custom' && <div className="field"><label htmlFor="link-custom-date">Date de fin</label><input id="link-custom-date" type="date" min={today} value={customDate} onChange={event => setCustomDate(event.target.value)} /></div>}
+          <div className="field"><label>Nombre de paiements</label><div className="inline-choice"><label className={`mini-choice ${paymentLimit === 'unlimited' ? 'selected' : ''}`}><input type="radio" name="payment-limit" checked={paymentLimit === 'unlimited'} onChange={() => setPaymentLimit('unlimited')} />Illimité</label><label className={`mini-choice ${paymentLimit === 'limited' ? 'selected' : ''}`}><input type="radio" name="payment-limit" checked={paymentLimit === 'limited'} onChange={() => setPaymentLimit('limited')} />Limité</label></div></div>
+          {paymentLimit === 'limited' && <div className="field"><label htmlFor="link-max-payments">Nombre maximum</label><input id="link-max-payments" type="number" min="1" step="1" value={maxPayments} onChange={event => setMaxPayments(event.target.value)} placeholder="Ex. 25" /></div>}
+        </div>
+        <div className="builder-section"><div className="builder-section-title"><span className="section-index">05</span><div><h3>Après le paiement</h3><p>Choisissez l’expérience qui suit la confirmation.</p></div></div>
+          <div className="choice-stack"><label className={`choice-card compact ${afterPaymentAction === 'CONFIRMATION' ? 'selected' : ''}`}><input type="radio" name="after-payment" checked={afterPaymentAction === 'CONFIRMATION'} onChange={() => setAfterPaymentAction('CONFIRMATION')} /><span className="choice-radio" /><span><strong>Confirmation Mulapay</strong><small>Votre client voit une confirmation claire après le paiement.</small></span></label><label className={`choice-card compact ${afterPaymentAction === 'REDIRECT' ? 'selected' : ''}`}><input type="radio" name="after-payment" checked={afterPaymentAction === 'REDIRECT'} onChange={() => setAfterPaymentAction('REDIRECT')} /><span className="choice-radio" /><span><strong>Rediriger vers une URL</strong><small>Retour vers votre site ou votre page de confirmation.</small></span></label></div>
+          {afterPaymentAction === 'REDIRECT' && <div className="field redirect-field"><label htmlFor="link-redirect-url">URL HTTPS ou HTTP <b>*</b></label><input id="link-redirect-url" type="url" value={redirectUrl} onChange={event => setRedirectUrl(event.target.value)} placeholder="https://votre-site.com/merci" required /></div>}
+        </div>
+        <div className="builder-section builder-section-last"><div className="builder-section-title"><span className="section-index">06</span><div><h3>Notifications</h3><p>Recevez les informations importantes au bon endroit.</p></div></div>
+          <div className="notification-options"><label className="toggle-row checked"><input type="checkbox" checked={notifyApp} onChange={event => setNotifyApp(event.target.checked)} /><span className="toggle-check">{notifyApp && <Check size={12} />}</span><span><strong>Notification Mulapay</strong><small>Dans votre espace de travail</small></span></label><label className="toggle-row checked"><input type="checkbox" checked={notifyEmail} onChange={event => setNotifyEmail(event.target.checked)} /><span className="toggle-check">{notifyEmail && <Check size={12} />}</span><span><strong>Notification e-mail</strong><small>À l’adresse de votre compte</small></span></label><label className="toggle-row"><input type="checkbox" checked={notifyWebhook} onChange={event => setNotifyWebhook(event.target.checked)} /><span className="toggle-check">{notifyWebhook && <Check size={12} />}</span><span><strong>Webhook</strong><small>Pour votre intégration technique</small></span></label></div>
+        </div>
+        <div className="builder-footer"><div className="reference-field"><span>Référence du paiement</span><strong>{createdLink?.reference ?? 'MP-LINK-••••••••'}</strong><small>Générée automatiquement · non modifiable</small></div><div className="builder-submit">{formError && <div className="form-error"><CircleAlert size={14} /> {formError}</div>}<button type="submit" className="button button-primary" disabled={createPaymentLink.isPending} data-testid="button-submit-link">{createPaymentLink.isPending ? 'Création en cours…' : <><Link2 size={15} /> Créer le lien de paiement</>}</button></div></div>
+      </form>
+      <aside className="payment-builder-aside"><div className="payment-preview card"><div className="preview-top"><div><span className="eyebrow">Aperçu</span><h2>Ce que votre client verra</h2></div><Eye size={17} /></div><div className="preview-payment"><div className="preview-brand"><span className="preview-mark">M</span><span>Mulapay</span><ShieldCheck size={13} /></div><div className="preview-product"><span className="preview-label">Paiement demandé</span><strong>{productName.trim() || 'Votre produit ou service'}</strong><p>{description.trim() || 'La description de votre paiement apparaîtra ici.'}</p></div><div className="preview-amount"><span>{amountType === 'FIXED' ? 'Montant' : 'Montant libre'}</span><strong>{amountType === 'FIXED' && amount ? money(Number(amount), wallets.find(wallet => wallet.id === walletId)?.currency ?? wallets[0]?.currency ?? 'XOF') : amountType === 'FIXED' ? '—' : 'Au choix'}</strong></div><div className="preview-detail"><span><Clock3 size={13} /> {validity === 'never' ? 'Sans expiration' : validity === 'custom' && customDate ? `Jusqu’au ${new Date(`${customDate}T12:00:00`).toLocaleDateString('fr-FR')}` : `Valide ${validity === '24h' ? '24 heures' : validity === '7d' ? '7 jours' : '30 jours'}`}</span><span><ShieldCheck size={13} /> Paiement sécurisé</span></div><div className="preview-button">Continuer vers le paiement <ArrowRight size={14} /></div></div><div className="preview-note"><LockKeyhole size={14} /><span>Les données client sont transmises de façon sécurisée et uniquement selon les champs sélectionnés.</span></div></div><div className="payment-help card"><div className="help-icon"><Info size={16} /></div><div><strong>Un lien pour chaque besoin</strong><p>Montant fixe pour une facture, montant libre pour un don ou une contribution.</p></div></div></aside>
+    </div>
+    <section className="existing-links-section"><div className="section-head"><div><span className="eyebrow">Votre activité</span><h2 className="section-title">Liens existants</h2><p className="section-note">{links.length ? `${links.length} lien${links.length > 1 ? 's' : ''} enregistré${links.length > 1 ? 's' : ''}` : 'Vos liens créés apparaîtront ici.'}</p></div><span className="link-count-badge">{links.length}</span></div>
+      {links.length === 0 ? <div className="empty-state card payment-links-empty"><Link2 size={25} /><strong>Aucun lien pour le moment</strong><p>Configurez votre premier lien ci-dessus pour commencer à recevoir des paiements.</p></div> : <div className="links-table card"><div className="links-table-head"><span>Produit / service</span><span>Montant</span><span>Référence</span><span>Statut</span><span>Validité</span><span>Paiements</span><span>Actions</span></div>{links.map(link => <div className="links-table-row" key={link.id} data-testid={`card-payment-link-${link.id}`}><div className="link-product"><span className="link-product-icon"><Link2 size={14} /></span><span><strong>{link.productName || link.description || 'Lien de paiement'}</strong><small>{link.description || 'Sans description'}</small></span></div><strong className="table-amount">{renderLinkAmount(link)}</strong><code>{link.reference || '—'}</code><span className={`pill ${link.status === 'Active' ? 'pill-success' : link.status === 'Expired' ? 'pill-danger' : 'pill-neutral'}`}>{statusLabel(link.status)}</span><span className="table-muted">{renderLinkExpiry(link)}</span><span className="table-muted">{link.payments}{link.maxPayments ? ` / ${link.maxPayments}` : ''}</span><div className="link-actions"><button className="icon-button" title={copiedId === link.id ? 'Lien copié' : 'Copier le lien'} onClick={() => copyLink(link)} data-testid={`button-copy-link-${link.id}`}>{copiedId === link.id ? <Check size={15} /> : <Copy size={15} />}</button><button className="icon-button" title="Partager le lien" onClick={() => shareLink(link)} data-testid={`button-share-link-${link.id}`}><Send size={15} /></button><button className="icon-button" title="Afficher le QR code" onClick={() => setQrLink(link)} data-testid={`button-qr-link-${link.id}`}><QrCode size={15} /></button></div></div>)}</div>}
+    </section>
+    {qrLink && <div className="payment-modal-backdrop" role="presentation" onClick={() => setQrLink(null)}><div className="payment-qr-modal card" role="dialog" aria-modal="true" aria-label="QR Code du lien" onClick={event => event.stopPropagation()}><button className="payment-success-close" aria-label="Fermer" onClick={() => setQrLink(null)}><X size={16} /></button><span className="eyebrow">À partager en présentiel</span><h2>QR Code du paiement</h2><p>{qrLink.productName}</p><div className="qr-box payment-qr-visual">{Array.from({ length: 81 }, (_, index) => <i key={index} />)}</div><code>{qrLink.slug}</code><button className="button button-primary button-wide" onClick={() => copyLink(qrLink)}>{copiedId === qrLink.id ? <><Check size={14} /> Lien copié !</> : <><Copy size={14} /> Copier le lien</>}</button></div></div>}
+  </main>;
 }
 
 function Kyc() {
@@ -1280,7 +1424,7 @@ function RoutedApp() {
     transfer: ({ amount, currency, country, counterparty, note, feePayer }) => { transferMutation.mutate({ data: { amount, currency, country, counterparty, note, feePayer } }, { onSuccess: response => { invalidate(); toast(response.message); }, onError: () => toast('Transfert impossible. Vérifiez le solde disponible.') }); },
     exchange: ({ source, destination, amount }) => { exchangeMutation.mutate({ data: { source, destination, amount } }, { onSuccess: response => { invalidate(); toast(response.message); }, onError: () => toast('La demande d’échange n’a pas pu être créée.') }); },
     setExchangeStatus: (id, status) => { exchangeDecisionMutation.mutate({ id, data: { decision: status === 'Completed' ? 'APPROVED' : 'REJECTED' } }, { onSuccess: response => { invalidate(); toast(response.message); }, onError: () => toast('La décision d’échange n’a pas pu être enregistrée.') }); },
-    addLink: ({ amount, currency, description, expiresAt }) => { paymentLinkMutation.mutate({ data: { amount, currency, description, expiresAt } }, { onSuccess: response => { invalidate(); toast(`Lien de paiement ${response.slug} créé.`); }, onError: () => toast('Le lien de paiement n’a pas pu être créé.') }); },
+    addLink: data => { paymentLinkMutation.mutate({ data }, { onSuccess: response => { invalidate(); toast(`Lien de paiement ${response.slug} créé.`); }, onError: () => toast('Le lien de paiement n’a pas pu être créé.') }); },
     markRead: id => { notificationMutation.mutate({ id }, { onSuccess: () => { invalidate(); } }); },
     submitKyc: documents => { kycMutation.mutate({ data: { country: data?.profile.country ?? 'Togo', documents } }, { onSuccess: () => { invalidate(); toast('Documents KYC envoyés pour examen.'); }, onError: () => toast('Le dossier KYC n’a pas pu être enregistré.') }); },
     decideKyc: (id, accepted) => { kycDecisionMutation.mutate({ id, data: { decision: accepted ? 'VERIFIED' : 'REFUSED' } }, { onSuccess: response => { invalidate(); toast(response.message); }, onError: () => toast('La décision KYC n’a pas pu être enregistrée.') }); },

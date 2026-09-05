@@ -8,6 +8,7 @@ import {
   text,
   timestamp,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 export const users = pgTable("mulapay_users", {
   id: text("id").primaryKey(),
@@ -102,11 +103,22 @@ export const paymentLinks = pgTable(
     id: text("id").primaryKey(),
     userId: text("user_id").notNull().references(() => users.id),
     slug: text("slug").notNull().unique(),
+    reference: text("reference"),
+    productName: text("product_name").notNull().default("Paiement"),
     amount: integer("amount").notNull(),
     currency: text("currency").notNull(),
     description: text("description").notNull(),
+    walletId: text("wallet_id"),
+    amountType: text("amount_type").notNull().default("FIXED"),
+    customerFields: jsonb("customer_fields").$type<string[]>().notNull().default(sql`'["full_name","phone","email"]'::jsonb`),
     status: text("status").notNull().default("Active"),
     expiresAt: text("expires_at").notNull(),
+    maxPayments: integer("max_payments"),
+    afterPaymentAction: text("after_payment_action").notNull().default("CONFIRMATION"),
+    redirectUrl: text("redirect_url"),
+    notifyApp: boolean("notify_app").notNull().default(true),
+    notifyEmail: boolean("notify_email").notNull().default(true),
+    notifyWebhook: boolean("notify_webhook").notNull().default(false),
     payments: integer("payments").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },

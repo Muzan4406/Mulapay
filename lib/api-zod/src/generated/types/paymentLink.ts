@@ -5,14 +5,32 @@
  * Mulapay wallet, ledger, KYC and operations API
  * OpenAPI spec version: 0.2.0
  */
+import type { PaymentLinkAfterPaymentAction } from './paymentLinkAfterPaymentAction';
+import type { PaymentLinkAmountType } from './paymentLinkAmountType';
+import type { PaymentLinkCustomerFieldsItem } from './paymentLinkCustomerFieldsItem';
 
 export interface PaymentLink {
   id: string;
   slug: string;
+  /** @nullable */
+  reference: string | null;
+  productName: string;
   amount: number;
   currency: string;
   description: string;
+  /** @nullable */
+  walletId: string | null;
+  amountType: PaymentLinkAmountType;
+  customerFields: PaymentLinkCustomerFieldsItem[];
   status: string;
   expiresAt: string;
+  /** @nullable */
+  maxPayments: number | null;
+  afterPaymentAction: PaymentLinkAfterPaymentAction;
+  /** @nullable */
+  redirectUrl: string | null;
+  notifyApp: boolean;
+  notifyEmail: boolean;
+  notifyWebhook: boolean;
   payments: number;
 }

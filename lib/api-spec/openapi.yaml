@@ -365,15 +365,28 @@ components:
         requestedAt: { type: string }
     PaymentLink:
       type: object
-      required: [id, slug, amount, currency, description, status, expiresAt, payments]
+      required: [id, slug, reference, productName, amount, currency, description, walletId, amountType, customerFields, status, expiresAt, maxPayments, afterPaymentAction, redirectUrl, notifyApp, notifyEmail, notifyWebhook, payments]
       properties:
         id: { type: string }
         slug: { type: string }
+        reference: { type: ["string", "null"] }
+        productName: { type: string }
         amount: { type: number }
         currency: { type: string }
         description: { type: string }
+        walletId: { type: ["string", "null"] }
+        amountType: { type: string, enum: [FIXED, CUSTOMER_CHOOSES] }
+        customerFields:
+          type: array
+          items: { type: string, enum: [full_name, country, operator, phone, email] }
         status: { type: string }
         expiresAt: { type: string }
+        maxPayments: { type: ["number", "null"] }
+        afterPaymentAction: { type: string, enum: [CONFIRMATION, REDIRECT] }
+        redirectUrl: { type: ["string", "null"] }
+        notifyApp: { type: boolean }
+        notifyEmail: { type: boolean }
+        notifyWebhook: { type: boolean }
         payments: { type: number }
     Notification:
       type: object
@@ -459,12 +472,24 @@ components:
         amount: { type: number, exclusiveMinimum: 0 }
     PaymentLinkInput:
       type: object
-      required: [amount, currency, description, expiresAt]
+      required: [currency, productName, description, walletId, amountType, customerFields, expiresAt, maxPayments, afterPaymentAction, redirectUrl, notifyApp, notifyEmail, notifyWebhook]
       properties:
-        amount: { type: number, exclusiveMinimum: 0 }
+        amount: { type: ["number", "null"], minimum: 0 }
         currency: { type: string }
-        description: { type: string, minLength: 2 }
+        productName: { type: string, minLength: 2 }
+        description: { type: string }
+        walletId: { type: ["string", "null"] }
+        amountType: { type: string, enum: [FIXED, CUSTOMER_CHOOSES] }
+        customerFields:
+          type: array
+          items: { type: string, enum: [full_name, country, operator, phone, email] }
         expiresAt: { type: string }
+        maxPayments: { type: ["number", "null"], minimum: 1 }
+        afterPaymentAction: { type: string, enum: [CONFIRMATION, REDIRECT] }
+        redirectUrl: { type: ["string", "null"] }
+        notifyApp: { type: boolean }
+        notifyEmail: { type: boolean }
+        notifyWebhook: { type: boolean }
     MoneyOperationInput:
       type: object
       required: [walletId, amount]

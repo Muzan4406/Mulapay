@@ -67,11 +67,22 @@ export const GetBootstrapResponse = zod.object({
   "links": zod.array(zod.object({
   "id": zod.string(),
   "slug": zod.string(),
+  "reference": zod.string().nullable(),
+  "productName": zod.string(),
   "amount": zod.number(),
   "currency": zod.string(),
   "description": zod.string(),
+  "walletId": zod.string().nullable(),
+  "amountType": zod.enum(['FIXED', 'CUSTOMER_CHOOSES']),
+  "customerFields": zod.array(zod.enum(['full_name', 'country', 'operator', 'phone', 'email'])),
   "status": zod.string(),
   "expiresAt": zod.string(),
+  "maxPayments": zod.number().nullable(),
+  "afterPaymentAction": zod.enum(['CONFIRMATION', 'REDIRECT']),
+  "redirectUrl": zod.string().nullable(),
+  "notifyApp": zod.boolean(),
+  "notifyEmail": zod.boolean(),
+  "notifyWebhook": zod.boolean(),
   "payments": zod.number()
 })),
   "notifications": zod.array(zod.object({
@@ -175,27 +186,49 @@ export const DecideExchangeResponse = zod.object({
 /**
  * @summary Creates a payment link
  */
-export const createPaymentLinkBodyAmountExclusiveMin = 0;
+export const createPaymentLinkBodyAmountMin = 0;
 
-export const createPaymentLinkBodyDescriptionMin = 2;
+export const createPaymentLinkBodyProductNameMin = 2;
+
 
 
 
 export const CreatePaymentLinkBody = zod.object({
-  "amount": zod.number().gt(createPaymentLinkBodyAmountExclusiveMin),
+  "amount": zod.number().min(createPaymentLinkBodyAmountMin).nullish(),
   "currency": zod.string(),
-  "description": zod.string().min(createPaymentLinkBodyDescriptionMin),
-  "expiresAt": zod.string()
+  "productName": zod.string().min(createPaymentLinkBodyProductNameMin),
+  "description": zod.string(),
+  "walletId": zod.string().nullable(),
+  "amountType": zod.enum(['FIXED', 'CUSTOMER_CHOOSES']),
+  "customerFields": zod.array(zod.enum(['full_name', 'country', 'operator', 'phone', 'email'])),
+  "expiresAt": zod.string(),
+  "maxPayments": zod.number().min(1).nullable(),
+  "afterPaymentAction": zod.enum(['CONFIRMATION', 'REDIRECT']),
+  "redirectUrl": zod.string().nullable(),
+  "notifyApp": zod.boolean(),
+  "notifyEmail": zod.boolean(),
+  "notifyWebhook": zod.boolean()
 })
 
 export const CreatePaymentLinkResponse = zod.object({
   "id": zod.string(),
   "slug": zod.string(),
+  "reference": zod.string().nullable(),
+  "productName": zod.string(),
   "amount": zod.number(),
   "currency": zod.string(),
   "description": zod.string(),
+  "walletId": zod.string().nullable(),
+  "amountType": zod.enum(['FIXED', 'CUSTOMER_CHOOSES']),
+  "customerFields": zod.array(zod.enum(['full_name', 'country', 'operator', 'phone', 'email'])),
   "status": zod.string(),
   "expiresAt": zod.string(),
+  "maxPayments": zod.number().nullable(),
+  "afterPaymentAction": zod.enum(['CONFIRMATION', 'REDIRECT']),
+  "redirectUrl": zod.string().nullable(),
+  "notifyApp": zod.boolean(),
+  "notifyEmail": zod.boolean(),
+  "notifyWebhook": zod.boolean(),
   "payments": zod.number()
 })
 
@@ -206,11 +239,22 @@ export const CreatePaymentLinkResponse = zod.object({
 export const ListPaymentLinksResponseItem = zod.object({
   "id": zod.string(),
   "slug": zod.string(),
+  "reference": zod.string().nullable(),
+  "productName": zod.string(),
   "amount": zod.number(),
   "currency": zod.string(),
   "description": zod.string(),
+  "walletId": zod.string().nullable(),
+  "amountType": zod.enum(['FIXED', 'CUSTOMER_CHOOSES']),
+  "customerFields": zod.array(zod.enum(['full_name', 'country', 'operator', 'phone', 'email'])),
   "status": zod.string(),
   "expiresAt": zod.string(),
+  "maxPayments": zod.number().nullable(),
+  "afterPaymentAction": zod.enum(['CONFIRMATION', 'REDIRECT']),
+  "redirectUrl": zod.string().nullable(),
+  "notifyApp": zod.boolean(),
+  "notifyEmail": zod.boolean(),
+  "notifyWebhook": zod.boolean(),
   "payments": zod.number()
 })
 export const ListPaymentLinksResponse = zod.array(ListPaymentLinksResponseItem)

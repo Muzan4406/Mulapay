@@ -465,7 +465,61 @@ router.patch("/v1/exchanges/:id/decision", requireAdmin, async (req, res) => {
 router.post("/v1/payment-links", async (req, res) => {
   const input = CreatePaymentLinkBody.parse(req.body);
   const user = await ensureUser(req);
-  const link = { id: crypto.randomUUID(), userId: user.id, slug: `mulapay.me/${user.firstName.toLowerCase()}-${crypto.randomUUID().slice(0, 6)}`, amount: input.amount, currency: input.currency, description: input.description, status: "Active", expiresAt: input.expiresAt, payments: 0 };
+  if (input.amountType === "FIXED" && (!input.amount || input.amount <= 0)) {
+    res.status(400).json({ error: "Un montant fixe supérieur à zéro est requis." });
+    return;
+  }
+  if (input.amountType === "CUSTOMER_CHOOSES" && input.amount != null && input.amount < 0) {
+    res.status(400).json({ error: "Le montant minimum ne peut pas être négatif." });
+    return;
+  }
+  if (input.maxPayments !== null && (!Number.isInteger(input.maxPayments) || input.maxPayments < 1)) {
+    res.status(400).json({ error: "La limite de paiements doit être un entier positif." });
+    return;
+  }
+  if (input.afterPaymentAction === "REDIRECT") {
+    if (!input.redirectUrl) {
+      res.status(400).json({ error: "Une URL de redirection est requise." });
+      return;
+    }
+    try {
+      const redirectUrl = new URL(input.redirectUrl);
+      if (!["http:", "https:"].includes(redirectUrl.protocol)) throw new Error("unsupported protocol");
+    } catch {
+      res.status(400).json({ error: "L’URL de redirection est invalide." });
+      return;
+    }
+  }
+  if (input.walletId) {
+    const wallet = await db.query.wallets.findFirst({ where: and(eq(wallets.id, input.walletId), eq(wallets.userId, user.id)) });
+    if (!wallet) {
+      res.status(400).json({ error: "Le wallet de réception est invalide." });
+      return;
+    }
+  }
+  const reference = `MP-LINK-${randomBytes(4).toString("hex").toUpperCase()}`;
+  const link = {
+    id: crypto.randomUUID(),
+    userId: user.id,
+    slug: `https://pay.mulapay.com/${randomBytes(8).toString("hex")}`,
+    reference,
+    productName: input.productName,
+    amount: input.amount ?? 0,
+    currency: input.currency,
+    description: input.description,
+    walletId: input.walletId,
+    amountType: input.amountType,
+    customerFields: input.customerFields,
+    status: "Active",
+    expiresAt: input.expiresAt,
+    maxPayments: input.maxPayments,
+    afterPaymentAction: input.afterPaymentAction,
+    redirectUrl: input.redirectUrl,
+    notifyApp: input.notifyApp,
+    notifyEmail: input.notifyEmail,
+    notifyWebhook: input.notifyWebhook,
+    payments: 0,
+  };
   const [created] = await db.insert(paymentLinks).values(link).returning();
   res.status(201).json(created);
 });

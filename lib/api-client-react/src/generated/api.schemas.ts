@@ -56,14 +56,56 @@ export interface Exchange {
   requestedAt: string;
 }
 
+export type PaymentLinkAmountType = typeof PaymentLinkAmountType[keyof typeof PaymentLinkAmountType];
+
+
+export const PaymentLinkAmountType = {
+  FIXED: 'FIXED',
+  CUSTOMER_CHOOSES: 'CUSTOMER_CHOOSES',
+} as const;
+
+export type PaymentLinkCustomerFieldsItem = typeof PaymentLinkCustomerFieldsItem[keyof typeof PaymentLinkCustomerFieldsItem];
+
+
+export const PaymentLinkCustomerFieldsItem = {
+  full_name: 'full_name',
+  country: 'country',
+  operator: 'operator',
+  phone: 'phone',
+  email: 'email',
+} as const;
+
+export type PaymentLinkAfterPaymentAction = typeof PaymentLinkAfterPaymentAction[keyof typeof PaymentLinkAfterPaymentAction];
+
+
+export const PaymentLinkAfterPaymentAction = {
+  CONFIRMATION: 'CONFIRMATION',
+  REDIRECT: 'REDIRECT',
+} as const;
+
 export interface PaymentLink {
   id: string;
   slug: string;
+  /** @nullable */
+  reference: string | null;
+  productName: string;
   amount: number;
   currency: string;
   description: string;
+  /** @nullable */
+  walletId: string | null;
+  amountType: PaymentLinkAmountType;
+  customerFields: PaymentLinkCustomerFieldsItem[];
   status: string;
   expiresAt: string;
+  /** @nullable */
+  maxPayments: number | null;
+  afterPaymentAction: PaymentLinkAfterPaymentAction;
+  /** @nullable */
+  redirectUrl: string | null;
+  notifyApp: boolean;
+  notifyEmail: boolean;
+  notifyWebhook: boolean;
   payments: number;
 }
 
@@ -154,13 +196,59 @@ export interface ExchangeInput {
   amount: number;
 }
 
+export type PaymentLinkInputAmountType = typeof PaymentLinkInputAmountType[keyof typeof PaymentLinkInputAmountType];
+
+
+export const PaymentLinkInputAmountType = {
+  FIXED: 'FIXED',
+  CUSTOMER_CHOOSES: 'CUSTOMER_CHOOSES',
+} as const;
+
+export type PaymentLinkInputCustomerFieldsItem = typeof PaymentLinkInputCustomerFieldsItem[keyof typeof PaymentLinkInputCustomerFieldsItem];
+
+
+export const PaymentLinkInputCustomerFieldsItem = {
+  full_name: 'full_name',
+  country: 'country',
+  operator: 'operator',
+  phone: 'phone',
+  email: 'email',
+} as const;
+
+export type PaymentLinkInputAfterPaymentAction = typeof PaymentLinkInputAfterPaymentAction[keyof typeof PaymentLinkInputAfterPaymentAction];
+
+
+export const PaymentLinkInputAfterPaymentAction = {
+  CONFIRMATION: 'CONFIRMATION',
+  REDIRECT: 'REDIRECT',
+} as const;
+
 export interface PaymentLinkInput {
-  /** @exclusiveMinimum 0 */
-  amount: number;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  amount?: number | null;
   currency: string;
   /** @minLength 2 */
+  productName: string;
   description: string;
+  /** @nullable */
+  walletId: string | null;
+  amountType: PaymentLinkInputAmountType;
+  customerFields: PaymentLinkInputCustomerFieldsItem[];
   expiresAt: string;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  maxPayments: number | null;
+  afterPaymentAction: PaymentLinkInputAfterPaymentAction;
+  /** @nullable */
+  redirectUrl: string | null;
+  notifyApp: boolean;
+  notifyEmail: boolean;
+  notifyWebhook: boolean;
 }
 
 export type MoneyOperationInputMethod = typeof MoneyOperationInputMethod[keyof typeof MoneyOperationInputMethod];
