@@ -100,6 +100,11 @@ async function getPlatformSettings() {
   return created ?? (await db.query.platformSettings.findFirst({ where: eq(platformSettings.id, PLATFORM_SETTINGS_ID) }))!;
 }
 
+function calculateMulapayNetAmount(amount: number, feePercentage: number) {
+  const platformFee = Math.round(amount * feePercentage / 100);
+  return { platformFee, merchantAmount: Math.max(0, amount - platformFee) };
+}
+
 function parseDrimPayWebhookSignature(header: string | undefined, rawBody: Buffer) {
   const secret = process.env.DRIMPAY_WEBHOOK_SECRET;
   if (!secret || !header) return false;
@@ -828,6 +833,8 @@ router.post("/v1/public/payment-links/:token/payments", async (req, res) => {
     res.status(400).json({ error: "Aucun wallet de réception actif ne correspond au pays choisi." });
     return;
   }
+  const settings = await getPlatformSettings();
+  const mulapayAmount = calculateMulapayNetAmount(input.amount, Number(settings.feePercentage));
   const providerSelection = await resolvePaymentProvider(countryCode, input.operator);
   if (input.operator === "Orange Money" && ORANGE_OTP_COUNTRIES.has(countryCode) && !input.operatorOtp) {
     res.status(400).json({ error: "Le code OTP Orange Money est requis pour ce pays." });
@@ -838,7 +845,7 @@ router.post("/v1/public/payment-links/:token/payments", async (req, res) => {
   const orderId = `paylink_${link.id}_${paymentLinkIdempotencyKey}`;
   const existing = await db.query.transactions.findFirst({ where: eq(transactions.providerOrderId, orderId) });
   if (existing) {
-    res.status(200).json({ ok: true, message: "Cette demande de paiement existe déjà.", reference: existing.reference, status: existing.status, paymentUrl: existing.paymentUrl, expiresAt: existing.expiresAt?.toISOString() ?? null, fee: existing.fee, netAmount: existing.netAmount });
+    res.status(200).json({ ok: true, message: "Cette demande de paiement existe déjà.", reference: existing.reference, status: existing.status, paymentUrl: existing.paymentUrl, expiresAt: existing.expiresAt?.toISOString() ?? null, fee: existing.fee, netAmount: existing.netAmount, platformFee: mulapayAmount.platformFee, merchantAmount: mulapayAmount.merchantAmount });
     return;
   }
   try {
@@ -917,7 +924,7 @@ router.post("/v1/public/payment-links/:token/payments", async (req, res) => {
         providerOrderId: orderId,
       });
     });
-    res.status(201).json({ ok: true, message: normalizedProvider.paymentUrl ? "Ouvrez le lien de paiement pour confirmer." : "Confirmez le paiement sur votre téléphone.", reference: normalizedProvider.reference, status: normalizedProvider.providerStatus, paymentUrl: normalizedProvider.paymentUrl, expiresAt: normalizedProvider.expiresAt?.toISOString() ?? null, fee: normalizedProvider.fee, netAmount: normalizedProvider.netAmount, provider: providerSelection.provider });
+    res.status(201).json({ ok: true, message: normalizedProvider.paymentUrl ? "Ouvrez le lien de paiement pour confirmer." : "Confirmez le paiement sur votre téléphone.", reference: normalizedProvider.reference, status: normalizedProvider.providerStatus, paymentUrl: normalizedProvider.paymentUrl, expiresAt: normalizedProvider.expiresAt?.toISOString() ?? null, fee: normalizedProvider.fee, netAmount: normalizedProvider.netAmount, platformFee: mulapayAmount.platformFee, merchantAmount: mulapayAmount.merchantAmount, provider: providerSelection.provider });
   } catch (error) {
     if (error instanceof AshtechPayOtpRequiredError) {
       res.status(400).json({ error: error.message, code: error.code, otpRequired: true, reference: error.reference, ussdCode: error.ussdCode, provider: "ASHTECHPAY" });
@@ -955,6 +962,8 @@ router.get("/v1/public/payment-links/:token/payments/:reference", async (req, re
     res.status(404).json({ error: "Paiement introuvable." });
     return;
   }
+  const settings = await getPlatformSettings();
+  const mulapayAmount = calculateMulapayNetAmount(transaction.amount, Number(settings.feePercentage));
   res.json({
     ok: true,
     reference: transaction.reference,
@@ -963,6 +972,8 @@ router.get("/v1/public/payment-links/:token/payments/:reference", async (req, re
     currency: transaction.currency,
     fee: transaction.fee,
     netAmount: transaction.netAmount,
+    platformFee: mulapayAmount.platformFee,
+    merchantAmount: mulapayAmount.merchantAmount,
     paymentUrl: transaction.paymentUrl,
     expiresAt: transaction.expiresAt?.toISOString() ?? null,
     createdAt: transaction.createdAt.toISOString(),

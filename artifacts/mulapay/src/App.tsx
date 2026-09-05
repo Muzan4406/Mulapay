@@ -55,7 +55,7 @@ type AdminKycCase = { id: string; userId: string; name: string; country: string;
 type AdminSummary = { kycAwaiting: number; exchangeQueue: number; volume: number; successRate: number };
 type PaymentProviderId = 'DRIMPAY' | 'ASHTECHPAY';
 type DepositTracking = { reference: string; status: string; amount: number; currency: string; fee: number | null; netAmount: number | null; paymentUrl: string | null };
-type PublicPaymentResult = { reference: string; status: string; operator?: string; message?: string; amount?: number; currency?: string; fee?: number | null; netAmount?: number | null; paymentUrl?: string | null; expiresAt?: string | null };
+type PublicPaymentResult = { reference: string; status: string; operator?: string; message?: string; amount?: number; currency?: string; fee?: number | null; netAmount?: number | null; platformFee?: number | null; merchantAmount?: number | null; paymentUrl?: string | null; expiresAt?: string | null };
 type Store = {
   profile: { id: string; firstName: string; lastName: string; email: string; role: string; country: string; kycStatus: string };
   wallets: Wallet[]; transactions: Transaction[]; exchanges: Exchange[]; links: PaymentLink[]; notifications: Notification[];
@@ -1596,6 +1596,8 @@ function PublicPaymentPage() {
         currency: link.currency,
         fee: typeof payload.fee === 'number' ? payload.fee : null,
         netAmount: typeof payload.netAmount === 'number' ? payload.netAmount : null,
+        platformFee: typeof payload.platformFee === 'number' ? payload.platformFee : null,
+        merchantAmount: typeof payload.merchantAmount === 'number' ? payload.merchantAmount : null,
         paymentUrl: payload.paymentUrl ?? null,
         expiresAt: payload.expiresAt ?? null,
       });
@@ -1609,7 +1611,8 @@ function PublicPaymentPage() {
   const paymentFailed = paymentResult ? ['failed', 'expired', 'cancelled', 'reversed'].includes(paymentResult.status.toLowerCase()) : false;
   const paymentOperator = paymentResult?.operator ?? customerOperator;
   const paymentOperatorOption = selectedCustomerCountry.operators.find(option => option.name === paymentOperator);
-  const paymentAmountLabel = money(paymentResult?.amount ?? selectedAmount, paymentResult?.currency ?? link.currency);
+  const paymentAmountLabel = money(paymentResult?.merchantAmount ?? paymentResult?.amount ?? selectedAmount, paymentResult?.currency ?? link.currency);
+  const paymentGrossAmountLabel = money(paymentResult?.amount ?? selectedAmount, paymentResult?.currency ?? link.currency);
 
    return <main className="page-wrap public-payment-page">
      <div className="public-payment-header"><Logo /><div className="public-payment-trust"><LockKeyhole size={13} /> Paiement sécurisé</div></div>
@@ -1621,8 +1624,8 @@ function PublicPaymentPage() {
             <span className="public-payment-result-icon">{paymentCompleted ? <CheckCircle2 size={22} /> : paymentFailed ? <CircleAlert size={22} /> : <RefreshCw size={22} className="loading-spin" />}</span>
             <span className="eyebrow">{paymentCompleted ? 'Paiement confirmé' : paymentFailed ? 'Paiement non confirmé' : 'Paiement en cours'}</span>
             <h2>{paymentCompleted ? 'Votre paiement est confirmé' : paymentFailed ? 'Le paiement n’a pas abouti' : 'Validez sur votre téléphone'}</h2>
-            <p>{paymentCompleted ? `Le paiement de ${money(paymentResult.amount ?? 0, paymentResult.currency ?? link.currency)} a été confirmé par le service de paiement.` : paymentFailed ? 'Le service de paiement n’a pas confirmé cette opération dans le délai prévu.' : paymentResult.message ?? 'Ouvrez votre application Mobile Money et validez la demande. Mulapay vérifie automatiquement la confirmation.'}</p>
-            <div className="public-payment-amount"><strong>{paymentAmountLabel}</strong><span>via {paymentOperator}</span></div>
+            <p>{paymentCompleted ? `Le paiement de ${paymentGrossAmountLabel} a été confirmé par le service de paiement.` : paymentFailed ? 'Le service de paiement n’a pas confirmé cette opération dans le délai prévu.' : paymentResult.message ?? 'Ouvrez votre application Mobile Money et validez la demande. Mulapay vérifie automatiquement la confirmation.'}</p>
+            <div className="public-payment-amount"><small>Net après frais Mulapay</small><strong>{paymentAmountLabel}</strong><span>Montant du paiement : {paymentGrossAmountLabel} · via {paymentOperator}</span></div>
             {!paymentCompleted && !paymentFailed && <div className="public-payment-progress"><div><span>Confirmation automatique</span><strong>{paymentSecondsLeft}s</strong></div><span className="public-payment-progress-track"><span style={{ width: `${Math.round((paymentSecondsLeft / 60) * 100)}%` }} /></span></div>}
             {!paymentCompleted && !paymentFailed && paymentResult.paymentUrl && <a className="button button-primary button-wide" href={paymentResult.paymentUrl} target="_blank" rel="noreferrer">Ouvrir le paiement sécurisé <ChevronRight size={15} /></a>}
             {!paymentCompleted && !paymentFailed && <div className="public-payment-waiting"><RefreshCw size={15} className="loading-spin" /> Statut vérifié automatiquement.</div>}
