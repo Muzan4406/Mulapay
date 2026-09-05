@@ -1143,7 +1143,7 @@ function Exchange() {
         <div className="exchange-history-list">
           {exchanges.map(ex => <div className="exchange-history-item" key={ex.id} data-testid={`row-exchange-${ex.id}`}>
             <div className="exchange-history-route"><span>{ex.source.split(' · ')[0].slice(0, 2).toUpperCase()}</span><div><strong>{ex.source}</strong><small><ArrowRight size={12} /> {ex.destination}</small></div></div>
-            <div className="exchange-history-meta"><strong>{money(ex.receivedAmount)}</strong><span>{ex.requestedAt}</span></div>
+            <div className="exchange-history-meta"><strong className="positive">+{money(ex.receivedAmount)}</strong><span>{ex.requestedAt}</span></div>
             <span className={`pill ${ex.status === 'Completed' ? 'pill-success' : ex.status === 'Rejected' ? 'pill-danger' : 'pill-pending'}`}>{statusLabel(ex.status)}</span>
           </div>)}
           {exchanges.length === 0 && <div className="empty-state exchange-empty"><ArrowRightLeft size={24} /><strong>Aucun échange pour le moment</strong><p>Votre historique apparaîtra ici.</p></div>}
