@@ -34,6 +34,7 @@ import NotFound from '@/pages/not-found';
 
 type Wallet = { id: string; country: string; code: string; currency: string; balance: number; pending: number; status: string };
 type Transaction = { id: string; type: string; status: string; amount: number; currency: string; country: string; counterparty: string; createdAt: string; reference: string };
+type TransactionView = Transaction & { isExample?: boolean };
 type Exchange = { id: string; source: string; destination: string; amount: number; rate: number; receivedAmount: number; status: string; requestedAt: string };
 type PaymentLink = { id: string; slug: string; amount: number; currency: string; description: string; status: string; expiresAt: string; payments: number };
 type Notification = { id: string; title: string; body: string; read: boolean };
@@ -77,6 +78,38 @@ function countryLabel(country: string) {
 
 function counterpartyLabel(counterparty: string) {
   return ({ 'Togo wallet': 'Wallet Togo' } as Record<string, string>)[counterparty] ?? counterparty;
+}
+
+function transactionOperator(counterparty: string) {
+  const match = counterparty.match(/·\s*(.+)$/);
+  return match?.[1];
+}
+
+function countryFlagUrl(country: string) {
+  const option = mobileMoneyCountryOptions.find(item => item.country === country || item.code === country);
+  return `${import.meta.env.BASE_URL}countries/${option?.flagSrc ?? `${country.toLowerCase()}.png`}`;
+}
+
+function operatorLogoUrl(operator?: string) {
+  if (!operator) return undefined;
+  const normalized = operator.toLowerCase();
+  const provider = mobileMoneyProviders.find(item => normalized.includes(item.name.toLowerCase()));
+  return provider ? `${import.meta.env.BASE_URL}mobile-money/${provider.src}` : undefined;
+}
+
+const exampleTransactions: TransactionView[] = [
+  { id: 'example-tg-mixx', type: 'Deposit', status: 'Completed', amount: 75000, currency: 'XOF', country: 'Togo', counterparty: 'Dépôt Mobile Money · Mixx by Yas', createdAt: '2026-09-05T08:35:00.000Z', reference: 'MP-EX-TG-001', isExample: true },
+  { id: 'example-bj-mtn', type: 'Deposit', status: 'Completed', amount: 120000, currency: 'XOF', country: 'Bénin', counterparty: 'Dépôt Mobile Money · MTN MoMo', createdAt: '2026-09-04T15:10:00.000Z', reference: 'MP-EX-BJ-002', isExample: true },
+  { id: 'example-ci-orange', type: 'Deposit', status: 'Completed', amount: 95000, currency: 'XOF', country: 'Côte d’Ivoire', counterparty: 'Dépôt Mobile Money · Orange Money', createdAt: '2026-09-03T11:25:00.000Z', reference: 'MP-EX-CI-003', isExample: true },
+  { id: 'example-sn-wave', type: 'Deposit', status: 'Processing', amount: 45000, currency: 'XOF', country: 'Sénégal', counterparty: 'Dépôt Mobile Money · Wave', createdAt: '2026-09-02T09:40:00.000Z', reference: 'MP-EX-SN-004', isExample: true },
+  { id: 'example-bf-moov', type: 'Received', status: 'Completed', amount: 30000, currency: 'XOF', country: 'Burkina Faso', counterparty: 'Réception de Kossi', createdAt: '2026-09-01T17:05:00.000Z', reference: 'MP-EX-BF-005', isExample: true },
+  { id: 'example-ml-airtel', type: 'Withdrawal', status: 'Completed', amount: 25000, currency: 'XOF', country: 'Mali', counterparty: 'Retrait Mobile Money · Airtel Money', createdAt: '2026-08-30T13:20:00.000Z', reference: 'MP-EX-ML-006', isExample: true },
+  { id: 'example-ne-moov', type: 'Payment', status: 'Completed', amount: 18500, currency: 'XOF', country: 'Niger', counterparty: 'Paiement marchand · Moov Money', createdAt: '2026-08-29T10:15:00.000Z', reference: 'MP-EX-NE-007', isExample: true },
+];
+
+function transactionDateLabel(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? dateLabel(value) : date.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 function dateLabel(value: string) {
@@ -921,8 +954,10 @@ function Transactions() {
   const { transactions, toast } = useStore();
   const [filter, setFilter] = useState('All');
   const [query, setQuery] = useState('');
-  const filtered = transactions.filter(t => (filter === 'All' || t.type === filter) && `${t.counterparty} ${t.reference}`.toLowerCase().includes(query.toLowerCase()));
-  return <main className="page-wrap"><PageIntro eyebrow="Une trace claire" title="Transactions" subtitle="Chaque mouvement confirmé par le serveur, avec sa référence et son statut." action={<button className="button button-ghost" onClick={() => toast('L’export sera disponible après activation des permissions de téléchargement.')} data-testid="button-export-transactions"><Download size={15} /> Exporter en CSV</button>} /><div className="card table-card"><div className="table-toolbar"><div className="filter-set">{[['All', 'Toutes'], ['Received', 'Reçues'], ['Sent', 'Envoyées'], ['Exchange', 'Échanges'], ['Deposit', 'Dépôts']].map(([value, label]) => <button key={value} onClick={() => setFilter(value)} className={`filter-button ${filter === value ? 'active' : ''}`} data-testid={`button-filter-${value.toLowerCase()}`}>{label}</button>)}</div><div className="input-prefix" style={{ width: 190 }}><Search size={14} style={{ position: 'absolute', left: 12, top: 11, color: 'hsl(203 18% 46%)' }} /><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Rechercher une référence" style={{ width: '100%', border: '1px solid hsl(38 28% 85%)', background: 'hsl(42 44% 99%)', borderRadius: 9, padding: '9px 10px 9px 32px', fontSize: 11, outline: 0 }} data-testid="input-search-transactions" /></div></div><div className="table-scroll"><table className="data-table"><thead><tr><th>Mouvement</th><th>Wallet</th><th>Référence</th><th>Date</th><th style={{ textAlign: 'right' }}>Montant</th><th>Statut</th></tr></thead><tbody>{filtered.map(t => <tr key={t.id} data-testid={`row-table-transaction-${t.id}`}><td><div style={{ fontWeight: 700 }}>{counterpartyLabel(t.counterparty)}</div><div className="activity-meta">{movementLabel(t.type)}</div></td><td>{countryLabel(t.country)} · {t.currency}</td><td style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'hsl(203 18% 46%)' }}>{t.reference}</td><td>{dateLabel(t.createdAt)}</td><td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: t.type === 'Received' || t.type === 'Deposit' ? 'hsl(160 42% 38%)' : 'inherit' }}>{t.type === 'Received' || t.type === 'Deposit' ? '+' : '-'}{new Intl.NumberFormat('fr-FR').format(t.amount)} {t.currency}</td><td><span className={`pill ${t.status === 'Completed' ? 'pill-success' : 'pill-pending'}`}>{statusLabel(t.status)}</span></td></tr>)}</tbody></table>{filtered.length === 0 && <div className="empty-state"><ListFilter size={25} /><strong>Aucun mouvement trouvé</strong><p>Essayez un autre filtre ou une autre référence.</p></div>}</div></div></main>;
+  const displayedTransactions: TransactionView[] = [...transactions, ...exampleTransactions];
+  const filtered = displayedTransactions.filter(t => (filter === 'All' || t.type === filter) && `${t.counterparty} ${t.reference} ${t.country}`.toLowerCase().includes(query.toLowerCase()));
+  const filterOptions = [['All', 'Toutes'], ['Received', 'Reçues'], ['Sent', 'Envoyées'], ['Exchange', 'Échanges'], ['Deposit', 'Dépôts'], ['Withdrawal', 'Retraits'], ['Payment', 'Paiements']];
+  return <main className="page-wrap"><PageIntro eyebrow="Une trace claire" title="Transactions" subtitle="Consultez vos mouvements par wallet, opérateur, référence et statut." action={<button className="button button-ghost" onClick={() => toast('L’export sera disponible après activation des permissions de téléchargement.')} data-testid="button-export-transactions"><Download size={15} /> Exporter en CSV</button>} /><div className="card table-card"><div className="table-toolbar"><div><div className="filter-set">{filterOptions.map(([value, label]) => <button key={value} onClick={() => setFilter(value)} className={`filter-button ${filter === value ? 'active' : ''}`} data-testid={`button-filter-${value.toLowerCase()}`}>{label}</button>)}</div><div className="transaction-example-note"><span className="pill pill-neutral">Exemples visuels</span><span>Les lignes marquées ainsi ne sont pas comptabilisées.</span></div></div><div className="input-prefix" style={{ width: 190 }}><Search size={14} style={{ position: 'absolute', left: 12, top: 11, color: 'hsl(203 18% 46%)' }} /><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Rechercher une référence" style={{ width: '100%', border: '1px solid hsl(38 28% 85%)', background: 'hsl(42 44% 99%)', borderRadius: 9, padding: '9px 10px 9px 32px', fontSize: 11, outline: 0 }} data-testid="input-search-transactions" /></div></div><div className="table-scroll"><table className="data-table"><thead><tr><th>Mouvement</th><th>Wallet</th><th>Référence</th><th>Date</th><th style={{ textAlign: 'right' }}>Montant</th><th>Statut</th></tr></thead><tbody>{filtered.map(t => { const operator = transactionOperator(t.counterparty); const operatorLogo = operatorLogoUrl(operator); const positive = t.type === 'Received' || t.type === 'Deposit'; return <tr className={t.isExample ? 'transaction-example-row' : undefined} key={t.id} data-testid={`row-table-transaction-${t.id}`}><td><div className="transaction-party"><span className="transaction-logo">{operatorLogo ? <img src={operatorLogo} alt={operator} /> : <img src={dashboardIcon('transactions.png')} alt="" />}</span><span><div className="transaction-party-name">{counterpartyLabel(t.counterparty)}</div><div className="activity-meta">{movementLabel(t.type)}{operator && <span className="transaction-operator">{operator}</span>}</div></span></div></td><td><div className="transaction-wallet"><img className="transaction-country-logo" src={countryFlagUrl(t.country)} alt={`Drapeau ${t.country}`} /><span>{countryLabel(t.country)}<small>{t.currency}</small></span></div></td><td><div className="transaction-reference"><code>{t.reference}</code>{t.isExample && <span className="pill pill-neutral">Exemple</span>}</div></td><td>{transactionDateLabel(t.createdAt)}</td><td className={`transaction-amount ${positive ? 'positive' : 'negative'}`}>{positive ? '+' : '-'}{new Intl.NumberFormat('fr-FR').format(t.amount)} {t.currency}</td><td><span className={`pill ${t.status === 'Completed' ? 'pill-success' : 'pill-pending'}`}>{statusLabel(t.status)}</span></td></tr>; })}</tbody></table>{filtered.length === 0 && <div className="empty-state"><ListFilter size={25} /><strong>Aucun mouvement trouvé</strong><p>Essayez un autre filtre ou une autre référence.</p></div>}</div></div></main>;
 }
 
 function Transfer() {
