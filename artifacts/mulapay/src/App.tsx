@@ -983,12 +983,17 @@ function Transfer() {
   const { wallets, transfer } = useStore();
   const [amount, setAmount] = useState('');
   const [country, setCountry] = useState(wallets[0]?.country ?? mobileMoneyCountryOptions[0].country);
+  const [operator, setOperator] = useState('');
   const [recipient, setRecipient] = useState('');
   const [note, setNote] = useState('');
   const walletForCountry = (countryName: string) => wallets.find(wallet => wallet.country === countryName || countryLabel(wallet.country) === countryName);
   const selectedCountry = mobileMoneyCountryOptions.find(option => option.country === country) ?? mobileMoneyCountryOptions[0];
   const selectedWallet = walletForCountry(country);
   const availableBalance = selectedWallet ? Math.max(0, selectedWallet.balance - selectedWallet.pending) : 0;
+  useEffect(() => {
+    const nextOperator = selectedCountry.operators[0]?.name ?? '';
+    if (operator !== nextOperator && !selectedCountry.operators.some(item => item.name === operator)) setOperator(nextOperator);
+  }, [operator, selectedCountry]);
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!amount || !recipient || !selectedWallet) return;
@@ -1013,6 +1018,16 @@ function Transfer() {
           <ChevronDown className="country-select-chevron" size={16} aria-hidden="true" />
         </div>
         <div className="wallet-availability"><WalletCards size={14} /><span>Disponible sur le wallet {countryLabel(selectedWallet?.country ?? country)}</span><strong>{money(availableBalance, selectedWallet?.currency ?? 'XOF')}</strong></div>
+      </div>
+      <div className="field">
+        <label>Opérateur Mobile Money</label>
+        <div className="mobile-money-options" role="radiogroup" aria-label="Choisir un opérateur Mobile Money">
+          {selectedCountry.operators.map(option => <label className={`mobile-money-option ${operator === option.name ? 'selected' : ''}`} key={option.name}>
+            <input type="radio" name="transfer-operator" value={option.name} checked={operator === option.name} onChange={event => setOperator(event.target.value)} required />
+            <img src={`${import.meta.env.BASE_URL}mobile-money/${option.src}`} alt="" />
+            <span>{option.name}</span>
+          </label>)}
+        </div>
       </div>
       <div className="field">
         <label htmlFor="recipient">Destinataire</label>
