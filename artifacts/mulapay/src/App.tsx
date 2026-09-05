@@ -1217,11 +1217,61 @@ function PaymentLinks() {
       onSuccess: () => {
         if (createdLink?.id === link.id) setCreatedLink(null);
         if (qrLink?.id === link.id) setQrLink(null);
+        if (editingLink?.id === link.id) {
+          setEditingLink(null);
+          resetForm();
+        }
         void queryClient.invalidateQueries({ queryKey: getGetBootstrapQueryKey() });
         toast('Lien de paiement supprimé définitivement.');
       },
       onError: () => toast('Le lien de paiement n’a pas pu être supprimé.'),
     });
+  };
+  const resetForm = () => {
+    setProductName('');
+    setDescription('');
+    setWalletId('all');
+    setAmountType('FIXED');
+    setAmount('');
+    setValidity('30d');
+    setCustomDate('');
+    setPaymentLimit('unlimited');
+    setMaxPayments('');
+    setAfterPaymentAction('CONFIRMATION');
+    setRedirectUrl('');
+    setNotifyApp(true);
+    setNotifyEmail(true);
+    setNotifyWebhook(false);
+    setFormError('');
+  };
+  const beginEdit = (link: PaymentLink) => {
+    setEditingLink(link);
+    setCreatedLink(null);
+    setProductName(link.productName ?? '');
+    setDescription(link.description ?? '');
+    setWalletId(link.walletId ?? 'all');
+    setAmountType(link.amountType);
+    setAmount(link.amountType === 'FIXED' ? String(link.amount || '') : '');
+    if (!link.expiresAt) {
+      setValidity('never');
+      setCustomDate('');
+    } else {
+      setValidity('custom');
+      setCustomDate(new Date(link.expiresAt).toISOString().slice(0, 10));
+    }
+    setPaymentLimit(link.maxPayments === null ? 'unlimited' : 'limited');
+    setMaxPayments(link.maxPayments === null ? '' : String(link.maxPayments));
+    setAfterPaymentAction(link.afterPaymentAction);
+    setRedirectUrl(link.redirectUrl ?? '');
+    setNotifyApp(link.notifyApp);
+    setNotifyEmail(link.notifyEmail);
+    setNotifyWebhook(link.notifyWebhook);
+    setFormError('');
+    window.requestAnimationFrame(() => document.getElementById('link-product-name')?.focus());
+  };
+  const cancelEdit = () => {
+    setEditingLink(null);
+    resetForm();
   };
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -1255,29 +1305,19 @@ function PaymentLinks() {
       notifyEmail,
       notifyWebhook,
     };
-    createPaymentLink.mutate({ data }, {
-      onSuccess: link => {
-        setCreatedLink(link);
-        setProductName('');
-        setDescription('');
-        setWalletId('all');
-        setAmountType('FIXED');
-        setAmount('');
-        setValidity('30d');
-        setCustomDate('');
-        setPaymentLimit('unlimited');
-        setMaxPayments('');
-        setAfterPaymentAction('CONFIRMATION');
-        setRedirectUrl('');
-        setNotifyApp(true);
-        setNotifyEmail(true);
-        setNotifyWebhook(false);
-        setFormError('');
-        void queryClient.invalidateQueries({ queryKey: getGetBootstrapQueryKey() });
-        toast('Votre lien de paiement est prêt à être partagé.');
-      },
-      onError: () => setFormError('Le lien n’a pas pu être créé. Vérifiez les informations saisies et réessayez.'),
-    });
+    const onSuccess = (link: PaymentLink) => {
+      setCreatedLink(link);
+      setEditingLink(null);
+      resetForm();
+      void queryClient.invalidateQueries({ queryKey: getGetBootstrapQueryKey() });
+      toast(editingLink ? 'Votre lien de paiement a été mis à jour.' : 'Votre lien de paiement est prêt à être partagé.');
+    };
+    const onError = () => setFormError(editingLink ? 'Le lien n’a pas pu être mis à jour. Vérifiez les informations saisies et réessayez.' : 'Le lien n’a pas pu être créé. Vérifiez les informations saisies et réessayez.');
+    if (editingLink) {
+      updatePaymentLink.mutate({ id: editingLink.id, data }, { onSuccess, onError });
+    } else {
+      createPaymentLink.mutate({ data }, { onSuccess, onError });
+    }
   };
   const renderLinkAmount = (link: PaymentLink) => link.amountType === 'CUSTOMER_CHOOSES' ? 'Montant libre' : money(link.amount, link.currency);
   const renderLinkExpiry = (link: PaymentLink) => expiryLabel(link.expiresAt);
@@ -1295,7 +1335,7 @@ function PaymentLinks() {
     </section>}
     <div className="payment-builder-layout">
       <form className="payment-builder card" onSubmit={submit}>
-        <div className="builder-header"><div><span className="eyebrow">Nouveau lien</span><h2>Les informations du paiement</h2><p>Les champs marqués d’un astérisque sont obligatoires.</p></div><div className="builder-step"><span>01</span><small>Configuration</small></div></div>
+        <div className="builder-header"><div><span className="eyebrow">{editingLink ? 'Modification du lien' : 'Nouveau lien'}</span><h2>Les informations du paiement</h2><p>{editingLink ? `Modifiez les paramètres de « ${editingLink.productName} » puis enregistrez.` : 'Les champs marqués d’un astérisque sont obligatoires.'}</p></div><div className="builder-step"><span>01</span><small>{editingLink ? 'Édition' : 'Configuration'}</small></div></div>
         <div className="builder-section"><div className="builder-section-title"><span className="section-index">01</span><div><h3>Le produit ou service</h3><p>Présentez clairement ce que votre client va payer.</p></div></div>
           <div className="field"><label htmlFor="link-product-name">Nom du produit ou service <b>*</b></label><input id="link-product-name" value={productName} onChange={event => setProductName(event.target.value)} placeholder="Ex. Abonnement mensuel" required data-testid="input-link-product-name" /></div>
           <div className="field"><label htmlFor="link-description">Description <span>(facultatif)</span></label><textarea id="link-description" value={description} onChange={event => setDescription(event.target.value)} placeholder="Ajoutez quelques détails utiles pour votre client" data-testid="input-link-description" /></div>
@@ -1318,12 +1358,12 @@ function PaymentLinks() {
          <div className="builder-section builder-section-last"><div className="builder-section-title"><span className="section-index">05</span><div><h3>Notifications</h3><p>Recevez les informations importantes au bon endroit.</p></div></div>
           <div className="notification-options"><label className="toggle-row checked"><input type="checkbox" checked={notifyApp} onChange={event => setNotifyApp(event.target.checked)} /><span className="toggle-check">{notifyApp && <Check size={12} />}</span><span><strong>Notification Mulapay</strong><small>Dans votre espace de travail</small></span></label><label className="toggle-row checked"><input type="checkbox" checked={notifyEmail} onChange={event => setNotifyEmail(event.target.checked)} /><span className="toggle-check">{notifyEmail && <Check size={12} />}</span><span><strong>Notification e-mail</strong><small>À l’adresse de votre compte</small></span></label><label className="toggle-row"><input type="checkbox" checked={notifyWebhook} onChange={event => setNotifyWebhook(event.target.checked)} /><span className="toggle-check">{notifyWebhook && <Check size={12} />}</span><span><strong>Webhook</strong><small>Pour votre intégration technique</small></span></label></div>
         </div>
-        <div className="builder-footer"><div className="reference-field"><span>Référence du paiement</span><strong>{createdLink?.reference ?? 'MP-LINK-••••••••'}</strong><small>Générée automatiquement · non modifiable</small></div><div className="builder-submit">{formError && <div className="form-error"><CircleAlert size={14} /> {formError}</div>}<button type="submit" className="button button-primary" disabled={createPaymentLink.isPending} data-testid="button-submit-link">{createPaymentLink.isPending ? 'Création en cours…' : <><Link2 size={15} /> Créer le lien de paiement</>}</button></div></div>
+        <div className="builder-footer"><div className="reference-field"><span>Référence du paiement</span><strong>{editingLink?.reference ?? createdLink?.reference ?? 'MP-LINK-••••••••'}</strong><small>{editingLink ? 'La référence et l’URL restent inchangées' : 'Générée automatiquement · non modifiable'}</small></div><div className="builder-submit">{formError && <div className="form-error"><CircleAlert size={14} /> {formError}</div>}<div className="builder-submit-actions">{editingLink && <button type="button" className="button button-ghost" onClick={cancelEdit}>Annuler</button>}<button type="submit" className="button button-primary" disabled={createPaymentLink.isPending || updatePaymentLink.isPending} data-testid="button-submit-link">{createPaymentLink.isPending || updatePaymentLink.isPending ? (editingLink ? 'Mise à jour en cours…' : 'Création en cours…') : <><Pencil size={15} /> {editingLink ? 'Enregistrer les modifications' : 'Créer le lien de paiement'}</>}</button></div></div></div>
       </form>
        <aside className="payment-builder-aside"><div className="payment-preview card"><div className="preview-top"><div><span className="eyebrow">Aperçu</span><h2>Ce que votre client verra</h2></div><Eye size={17} /></div><div className="preview-payment"><div className="preview-brand"><span className="preview-mark">M</span><span>Mulapay</span><ShieldCheck size={13} /></div><div className="preview-product"><span className="preview-label">Paiement demandé</span><strong>{productName.trim() || 'Votre produit ou service'}</strong><p>{description.trim() || 'La description de votre paiement apparaîtra ici.'}</p></div><div className="preview-amount"><span>{amountType === 'FIXED' ? 'Montant' : 'Montant libre'}</span><strong>{amountType === 'FIXED' && amount ? money(Number(amount), wallets.find(wallet => wallet.id === walletId)?.currency ?? wallets[0]?.currency ?? 'XOF') : amountType === 'FIXED' ? '—' : 'Au choix'}</strong></div><div className="preview-detail"><span><Clock3 size={13} /> {validity === 'never' ? 'Sans expiration' : validity === 'custom' && customDate ? `Jusqu’au ${new Date(`${customDate}T12:00:00`).toLocaleDateString('fr-FR')}` : `Valide ${validity === '24h' ? '24 heures' : validity === '7d' ? '7 jours' : '30 jours'}`}</span><span><ShieldCheck size={13} /> Paiement sécurisé</span></div><div className="preview-button">Continuer vers le paiement <ArrowRight size={14} /></div></div></div></aside>
     </div>
     <section className="existing-links-section"><div className="section-head"><div><span className="eyebrow">Votre activité</span><h2 className="section-title">Liens existants</h2><p className="section-note">{links.length ? `${links.length} lien${links.length > 1 ? 's' : ''} enregistré${links.length > 1 ? 's' : ''}` : 'Vos liens créés apparaîtront ici.'}</p></div><span className="link-count-badge">{links.length}</span></div>
-       {links.length === 0 ? <div className="empty-state card payment-links-empty"><Link2 size={25} /><strong>Aucun lien pour le moment</strong><p>Configurez votre premier lien ci-dessus pour commencer à recevoir des paiements.</p></div> : <div className="links-table card"><div className="links-table-head"><span>Produit / service</span><span>Montant</span><span>Référence</span><span>Statut</span><span>Validité</span><span>Paiements</span><span>Actions</span></div>{links.map(link => <div className="links-table-row" key={link.id} data-testid={`card-payment-link-${link.id}`}><div className="link-product"><span className="link-product-icon"><Link2 size={14} /></span><span><strong>{link.productName || link.description || 'Lien de paiement'}</strong><small>{link.description || 'Sans description'}</small></span></div><strong className="table-amount">{renderLinkAmount(link)}</strong><code>{link.reference || '—'}</code><span className={`pill ${link.status === 'Active' ? 'pill-success' : link.status === 'Expired' ? 'pill-danger' : 'pill-neutral'}`}>{statusLabel(link.status)}</span><span className="table-muted">{renderLinkExpiry(link)}</span><span className="table-muted">{link.payments}{link.maxPayments ? ` / ${link.maxPayments}` : ''}</span><div className="link-actions"><a className="icon-button" href={link.slug} target="_blank" rel="noreferrer" title="Aperçu du lien" data-testid={`button-preview-link-${link.id}`}><Eye size={15} /></a><button className="icon-button" title={copiedId === link.id ? 'Lien copié' : 'Copier le lien'} onClick={() => copyLink(link)} data-testid={`button-copy-link-${link.id}`}>{copiedId === link.id ? <Check size={15} /> : <Copy size={15} />}</button><button className="icon-button" title="Partager le lien" onClick={() => shareLink(link)} data-testid={`button-share-link-${link.id}`}><Send size={15} /></button><button className="icon-button" title="Afficher le QR code" onClick={() => setQrLink(link)} data-testid={`button-qr-link-${link.id}`}><QrCode size={15} /></button><button className="icon-button" title="Supprimer définitivement" onClick={() => removeLink(link)} disabled={deletePaymentLink.isPending} data-testid={`button-delete-link-${link.id}`}><Trash2 size={15} /></button></div></div>)}</div>}
+        {links.length === 0 ? <div className="empty-state card payment-links-empty"><Link2 size={25} /><strong>Aucun lien pour le moment</strong><p>Configurez votre premier lien ci-dessus pour commencer à recevoir des paiements.</p></div> : <div className="links-table card"><div className="links-table-head"><span>Produit / service</span><span>Montant</span><span>Référence</span><span>Statut</span><span>Validité</span><span>Paiements</span><span>Actions</span></div>{links.map(link => <div className={`links-table-row ${editingLink?.id === link.id ? 'is-editing' : ''}`} key={link.id} data-testid={`card-payment-link-${link.id}`}><div className="link-product"><span className="link-product-icon"><Link2 size={14} /></span><span><strong>{link.productName || link.description || 'Lien de paiement'}</strong><small>{link.description || 'Sans description'}</small></span></div><strong className="table-amount">{renderLinkAmount(link)}</strong><code>{link.reference || '—'}</code><span className={`pill ${link.status === 'Active' ? 'pill-success' : link.status === 'Expired' ? 'pill-danger' : 'pill-neutral'}`}>{statusLabel(link.status)}</span><span className="table-muted">{renderLinkExpiry(link)}</span><span className="table-muted">{link.payments}{link.maxPayments ? ` / ${link.maxPayments}` : ''}</span><div className="link-actions"><button className="icon-button" title="Modifier le lien" onClick={() => beginEdit(link)} data-testid={`button-edit-link-${link.id}`}><Pencil size={15} /></button><a className="icon-button" href={link.slug} target="_blank" rel="noreferrer" title="Aperçu du lien" data-testid={`button-preview-link-${link.id}`}><Eye size={15} /></a><button className="icon-button" title={copiedId === link.id ? 'Lien copié' : 'Copier le lien'} onClick={() => copyLink(link)} data-testid={`button-copy-link-${link.id}`}>{copiedId === link.id ? <Check size={15} /> : <Copy size={15} />}</button><button className="icon-button" title="Partager le lien" onClick={() => shareLink(link)} data-testid={`button-share-link-${link.id}`}><Send size={15} /></button><button className="icon-button" title="Afficher le QR code" onClick={() => setQrLink(link)} data-testid={`button-qr-link-${link.id}`}><QrCode size={15} /></button><button className="icon-button" title="Supprimer définitivement" onClick={() => removeLink(link)} disabled={deletePaymentLink.isPending} data-testid={`button-delete-link-${link.id}`}><Trash2 size={15} /></button></div></div>)}</div>}
     </section>
     {qrLink && <div className="payment-modal-backdrop" role="presentation" onClick={() => setQrLink(null)}><div className="payment-qr-modal card" role="dialog" aria-modal="true" aria-label="QR Code du lien" onClick={event => event.stopPropagation()}><button className="payment-success-close" aria-label="Fermer" onClick={() => setQrLink(null)}><X size={16} /></button><span className="eyebrow">À partager en présentiel</span><h2>QR Code du paiement</h2><p>{qrLink.productName}</p><div className="qr-box payment-qr-visual">{Array.from({ length: 81 }, (_, index) => <i key={index} />)}</div><code>{qrLink.slug}</code><button className="button button-primary button-wide" onClick={() => copyLink(qrLink)}>{copiedId === qrLink.id ? <><Check size={14} /> Lien copié !</> : <><Copy size={14} /> Copier le lien</>}</button></div></div>}
   </main>;
@@ -1362,7 +1402,7 @@ function PublicPaymentPage() {
   if (state === 'error' || !link) return <main className="page-wrap public-payment-page"><div className="public-payment-header"><Logo /></div><PageIntro eyebrow="Paiement Mulapay" title="Lien indisponible" subtitle="Vérifiez l’adresse reçue ou demandez un nouveau lien au commerçant." /><div className="card card-pad public-payment-unavailable"><CircleAlert size={22} /><strong>Ce lien de paiement n’est plus disponible.</strong><Link className="button button-primary" href="/">Retour à Mulapay</Link></div></main>;
 
   const selectedCustomerCountry = mobileMoneyCountryOptions.find(option => option.country === customerCountry) ?? mobileMoneyCountryOptions[0];
-  const hasField = (name: string) => link.customerFields.includes(name);
+  const hasField = (name: string) => (link.customerFields as string[]).includes(name);
   const updateCustomerValue = (name: string, value: string) => setCustomerValues(values => ({ ...values, [name]: value }));
   const fixedAmount = link.amountType === 'FIXED' ? money(link.amount, link.currency) : 'Montant libre';
 
