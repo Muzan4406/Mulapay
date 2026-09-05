@@ -55,6 +55,7 @@ type AdminKycCase = { id: string; userId: string; name: string; country: string;
 type AdminSummary = { kycAwaiting: number; exchangeQueue: number; volume: number; successRate: number };
 type PaymentProviderId = 'DRIMPAY' | 'ASHTECHPAY';
 type DepositTracking = { reference: string; status: string; amount: number; currency: string; fee: number | null; netAmount: number | null; paymentUrl: string | null };
+type PublicPaymentResult = { reference: string; status: string; message?: string; amount?: number; currency?: string; fee?: number | null; netAmount?: number | null; paymentUrl?: string | null; expiresAt?: string | null };
 type Store = {
   profile: { id: string; firstName: string; lastName: string; email: string; role: string; country: string; kycStatus: string };
   wallets: Wallet[]; transactions: Transaction[]; exchanges: Exchange[]; links: PaymentLink[]; notifications: Notification[];
@@ -874,7 +875,7 @@ Idempotency-Key: commande-unique-123`}</pre>
 
     <div className="card card-pad api-docs-endpoints" style={{ marginTop: 18 }}>
       <div className="section-head"><div><h2 className="section-title">10. Ressources API</h2><p className="section-note">Endpoints actuellement exposés par Mulapay.</p></div><Link href="/app/transactions" className="button button-ghost button-sm">Voir l’historique</Link></div>
-      <div className="api-endpoint-list"><div><span className="api-method">POST</span><code>/api/v1/deposits</code><span>Créer un dépôt Mobile Money</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/deposits/:reference</code><span>Consulter le statut d’un dépôt</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/bootstrap</code><span>Lire les wallets et transactions du compte</span></div><div><span className="api-method api-method-muted">POST</span><code>/api/v1/withdrawals</code><span>Réservé : non couvert par le Payin actuel</span></div></div>
+      <div className="api-endpoint-list"><div><span className="api-method">POST</span><code>/api/v1/deposits</code><span>Créer un dépôt Mobile Money</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/deposits/:reference</code><span>Consulter le statut d’un dépôt</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/payments/:reference</code><span>Consulter le statut d’un paiement</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/bootstrap</code><span>Lire les wallets et transactions du compte</span></div><div><span className="api-method api-method-muted">POST</span><code>/api/v1/withdrawals</code><span>Réservé : non couvert par le Payin actuel</span></div></div>
     </div>
   </main>;
 }
@@ -1467,7 +1468,8 @@ function PublicPaymentPage() {
   const [operatorOtp, setOperatorOtp] = useState('');
   const [paymentSubmitting, setPaymentSubmitting] = useState(false);
   const [paymentError, setPaymentError] = useState('');
-  const [paymentResult, setPaymentResult] = useState<{ reference?: string; message?: string; paymentUrl?: string | null } | null>(null);
+  const [paymentStatusError, setPaymentStatusError] = useState('');
+  const [paymentResult, setPaymentResult] = useState<PublicPaymentResult | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -1487,6 +1489,60 @@ function PublicPaymentPage() {
       });
     return () => { mounted = false; };
   }, [token]);
+
+  useEffect(() => {
+    if (!paymentResult?.reference) return;
+    if (depositStatusIsTerminal(paymentResult.status)) return;
+    let active = true;
+    const refreshPaymentStatus = async () => {
+      try {
+        const response = await fetch(`/api/v1/public/payment-links/${encodeURIComponent(token)}/payments/${encodeURIComponent(paymentResult.reference)}`);
+        if (response.status === 304) return;
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error ?? 'Statut indisponible.');
+        if (!active) return;
+        setPaymentStatusError('');
+        setPaymentResult(current => current ? {
+          ...current,
+          status: payload.status ?? current.status,
+          amount: typeof payload.amount === 'number' ? payload.amount : current.amount,
+          currency: payload.currency ?? current.currency,
+          fee: typeof payload.fee === 'number' ? payload.fee : current.fee,
+          netAmount: typeof payload.netAmount === 'number' ? payload.netAmount : current.netAmount,
+          paymentUrl: payload.paymentUrl ?? current.paymentUrl,
+          expiresAt: payload.expiresAt ?? current.expiresAt,
+        } : current);
+      } catch (error) {
+        if (active) setPaymentStatusError(error instanceof Error ? error.message : 'Le statut est momentanément indisponible.');
+      }
+    };
+    void refreshPaymentStatus();
+    const interval = window.setInterval(() => void refreshPaymentStatus(), 4000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [paymentResult?.reference, paymentResult?.status, token]);
+
+  useEffect(() => {
+    if (!paymentResult?.reference || depositStatusIsTerminal(paymentResult.status)) return;
+    let redirectTimer: number | undefined;
+    const timeout = window.setTimeout(() => {
+      setPaymentResult(current => current && !depositStatusIsTerminal(current.status) ? { ...current, status: 'Failed', message: 'Le paiement n’a pas été confirmé après 30 secondes.' } : current);
+      redirectTimer = window.setTimeout(() => setPaymentStatusError('Le paiement a échoué après 30 secondes sans confirmation.'), 800);
+    }, 30000);
+    return () => {
+      window.clearTimeout(timeout);
+      if (redirectTimer) window.clearTimeout(redirectTimer);
+    };
+  }, [paymentResult?.reference, paymentResult?.status]);
+
+  useEffect(() => {
+    if (!paymentResult?.reference || paymentResult.status.toLowerCase() !== 'completed') return;
+    if (link?.afterPaymentAction === 'REDIRECT' && link.redirectUrl) {
+      window.location.assign(link.redirectUrl);
+    }
+  }, [link, paymentResult?.reference, paymentResult?.status]);
 
   if (state === 'loading') return <div className="loading-screen">Chargement du paiement…</div>;
   if (state === 'error' || !link) return <main className="page-wrap public-payment-page"><div className="public-payment-header"><Logo /></div><PageIntro eyebrow="Paiement Mulapay" title="Lien indisponible" subtitle="Vérifiez l’adresse reçue ou demandez un nouveau lien au commerçant." /><div className="card card-pad public-payment-unavailable"><CircleAlert size={22} /><strong>Ce lien de paiement n’est plus disponible.</strong><Link className="button button-primary" href="/">Retour à Mulapay</Link></div></main>;
@@ -1522,13 +1578,26 @@ function PublicPaymentPage() {
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error ?? 'Le paiement n’a pas pu être initié.');
-      setPaymentResult(payload);
+      setPaymentStatusError('');
+      setPaymentResult({
+        reference: payload.reference,
+        status: payload.status ?? 'Pending',
+        message: payload.message,
+        amount: selectedAmount,
+        currency: link.currency,
+        fee: typeof payload.fee === 'number' ? payload.fee : null,
+        netAmount: typeof payload.netAmount === 'number' ? payload.netAmount : null,
+        paymentUrl: payload.paymentUrl ?? null,
+        expiresAt: payload.expiresAt ?? null,
+      });
     } catch (error) {
       setPaymentError(error instanceof Error ? error.message : 'Le paiement n’a pas pu être initié.');
     } finally {
       setPaymentSubmitting(false);
     }
   };
+  const paymentCompleted = paymentResult?.status.toLowerCase() === 'completed';
+  const paymentFailed = paymentResult ? ['failed', 'expired', 'cancelled', 'reversed'].includes(paymentResult.status.toLowerCase()) : false;
 
    return <main className="page-wrap public-payment-page">
      <div className="public-payment-header"><Logo /><div className="public-payment-trust"><LockKeyhole size={13} /> Paiement sécurisé</div></div>
@@ -1542,7 +1611,7 @@ function PublicPaymentPage() {
          <p className="public-payment-note">Votre paiement est transmis au service de paiement puis crédité au commerçant uniquement après confirmation.</p>
        </aside>
        <form className="card card-pad deposit-form public-payment-form" onSubmit={submitPayment}>
-         {paymentResult ? <div className="public-payment-result" aria-live="polite"><span className="public-payment-result-icon"><CheckCircle2 size={22} /></span><span className="eyebrow">Demande enregistrée</span><h2>Continuez votre paiement</h2><p>{paymentResult.message}</p>{paymentResult.reference && <code>{paymentResult.reference}</code>}{paymentResult.paymentUrl ? <a className="button button-primary button-wide" href={paymentResult.paymentUrl} target="_blank" rel="noreferrer">Ouvrir le paiement sécurisé <ChevronRight size={15} /></a> : <div className="public-payment-waiting"><Clock3 size={15} /> Confirmez la demande sur votre téléphone.</div>}</div> : <>
+          {paymentResult ? <div className={`public-payment-result ${paymentCompleted ? 'is-complete' : paymentFailed ? 'is-failed' : ''}`} aria-live="polite"><span className="public-payment-result-icon">{paymentCompleted ? <CheckCircle2 size={22} /> : paymentFailed ? <CircleAlert size={22} /> : <Clock3 size={22} />}</span><span className="eyebrow">{paymentCompleted ? 'Paiement confirmé' : paymentFailed ? 'Paiement échoué' : 'Paiement en attente'}</span><h2>{paymentCompleted ? 'Merci, votre paiement est confirmé' : paymentFailed ? 'Le paiement n’a pas été confirmé' : 'Continuez votre paiement'}</h2><p>{paymentCompleted ? `Le commerçant recevra ${money(paymentResult.netAmount ?? paymentResult.amount ?? 0, paymentResult.currency ?? link.currency)} après confirmation du service de paiement.` : paymentFailed ? 'Aucun crédit ne sera appliqué au commerçant sans confirmation signée du fournisseur.' : paymentResult.message ?? 'Confirmez la demande sur votre téléphone. Le statut est vérifié automatiquement.'}</p><code>{paymentResult.reference}</code>{!paymentCompleted && !paymentFailed && paymentResult.paymentUrl && <a className="button button-primary button-wide" href={paymentResult.paymentUrl} target="_blank" rel="noreferrer">Ouvrir le paiement sécurisé <ChevronRight size={15} /></a>}{!paymentCompleted && !paymentFailed && !paymentResult.paymentUrl && <div className="public-payment-waiting"><RefreshCw size={15} /> Vérification automatique toutes les 4 secondes.</div>}{paymentStatusError && <div className="form-error public-payment-error"><CircleAlert size={14} /> {paymentStatusError}</div>}{paymentFailed && <button className="button button-ghost button-wide" type="button" onClick={() => { setPaymentResult(null); setPaymentStatusError(''); setPaymentError(''); }}>Réessayer le paiement</button>}</div> : <>
            <div className="public-payment-form-head"><div><span className="eyebrow">Dernière étape</span><h2>Vos informations</h2><p>Renseignez les coordonnées utilisées pour le paiement.</p></div><span className="public-payment-step">1 / 1</span></div>
            {link.amountType === 'CUSTOMER_CHOOSES' && <div className="field"><label htmlFor="public-payment-amount">Montant à payer</label><div className="input-prefix"><span>{link.currency}</span><input id="public-payment-amount" type="number" min="1" step="1" value={amount} onChange={event => setAmount(event.target.value)} placeholder="0" required /></div><small className="field-hint">Saisissez un montant entier en {link.currency}.</small></div>}
            {hasField('full_name') && <div className="field"><label htmlFor="public-payment-full-name">Nom complet</label><input id="public-payment-full-name" value={customerValues.full_name ?? ''} onChange={event => updateCustomerValue('full_name', event.target.value)} autoComplete="name" placeholder="Votre nom et prénom" required /></div>}

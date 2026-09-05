@@ -987,6 +987,8 @@ h1,h2,h3,p { margin:0; }
 .public-payment-error { max-width:none; margin:0 0 12px; padding:10px 12px; border-radius:9px; background:hsl(var(--destructive) / .08); text-align:left; }
 .public-payment-result { display:grid; justify-items:center; gap:10px; min-height:310px; align-content:center; padding:20px; text-align:center; }
 .public-payment-result-icon { width:52px; height:52px; display:grid; place-items:center; margin-bottom:4px; border-radius:16px; background:hsl(var(--primary) / .12); color:hsl(var(--primary)); }
+.public-payment-result.is-failed .public-payment-result-icon { background:hsl(var(--destructive) / .1); color:hsl(var(--destructive)); }
+.public-payment-result.is-complete .public-payment-result-icon { background:hsl(var(--primary) / .12); color:hsl(var(--primary)); }
 .public-payment-result h2 { color:hsl(var(--foreground)); font-size:24px; letter-spacing:-.06em; }
 .public-payment-result p { max-width:340px; color:hsl(var(--muted-foreground)); font-size:11px; line-height:1.55; }
 .public-payment-result code { padding:7px 10px; border-radius:8px; background:hsl(var(--muted)); color:hsl(var(--foreground)); font-family:var(--font-mono); font-size:10px; }

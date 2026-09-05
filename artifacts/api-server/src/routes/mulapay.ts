@@ -794,7 +794,8 @@ router.post("/v1/public/payment-links/:token/payments", async (req, res) => {
     return;
   }
   const orderIdHeader = req.header("Idempotency-Key");
-  const orderId = orderIdHeader && orderIdHeader.length <= 128 ? orderIdHeader : `paylink_${link.id}_${crypto.randomUUID()}`;
+  const paymentLinkIdempotencyKey = orderIdHeader && orderIdHeader.length <= 64 ? orderIdHeader : crypto.randomUUID();
+  const orderId = `paylink_${link.id}_${paymentLinkIdempotencyKey}`;
   const existing = await db.query.transactions.findFirst({ where: eq(transactions.providerOrderId, orderId) });
   if (existing) {
     res.status(200).json({ ok: true, message: "Cette demande de paiement existe déjà.", reference: existing.reference, status: existing.status, paymentUrl: existing.paymentUrl, expiresAt: existing.expiresAt?.toISOString() ?? null, fee: existing.fee, netAmount: existing.netAmount });
@@ -888,6 +889,43 @@ router.post("/v1/public/payment-links/:token/payments", async (req, res) => {
     }
     throw error;
   }
+});
+
+router.get("/v1/public/payment-links/:token/payments/:reference", async (req, res) => {
+  const token = req.params.token;
+  if (!/^[a-f0-9]{16}$/i.test(token)) {
+    res.status(404).json({ error: "Lien de paiement introuvable." });
+    return;
+  }
+  const link = await db.query.paymentLinks.findFirst({ where: like(paymentLinks.slug, `%/${token}`) });
+  if (!link) {
+    res.status(404).json({ error: "Lien de paiement introuvable." });
+    return;
+  }
+  const transaction = await db.query.transactions.findFirst({
+    where: and(
+      eq(transactions.reference, req.params.reference),
+      eq(transactions.userId, link.userId),
+      eq(transactions.type, "Payment"),
+      like(transactions.providerOrderId, `paylink_${link.id}_%`),
+    ),
+  });
+  if (!transaction) {
+    res.status(404).json({ error: "Paiement introuvable." });
+    return;
+  }
+  res.json({
+    ok: true,
+    reference: transaction.reference,
+    status: transaction.status,
+    amount: transaction.amount,
+    currency: transaction.currency,
+    fee: transaction.fee,
+    netAmount: transaction.netAmount,
+    paymentUrl: transaction.paymentUrl,
+    expiresAt: transaction.expiresAt?.toISOString() ?? null,
+    createdAt: transaction.createdAt.toISOString(),
+  });
 });
 
 router.get("/v1/payment-links", async (req, res) => {
@@ -1141,6 +1179,29 @@ router.get("/v1/deposits/:reference", async (req, res) => {
   });
   if (!transaction) {
     res.status(404).json({ error: "Dépôt introuvable." });
+    return;
+  }
+  res.json({
+    ok: true,
+    reference: transaction.reference,
+    status: transaction.status,
+    amount: transaction.amount,
+    currency: transaction.currency,
+    fee: transaction.fee,
+    netAmount: transaction.netAmount,
+    paymentUrl: transaction.paymentUrl,
+    expiresAt: transaction.expiresAt?.toISOString() ?? null,
+    createdAt: transaction.createdAt.toISOString(),
+  });
+});
+
+router.get("/v1/payments/:reference", async (req, res) => {
+  const user = await ensureUser(req);
+  const transaction = await db.query.transactions.findFirst({
+    where: and(eq(transactions.reference, req.params.reference), eq(transactions.userId, user.id), eq(transactions.type, "Payment")),
+  });
+  if (!transaction) {
+    res.status(404).json({ error: "Paiement introuvable." });
     return;
   }
   res.json({
