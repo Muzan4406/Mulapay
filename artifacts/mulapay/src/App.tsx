@@ -636,7 +636,7 @@ function ApiAccess() {
          <div><span className="api-key-guide-number">03</span><strong>Permissions</strong><p>Attribuées automatiquement : lecture des wallets, lecture des transactions et création de dépôts.</p></div>
        </div>
        <div className="notice api-key-provider-note"><ShieldCheck size={15} /><span><strong>Clé DrimPay :</strong> elle reste configurée côté serveur Mulapay. Ne la saisissez pas ici et ne la partagez jamais avec un partenaire.</span></div>
-       <div className="api-key-payin-note"><span className="eyebrow">Pour chaque dépôt Payin</span><p>Votre backend devra ensuite transmettre la clé Mulapay avec le montant, la devise, le pays, l’opérateur, le numéro de téléphone, un identifiant de commande et une clé d’idempotence.</p></div>
+       <div className="api-key-payin-note"><span className="eyebrow">Pour chaque dépôt Payin</span><p>Votre backend devra ensuite transmettre la clé Mulapay avec le wallet de réception, le montant, la méthode, la devise, le pays, l’opérateur, le numéro de téléphone, un identifiant de commande et une clé d’idempotence.</p></div>
      </div>
     <div className="card card-pad" style={{ marginTop: 18 }}>
       <div className="section-head"><div><h2 className="section-title">Vos clés API</h2><p className="section-note">Utilisez-les uniquement depuis votre serveur, jamais dans une application cliente.</p></div><span className="pill pill-neutral">{keys.filter(key => !key.revokedAt).length} active(s)</span></div>

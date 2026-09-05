@@ -335,6 +335,18 @@ h1,h2,h3,p { margin:0; }
 .api-key-row.revoked { opacity:.62; }
 .api-key-secret { display:flex; align-items:center; gap:12px; margin-top:17px; padding:13px; border:1px dashed hsl(var(--primary) / .48); border-radius:10px; background:hsl(var(--secondary) / .55); }
 .api-key-secret code { flex:1; overflow-wrap:anywhere; font-family:var(--font-mono); font-size:11px; color:hsl(var(--foreground)); }
+.required-mark { color:hsl(var(--destructive)); }
+.api-key-guide { overflow:hidden; }
+.api-key-guide > .section-head > svg { color:hsl(var(--primary)); }
+.api-key-guide-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:20px; }
+.api-key-guide-grid > div { display:grid; align-content:start; gap:7px; min-height:142px; padding:14px; border:1px solid hsl(var(--border)); border-radius:11px; background:hsl(var(--muted) / .34); }
+.api-key-guide-number { color:hsl(var(--primary)); font-family:var(--font-mono); font-size:10px; font-weight:700; letter-spacing:.08em; }
+.api-key-guide-grid strong { color:hsl(var(--foreground)); font-size:11px; }
+.api-key-guide-grid p { color:hsl(var(--muted-foreground)); font-size:9px; line-height:1.5; }
+.api-key-provider-note { margin-top:15px; }
+.api-key-provider-note strong { color:hsl(var(--foreground)); }
+.api-key-payin-note { margin-top:17px; padding-top:16px; border-top:1px solid hsl(var(--border)); }
+.api-key-payin-note p { max-width:760px; margin-top:7px; color:hsl(var(--muted-foreground)); font-size:10px; line-height:1.55; }
 .notice-error { background:hsl(var(--destructive) / .08); border-color:hsl(var(--destructive) / .28); color:hsl(var(--destructive)); margin-top:18px; }
 .api-docs-grid { display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr); gap:17px; }
 .api-docs-endpoints { overflow:hidden; }
@@ -438,6 +450,8 @@ h1,h2,h3,p { margin:0; }
 .docs-bottom-cta span { margin-top:4px; color:hsl(var(--muted-foreground)); font-size:10px; }
 @media (max-width: 740px) {
   .api-key-create-form, .api-key-row { align-items:stretch; flex-direction:column; }
+  .api-key-guide-grid { grid-template-columns:1fr; }
+  .api-key-guide-grid > div { min-height:0; }
   .api-docs-grid { grid-template-columns:1fr; }
   .api-endpoint-list > div { grid-template-columns:auto 1fr; }
   .api-endpoint-list > div span:last-child { grid-column:2; }
