@@ -397,6 +397,8 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
   const walletForCountry = (countryName: string) => wallets.find(wallet => wallet.country === countryName || countryLabel(wallet.country) === countryName);
   const selectedWallet = wallets.find(wallet => wallet.id === walletId) ?? walletForCountry(country) ?? wallets[0];
   const availableBalance = selectedWallet ? Math.max(0, selectedWallet.balance - selectedWallet.pending) : 0;
+  const operationAmount = Number(amount) || 0;
+  const operationFee = operationAmount > 0 ? 350 : 0;
 
   useEffect(() => {
     const nextWallet = walletForCountry(country) ?? wallets[0];
@@ -528,6 +530,10 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
           <input id="withdrawal-amount" type="number" min="1" value={amount} onChange={event => setAmount(event.target.value)} placeholder="0" required />
         </div>
       </div>
+      {operationAmount > 0 && <div className="summary-box" style={{ marginBottom: 16 }} data-testid="withdrawal-fee-summary">
+        <div className="summary-line"><span>Montant retiré</span><strong>{money(operationAmount, selectedWallet?.currency ?? 'XOF')}</strong></div>
+        <div className="summary-line total"><span>Frais de retrait estimés</span><strong>{money(operationFee, selectedWallet?.currency ?? 'XOF')}</strong></div>
+      </div>}
       <button className="button button-primary button-wide" type="submit" disabled={submitting}>
         {submitting ? 'Traitement…' : 'Retirer maintenant'} <ChevronRight size={15} />
       </button>
@@ -973,6 +979,8 @@ function Transfer() {
   const selectedCountry = mobileMoneyCountryOptions.find(option => option.country === country) ?? mobileMoneyCountryOptions[0];
   const selectedWallet = walletForCountry(country);
   const availableBalance = selectedWallet ? Math.max(0, selectedWallet.balance - selectedWallet.pending) : 0;
+  const transferAmount = Number(amount) || 0;
+  const transferFee = transferAmount > 0 ? 350 : 0;
   useEffect(() => {
     const nextOperator = selectedCountry.operators[0]?.name ?? '';
     if (operator !== nextOperator && !selectedCountry.operators.some(item => item.name === operator)) setOperator(nextOperator);
@@ -1027,6 +1035,10 @@ function Transfer() {
           <input id="transfer-amount" type="number" min="1" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" data-testid="input-transfer-amount" required />
         </div>
       </div>
+      {transferAmount > 0 && <div className="summary-box" style={{ marginBottom: 16 }} data-testid="transfer-fee-summary">
+        <div className="summary-line"><span>Montant envoyé</span><strong>{money(transferAmount, selectedWallet?.currency ?? 'XOF')}</strong></div>
+        <div className="summary-line total"><span>Frais de transfert estimés</span><strong>{money(transferFee, selectedWallet?.currency ?? 'XOF')}</strong></div>
+      </div>}
       <div className="field">
         <label>Prise en charge des frais</label>
         <div className="fee-options" role="radiogroup" aria-label="Choisir qui prend les frais">
