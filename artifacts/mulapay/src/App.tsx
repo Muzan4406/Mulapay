@@ -736,7 +736,7 @@ Idempotency-Key: commande-unique-123`}</pre>
   </main>;
 }
 
-function ApiPayinDocs() {
+function ApiPayinDocsCompact() {
   return <main className="page-wrap">
     <PageIntro eyebrow="Documentation partenaire" title="Documentation API Payin" subtitle="Encaissez du Mobile Money avec l’API Mulapay et suivez chaque opération par sa référence." action={<Link href="/app/api" className="button button-primary"><Settings2 size={15} /> Gérer mes clés</Link>} />
     <div className="api-docs-grid">
@@ -755,6 +755,144 @@ Idempotency-Key: commande-unique-123
       <div className="card card-pad"><h2 className="section-title">Règles essentielles</h2><div className="step-list" style={{ marginTop: 14 }}><div className="step"><div className="step-number">01</div><div><div className="step-title">Clé serveur</div><div className="step-copy">Conservez la clé uniquement dans votre backend. Ne l’utilisez jamais dans le navigateur ou une application distribuée.</div></div></div><div className="step"><div className="step-number">02</div><div><div className="step-title">Idempotence</div><div className="step-copy">Réutilisez la même valeur <code>Idempotency-Key</code> si votre requête doit être rejouée.</div></div></div><div className="step"><div className="step-number">03</div><div><div className="step-title">Suivi</div><div className="step-copy">Consultez <code>GET /api/v1/deposits/:reference</code> jusqu’à la confirmation.</div></div></div></div></div>
     </div>
     <div className="card card-pad api-docs-endpoints" style={{ marginTop: 18 }}><div className="section-head"><div><h2 className="section-title">Endpoints Mulapay</h2><p className="section-note">Toutes les routes publiques utilisent votre clé API dans l’en-tête Authorization.</p></div><Link href="/app/transactions" className="button button-ghost button-sm">Voir l’historique</Link></div><div className="api-endpoint-list"><div><span className="api-method">POST</span><code>/api/v1/deposits</code><span>Créer un dépôt Mobile Money</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/deposits/:reference</code><span>Consulter le statut d’un dépôt</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/bootstrap</code><span>Lire wallets et transactions</span></div><div><span className="api-method api-method-muted">POST</span><code>/api/v1/withdrawals</code><span>Non disponible actuellement</span></div></div><div className="notice" style={{ marginTop: 18 }}><Info size={15} /><span>Les statuts possibles sont En attente, En traitement, Effectué, Échoué, Expiré, Annulé ou Remboursé.</span></div></div>
+  </main>;
+}
+
+function ApiPayinDocs() {
+  const sections = [
+    ['overview', 'Vue d’ensemble'],
+    ['authentication', 'Authentification'],
+    ['quickstart', 'Démarrage rapide'],
+    ['create-deposit', 'Créer un dépôt'],
+    ['track-deposit', 'Suivre un dépôt'],
+    ['statuses', 'Statuts & erreurs'],
+    ['coverage', 'Pays & opérateurs'],
+  ];
+  const fields = [
+    ['walletId', 'Identifiant du wallet Mulapay du pays concerné.', 'Requis'],
+    ['amount', 'Montant entier strictement positif dans la devise du wallet.', 'Requis'],
+    ['method', 'Valeur attendue : mobile_money.', 'Requis'],
+    ['country', 'Pays du wallet : Togo, Bénin, Côte d’Ivoire, Burkina Faso, Sénégal ou Mali.', 'Requis'],
+    ['operator', 'Opérateur Mobile Money disponible pour le pays sélectionné.', 'Requis'],
+    ['phone', 'Numéro au format international, par exemple +22890000000.', 'Requis'],
+    ['operatorOtp', 'Code OTP si l’opérateur ou le pays le demande.', 'Conditionnel'],
+  ];
+  const statuses = [
+    ['pending', 'En attente', 'La confirmation du client est attendue.'],
+    ['processing', 'En traitement', 'La demande est en cours de traitement.'],
+    ['success', 'Effectué', 'Le wallet est crédité du montant net.'],
+    ['failed', 'Échoué', 'La demande est terminée sans crédit.'],
+    ['expired', 'Expiré', 'La demande a dépassé sa durée de validité.'],
+    ['cancelled', 'Annulé', 'La demande a été annulée sans crédit.'],
+    ['reversed', 'Remboursé', 'Un crédit précédemment effectué a été compensé.'],
+  ];
+  return <main className="page-wrap docs-page">
+    <div className="docs-layout">
+      <aside className="docs-sidebar">
+        <div className="docs-sidebar-brand"><img src={dashboardIcon('documents.png')} alt="" /><div><strong>Mulapay API</strong><span>Documentation v1</span></div></div>
+        <div className="docs-sidebar-label">Dans cette page</div>
+        <nav className="docs-nav">{sections.map(([id, label], index) => <a key={id} href={`#${id}`} className={index === 0 ? 'active' : ''}><span>{String(index + 1).padStart(2, '0')}</span>{label}</a>)}</nav>
+        <div className="docs-sidebar-footer"><span className="docs-production-dot" /> Production uniquement</div>
+      </aside>
+      <div className="docs-content">
+        <div className="docs-topline"><span className="eyebrow">Documentation partenaire</span><div className="docs-topline-actions"><span className="pill pill-success">Production</span><Link href="/app/api" className="button button-ghost button-sm"><Settings2 size={14} /> Gérer mes clés</Link></div></div>
+        <header className="docs-header">
+          <div><h1 className="page-title">Documentation API Payin</h1><p className="page-subtitle">Tout ce qu’il faut pour accepter des paiements Mobile Money avec Mulapay : créer une demande, suivre son statut et rapprocher le résultat dans votre système.</p></div>
+          <div className="docs-version">API <strong>v1</strong><span>•</span> Dernière version</div>
+        </header>
+
+        <section id="overview" className="docs-hero card">
+          <div className="docs-hero-copy"><span className="docs-kicker">Commencer en quelques minutes</span><h2>Une intégration claire, de la demande à la confirmation.</h2><p>Votre serveur crée un dépôt avec une clé Mulapay. La réponse fournit une référence unique, puis votre application suit l’opération jusqu’à son statut final.</p><div className="docs-hero-actions"><a href="#quickstart" className="button button-primary">Démarrer l’intégration <ArrowRight size={15} /></a><a href="#create-deposit" className="button button-ghost">Voir l’exemple</a></div></div>
+          <div className="docs-hero-visual"><div className="docs-hero-orbit" /><img src={dashboardIcon('documents.png')} alt="" className="docs-hero-illustration" /><div className="docs-hero-status"><span className="docs-production-dot" /> API opérationnelle</div></div>
+        </section>
+
+        <section className="docs-steps card">
+          <div className="docs-section-heading"><div><span className="docs-kicker">Le flux</span><h2>Un parcours prévisible</h2></div><span className="docs-muted-label">3 étapes</span></div>
+          <div className="docs-step-grid"><div className="docs-step-card"><span className="docs-step-number">01</span><div><strong>Créer</strong><p>Envoyez le montant, le wallet, le pays, l’opérateur et le numéro du client.</p></div></div><div className="docs-step-card"><span className="docs-step-number">02</span><div><strong>Confirmer</strong><p>Présentez le lien de paiement ou demandez au client de confirmer sur son téléphone.</p></div></div><div className="docs-step-card"><span className="docs-step-number">03</span><div><strong>Rapprocher</strong><p>Conservez la référence et attendez le statut final avant de livrer votre service.</p></div></div></div>
+        </section>
+
+        <section id="authentication" className="docs-section">
+          <div className="docs-section-heading"><div><span className="docs-kicker">01 · Sécurité</span><h2>Authentification</h2><p>Les appels partenaires sont effectués depuis votre backend avec une clé API active.</p></div><LockKeyhole size={19} /></div>
+          <div className="docs-two-column"><div className="card card-pad"><h3>En-têtes obligatoires</h3><pre className="api-code">{`Authorization: Bearer mp_live_votre_cle
+Content-Type: application/json
+Idempotency-Key: commande-unique-123`}</pre><p className="docs-inline-note"><ShieldCheck size={14} /> Ne placez jamais cette clé dans le navigateur, une application mobile distribuée ou un dépôt public.</p></div><div className="card card-pad docs-callout-card"><span className="docs-callout-icon"><ShieldCheck size={16} /></span><h3>Clés à durée de vie contrôlée</h3><p>Créez une clé distincte par application. Vous pouvez la révoquer depuis l’espace API sans modifier les autres intégrations.</p><Link href="/app/api" className="docs-text-link">Gérer mes clés <ArrowRight size={14} /></Link></div></div>
+        </section>
+
+        <section id="quickstart" className="docs-section">
+          <div className="docs-section-heading"><div><span className="docs-kicker">02 · Démarrage</span><h2>Démarrage rapide</h2><p>Un premier appel suffit pour initialiser une collecte.</p></div><span className="docs-muted-label">POST</span></div>
+          <div className="docs-endpoint-bar"><span className="api-method">POST</span><code>/api/v1/deposits</code><span>Créer un dépôt</span></div>
+          <div className="docs-code-grid"><div><div className="docs-code-label">cURL</div><pre className="api-code">{`curl -X POST https://votre-domaine/api/v1/deposits \\
+  -H "Authorization: Bearer mp_live_votre_cle" \\
+  -H "Content-Type: application/json" \\
+  -H "Idempotency-Key: commande-unique-123" \\
+  -d '{
+    "walletId": "wallet_togo",
+    "amount": 10000,
+    "method": "mobile_money",
+    "country": "Togo",
+    "operator": "Mixx by Yas",
+    "phone": "+22890000000"
+  }'`}</pre></div><div><div className="docs-code-label">JavaScript côté serveur</div><pre className="api-code">{`const response = await fetch(
+  "https://votre-domaine/api/v1/deposits",
+  {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer mp_live_votre_cle",
+      "Content-Type": "application/json",
+      "Idempotency-Key": "commande-unique-123"
+    },
+    body: JSON.stringify(payload)
+  }
+);`}</pre></div></div>
+        </section>
+
+        <section id="create-deposit" className="docs-section">
+          <div className="docs-section-heading"><div><span className="docs-kicker">03 · Endpoint</span><h2>Créer un dépôt</h2><p>La création accepte la demande et réserve le montant en attente. Elle ne confirme pas encore le crédit définitif.</p></div></div>
+          <div className="docs-two-column docs-align-start"><div className="card card-pad"><h3>Corps de la requête</h3><div className="docs-field-list">{fields.map(([name, description, requirement]) => <div key={name}><code>{name}</code><p>{description}</p><span className={requirement === 'Requis' ? 'docs-required' : 'docs-conditional'}>{requirement}</span></div>)}</div></div><div className="card card-pad"><h3>Réponse · 201 Created</h3><pre className="api-code">{`{
+  "ok": true,
+  "reference": "DP-XXXXXXXX",
+  "status": "pending",
+  "paymentUrl": null,
+  "expiresAt": "2026-09-05T12:05:00.000Z",
+  "fee": 350,
+  "netAmount": 9650
+}`}</pre><p className="docs-inline-note"><Info size={14} /> Si <code>paymentUrl</code> est renseigné, ouvrez-le depuis votre parcours serveur ou transmettez-le à votre interface sécurisée.</p></div></div>
+        </section>
+
+        <section id="track-deposit" className="docs-section">
+          <div className="docs-section-heading"><div><span className="docs-kicker">04 · Suivi</span><h2>Suivre un dépôt</h2><p>Utilisez la référence retournée à la création pour récupérer l’état le plus récent.</p></div></div>
+          <div className="docs-endpoint-bar"><span className="api-method api-method-muted">GET</span><code>/api/v1/deposits/:reference</code><span>Consulter un dépôt</span></div>
+          <div className="docs-two-column docs-align-start"><div className="card card-pad"><h3>Réponse de suivi</h3><pre className="api-code">{`{
+  "ok": true,
+  "reference": "DP-XXXXXXXX",
+  "status": "success",
+  "amount": 10000,
+  "currency": "XOF",
+  "fee": 350,
+  "netAmount": 9650,
+  "paymentUrl": null,
+  "expiresAt": null,
+  "createdAt": "2026-09-05T11:45:00.000Z"
+}`}</pre></div><div className="card card-pad docs-callout-card"><span className="docs-callout-icon"><Activity size={16} /></span><h3>Quand créditer votre service ?</h3><p>Ne livrez jamais votre produit et ne créditez jamais votre propre compte après le seul statut HTTP 201. Attendez <code>success</code> et rapprochez la référence.</p><div className="docs-mini-rule"><span className="docs-production-dot" /> Statut final requis : <strong>success</strong></div></div></div>
+        </section>
+
+        <section id="statuses" className="docs-section">
+          <div className="docs-section-heading"><div><span className="docs-kicker">05 · Référence</span><h2>Statuts, idempotence & erreurs</h2><p>Les réponses sont conçues pour être rejouées sans créer de double opération.</p></div></div>
+          <div className="docs-two-column docs-align-start"><div className="card card-pad"><h3>Statuts métier</h3><div className="docs-status-list">{statuses.map(([value, label, description]) => <div key={value}><span className={`pill ${value === 'success' ? 'pill-success' : value === 'failed' || value === 'expired' || value === 'cancelled' || value === 'reversed' ? 'pill-danger' : 'pill-pending'}`}>{value}</span><div><strong>{label}</strong><p>{description}</p></div></div>)}</div></div><div className="card card-pad"><h3>Idempotence</h3><p className="section-note" style={{ marginTop: 8 }}>Réutilisez la même clé pour une nouvelle tentative réseau de la même commande. Mulapay renvoie la transaction existante.</p><pre className="api-code" style={{ marginTop: 16 }}>{`Idempotency-Key: checkout-20260905-0001`}</pre><p className="section-note" style={{ marginTop: 12 }}>Ne réutilisez jamais cette valeur pour une autre commande, un autre montant ou un autre wallet.</p><div className="docs-error-list"><div><span className="pill pill-danger">400</span><span>Paramètre invalide, wallet incohérent, numéro incorrect ou OTP manquant.</span></div><div><span className="pill pill-danger">401</span><span>Clé absente, invalide ou révoquée.</span></div><div><span className="pill pill-danger">404</span><span>Dépôt ou référence introuvable.</span></div><div><span className="pill pill-danger">503</span><span>Service de paiement temporairement indisponible.</span></div></div></div></div>
+        </section>
+
+        <section id="coverage" className="docs-section">
+          <div className="docs-section-heading"><div><span className="docs-kicker">06 · Disponibilité</span><h2>Pays & opérateurs</h2><p>La disponibilité effective dépend des pays et opérateurs activés sur votre compte Mulapay.</p></div></div>
+          <div className="card card-pad docs-coverage-grid"><div><strong>Togo</strong><span>Mixx by Yas · Moov Money</span></div><div><strong>Bénin</strong><span>MTN MoMo · Moov Money</span></div><div><strong>Côte d’Ivoire</strong><span>Orange Money · MTN MoMo · Wave · Moov Money</span></div><div><strong>Burkina Faso</strong><span>Orange Money · Moov Money · Telecel</span></div><div><strong>Sénégal</strong><span>Orange Money · Wave · Wizall</span></div><div><strong>Mali</strong><span>Orange Money · Moov Money · MTN MoMo</span></div></div>
+        </section>
+
+        <section className="docs-resources card">
+          <div><span className="docs-kicker">Référence API</span><h2>Endpoints disponibles</h2><p>Les routes publiques actuellement exposées par Mulapay.</p></div>
+          <div className="docs-resource-list"><div><span className="api-method">POST</span><code>/api/v1/deposits</code><span>Créer un dépôt Mobile Money</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/deposits/:reference</code><span>Consulter le statut d’un dépôt</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/bootstrap</code><span>Lire les wallets et transactions du compte</span></div><div><span className="api-method api-method-muted">POST</span><code>/api/v1/withdrawals</code><span>Non disponible actuellement</span></div></div>
+          <div className="docs-bottom-cta"><div><strong>Prêt à connecter votre backend ?</strong><span>Créez une clé serveur et commencez avec le quickstart.</span></div><Link href="/app/api" className="button button-primary">Créer une clé API <ArrowRight size={15} /></Link></div>
+        </section>
+      </div>
+    </div>
   </main>;
 }
 
