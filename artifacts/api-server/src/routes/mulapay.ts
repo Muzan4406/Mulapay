@@ -374,7 +374,11 @@ router.get("/v1/bootstrap", async (req, res) => {
 router.post("/v1/transfers", async (req, res) => {
   const input = CreateTransferBody.parse(req.body);
   const user = await ensureUser(req);
-  const source = await db.query.wallets.findFirst({ where: and(eq(wallets.userId, user.id), eq(wallets.currency, input.currency), eq(wallets.status, "Active")) });
+  const source = await db.query.wallets.findFirst({
+    where: input.country
+      ? and(eq(wallets.userId, user.id), eq(wallets.country, input.country), eq(wallets.status, "Active"))
+      : and(eq(wallets.userId, user.id), eq(wallets.currency, input.currency), eq(wallets.status, "Active")),
+  });
   if (!source || source.balance < input.amount) {
     res.status(400).json({ error: "Solde disponible insuffisant pour ce transfert." });
     return;

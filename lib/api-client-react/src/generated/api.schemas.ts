@@ -111,6 +111,7 @@ export interface TransferInput {
   /** @exclusiveMinimum 0 */
   amount: number;
   currency: string;
+  country?: string;
   /** @minLength 2 */
   counterparty: string;
   note?: string;

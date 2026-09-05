@@ -99,6 +99,7 @@ export const createTransferBodyCounterpartyMin = 2;
 export const CreateTransferBody = zod.object({
   "amount": zod.number().gt(createTransferBodyAmountExclusiveMin),
   "currency": zod.string(),
+  "country": zod.string().optional(),
   "counterparty": zod.string().min(createTransferBodyCounterpartyMin),
   "note": zod.string().optional()
 })

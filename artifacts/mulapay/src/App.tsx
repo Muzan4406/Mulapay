@@ -45,7 +45,7 @@ type Store = {
   profile: { id: string; firstName: string; lastName: string; email: string; role: string; country: string; kycStatus: string };
   wallets: Wallet[]; transactions: Transaction[]; exchanges: Exchange[]; links: PaymentLink[]; notifications: Notification[];
   adminKyc: AdminKycCase[]; adminTransactions: Transaction[]; adminSummary?: AdminSummary;
-  transfer: (data: { amount: number; currency: string; counterparty: string; note: string }) => void;
+  transfer: (data: { amount: number; currency: string; country: string; counterparty: string; note: string }) => void;
   exchange: (data: { source: string; destination: string; amount: number }) => void;
   setExchangeStatus: (id: string, status: string) => void;
   addLink: (data: { amount: number; currency: string; description: string; expiresAt: string }) => void;
@@ -981,9 +981,58 @@ function Transactions() {
 
 function Transfer() {
   const { wallets, transfer } = useStore();
-  const [amount, setAmount] = useState(''); const [currency, setCurrency] = useState('XOF'); const [recipient, setRecipient] = useState(''); const [note, setNote] = useState('');
-  const submit = (e: FormEvent) => { e.preventDefault(); if (!amount || !recipient) return; transfer({ amount: Number(amount), currency, counterparty: recipient, note }); setAmount(''); setRecipient(''); setNote(''); };
-  return <main className="page-wrap"><PageIntro eyebrow="Déplacer de l’argent en interne" title="Envoyer de l’argent" subtitle="Envoyez de l’argent à un autre utilisateur Mulapay avec son téléphone ou son identifiant. Rapide, clair et toujours traçable." /><div className="form-layout"><form className="card card-pad" onSubmit={submit}><div className="field"><label htmlFor="recipient">Destinataire</label><input id="recipient" value={recipient} onChange={e => setRecipient(e.target.value)} placeholder="Numéro de téléphone ou @identifiant" data-testid="input-transfer-recipient" /><div className="field-hint">Le destinataire doit disposer d’un compte Mulapay actif.</div></div><div className="field"><label htmlFor="amount">Montant</label><div className="input-prefix"><span>{currency}</span><input id="amount" type="number" min="1" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" data-testid="input-transfer-amount" /></div></div><div className="field"><label htmlFor="currency">Depuis le wallet</label><select id="currency" value={currency} onChange={e => setCurrency(e.target.value)} data-testid="select-transfer-wallet">{wallets.filter(w => w.status === 'Active').map(w => <option key={w.code} value={w.currency}>{countryLabel(w.country)} · {w.currency} · {new Intl.NumberFormat('fr-FR').format(w.balance)} disponibles</option>)}</select></div><div className="field"><label htmlFor="note">Note <span style={{ color: 'hsl(203 18% 46%)', fontWeight: 400 }}>(facultative)</span></label><textarea id="note" value={note} onChange={e => setNote(e.target.value)} placeholder="À quoi sert ce transfert ?" data-testid="input-transfer-note" /></div><button className="button button-primary button-wide" type="submit" disabled={!amount || !recipient} data-testid="button-submit-transfer"><Send size={15} /> Vérifier et envoyer</button></form><div className="card card-pad"><div className="eyebrow">Avant d’envoyer</div><div className="step-list" style={{ marginTop: 12 }}><div className="step done"><div className="step-number">1</div><div><div className="step-title">Choisir le wallet</div><div className="step-copy">Les fonds sortent du wallet actif du pays sélectionné.</div></div></div><div className="step"><div className="step-number">2</div><div><div className="step-title">Confirmer la personne</div><div className="step-copy">Le destinataire est vérifié côté serveur avant le débit.</div></div></div><div className="step"><div className="step-number">3</div><div><div className="step-title">Conserver le reçu</div><div className="step-copy">Une référence est créée pour chaque mouvement confirmé.</div></div></div></div></div></div></main>;
+  const [amount, setAmount] = useState('');
+  const [country, setCountry] = useState(wallets[0]?.country ?? mobileMoneyCountryOptions[0].country);
+  const [recipient, setRecipient] = useState('');
+  const [note, setNote] = useState('');
+  const walletForCountry = (countryName: string) => wallets.find(wallet => wallet.country === countryName || countryLabel(wallet.country) === countryName);
+  const selectedCountry = mobileMoneyCountryOptions.find(option => option.country === country) ?? mobileMoneyCountryOptions[0];
+  const selectedWallet = walletForCountry(country);
+  const availableBalance = selectedWallet ? Math.max(0, selectedWallet.balance - selectedWallet.pending) : 0;
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    if (!amount || !recipient || !selectedWallet) return;
+    transfer({ amount: Number(amount), currency: selectedWallet.currency, country: selectedWallet.country, counterparty: recipient, note });
+    setAmount('');
+    setRecipient('');
+    setNote('');
+  };
+  return <main className="page-wrap deposit-page">
+    <PageIntro eyebrow="Transfert Mulapay" title="Envoyer de l’argent" />
+    <form className="card card-pad deposit-form" onSubmit={submit}>
+      <div className="field">
+        <label htmlFor="transfer-country">Depuis le wallet</label>
+        <div className="country-select">
+          <img src={`${import.meta.env.BASE_URL}countries/${selectedCountry.flagSrc}`} alt="" />
+          <select id="transfer-country" value={country} onChange={event => setCountry(event.target.value)} required data-testid="select-transfer-wallet">
+            {mobileMoneyCountryOptions.map(option => {
+              const wallet = walletForCountry(option.country);
+              return <option key={option.country} value={option.country} disabled={!wallet || wallet.status !== 'Active'}>{option.country} · {wallet?.currency ?? 'XOF'}{wallet ? ` · ${new Intl.NumberFormat('fr-FR').format(Math.max(0, wallet.balance - wallet.pending))} disponibles` : ' · indisponible'}</option>;
+            })}
+          </select>
+          <ChevronDown className="country-select-chevron" size={16} aria-hidden="true" />
+        </div>
+        <div className="wallet-availability"><WalletCards size={14} /><span>Disponible sur le wallet {countryLabel(selectedWallet?.country ?? country)}</span><strong>{money(availableBalance, selectedWallet?.currency ?? 'XOF')}</strong></div>
+      </div>
+      <div className="field">
+        <label htmlFor="recipient">Destinataire</label>
+        <input id="recipient" value={recipient} onChange={e => setRecipient(e.target.value)} placeholder="Numéro de téléphone ou @identifiant" data-testid="input-transfer-recipient" required />
+        <div className="field-hint">Le destinataire doit disposer d’un compte Mulapay actif.</div>
+      </div>
+      <div className="field">
+        <label htmlFor="amount">Montant</label>
+        <div className="input-prefix">
+          <span>{selectedWallet?.currency ?? 'XOF'}</span>
+          <input id="amount" type="number" min="1" max={availableBalance || undefined} value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" data-testid="input-transfer-amount" required />
+        </div>
+      </div>
+      <div className="field">
+        <label htmlFor="note">Note <span style={{ color: 'hsl(203 18% 46%)', fontWeight: 400 }}>(facultative)</span></label>
+        <textarea id="note" value={note} onChange={e => setNote(e.target.value)} placeholder="À quoi sert ce transfert ?" data-testid="input-transfer-note" />
+      </div>
+      <button className="button button-primary button-wide" type="submit" disabled={!amount || !recipient || !selectedWallet} data-testid="button-submit-transfer"><Send size={15} /> Envoyer maintenant</button>
+    </form>
+  </main>;
 }
 
 function Exchange() {
@@ -1069,7 +1118,7 @@ function RoutedApp() {
     profile: { ...(data?.profile ?? { id: '', firstName: 'Utilisateur', lastName: 'Mulapay', email: '', role: 'USER', country: 'Togo', kycStatus: 'NON_VERIFIE' }), firstName: user?.firstName ?? data?.profile.firstName ?? 'Utilisateur', lastName: user?.lastName ?? data?.profile.lastName ?? 'Mulapay', email: user?.primaryEmailAddress?.emailAddress ?? data?.profile.email ?? '' },
     wallets: data?.wallets ?? [], transactions: data?.transactions ?? [], exchanges: data?.exchanges ?? [], links: data?.links ?? [], notifications: data?.notifications ?? [],
     adminKyc: (adminKycQuery.data ?? []) as AdminKycCase[], adminTransactions: (adminTransactionsQuery.data ?? []) as Transaction[], adminSummary: adminSummaryQuery.data as AdminSummary | undefined,
-    transfer: ({ amount, currency, counterparty, note }) => { transferMutation.mutate({ data: { amount, currency, counterparty, note } }, { onSuccess: response => { invalidate(); toast(response.message); }, onError: () => toast('Transfert impossible. Vérifiez le solde disponible.') }); },
+    transfer: ({ amount, currency, country, counterparty, note }) => { transferMutation.mutate({ data: { amount, currency, country, counterparty, note } }, { onSuccess: response => { invalidate(); toast(response.message); }, onError: () => toast('Transfert impossible. Vérifiez le solde disponible.') }); },
     exchange: ({ source, destination, amount }) => { exchangeMutation.mutate({ data: { source, destination, amount } }, { onSuccess: response => { invalidate(); toast(response.message); }, onError: () => toast('La demande d’échange n’a pas pu être créée.') }); },
     setExchangeStatus: (id, status) => { exchangeDecisionMutation.mutate({ id, data: { decision: status === 'Completed' ? 'APPROVED' : 'REJECTED' } }, { onSuccess: response => { invalidate(); toast(response.message); }, onError: () => toast('La décision d’échange n’a pas pu être enregistrée.') }); },
     addLink: ({ amount, currency, description, expiresAt }) => { paymentLinkMutation.mutate({ data: { amount, currency, description, expiresAt } }, { onSuccess: response => { invalidate(); toast(`Lien de paiement ${response.slug} créé.`); }, onError: () => toast('Le lien de paiement n’a pas pu être créé.') }); },
