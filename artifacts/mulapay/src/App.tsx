@@ -391,6 +391,7 @@ function Wallets() {
 
 function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
   const { wallets, toast, feePercentage } = useStore();
+  const [, setLocation] = useLocation();
   const [walletId, setWalletId] = useState(wallets[0]?.id ?? '');
   const [country, setCountry] = useState(countryLabel(wallets[0]?.country ?? mobileMoneyCountryOptions[0].country));
   const [amount, setAmount] = useState('');
@@ -443,6 +444,26 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
     return () => {
       active = false;
       window.clearInterval(interval);
+    };
+  }, [depositTracking?.reference, depositTracking?.status, isDeposit]);
+
+  useEffect(() => {
+    if (!isDeposit || !depositTracking?.reference || depositTracking.status.toLowerCase() !== 'completed') return;
+    toast('Dépôt confirmé. Votre dashboard va être actualisé.');
+    setLocation('/app');
+  }, [depositTracking?.reference, depositTracking?.status, isDeposit]);
+
+  useEffect(() => {
+    if (!isDeposit || !depositTracking?.reference || depositStatusIsTerminal(depositTracking.status)) return;
+    let redirectTimer: number | undefined;
+    const timeout = window.setTimeout(() => {
+      setDepositTracking(current => current && !depositStatusIsTerminal(current.status) ? { ...current, status: 'Failed' } : current);
+      toast('Dépôt non confirmé après 30 secondes. Retour au dashboard.');
+      redirectTimer = window.setTimeout(() => setLocation('/app'), 800);
+    }, 30000);
+    return () => {
+      window.clearTimeout(timeout);
+      if (redirectTimer) window.clearTimeout(redirectTimer);
     };
   }, [depositTracking?.reference, depositTracking?.status, isDeposit]);
 
