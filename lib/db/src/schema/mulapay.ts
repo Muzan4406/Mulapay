@@ -20,6 +20,22 @@ export const users = pgTable("mulapay_users", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+export const apiKeys = pgTable(
+  "mulapay_api_keys",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull().references(() => users.id),
+    name: text("name").notNull(),
+    keyPrefix: text("key_prefix").notNull(),
+    keyHash: text("key_hash").notNull().unique(),
+    scopes: jsonb("scopes").$type<string[]>().notNull(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("mulapay_api_keys_user_idx").on(table.userId)],
+);
+
 export const wallets = pgTable(
   "mulapay_wallets",
   {
@@ -50,6 +66,9 @@ export const transactions = pgTable(
     reference: text("reference").notNull().unique(),
     providerOrderId: text("provider_order_id").unique(),
     netAmount: integer("net_amount"),
+    paymentUrl: text("payment_url"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    fee: integer("fee"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [index("mulapay_transactions_user_idx").on(table.userId)],

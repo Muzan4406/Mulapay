@@ -37,6 +37,7 @@ type Transaction = { id: string; type: string; status: string; amount: number; c
 type Exchange = { id: string; source: string; destination: string; amount: number; rate: number; receivedAmount: number; status: string; requestedAt: string };
 type PaymentLink = { id: string; slug: string; amount: number; currency: string; description: string; status: string; expiresAt: string; payments: number };
 type Notification = { id: string; title: string; body: string; read: boolean };
+type ApiKey = { id: string; name: string; keyPrefix: string; scopes: string[]; lastUsedAt: string | null; revokedAt: string | null; createdAt: string };
 type AdminKycCase = { id: string; userId: string; name: string; country: string; status: string; documents: string[]; submittedAt: string };
 type AdminSummary = { kycAwaiting: number; exchangeQueue: number; volume: number; successRate: number };
 type Store = {
@@ -411,7 +412,7 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
         {selectedCountry.code && ['CI', 'SN', 'BF', 'ML'].includes(selectedCountry.code) && operator === 'Orange Money' && <div className="field">
           <label htmlFor="deposit-operator-otp">Code OTP Orange Money</label>
           <input id="deposit-operator-otp" type="text" inputMode="numeric" value={operatorOtp} onChange={event => setOperatorOtp(event.target.value.replace(/\D/g, ''))} placeholder="Code reçu après le code USSD" required />
-          <p className="field-hint">Générez d’abord le code selon les instructions DrimPay de votre pays.</p>
+          <p className="field-hint">Générez d’abord le code selon les instructions de votre opérateur.</p>
         </div>}
         <div className="field">
           <label htmlFor="deposit-amount">Montant</label>
@@ -512,23 +513,103 @@ function QrPage() {
 }
 
 function ApiAccess() {
-  return <main className="page-wrap"><PageIntro eyebrow="Pour les partenaires" title="API partenaire" subtitle="Un accès production clair pour encaisser des paiements Mobile Money via Mulapay." action={<Link href="/app/api-docs" className="button button-primary"><FileCheck2 size={15} /> Lire la documentation</Link>} /><div className="notice"><ShieldCheck size={15} /><span>Votre intégration utilise l’API de production Mulapay. Les clés et secrets restent côté serveur, jamais dans votre application cliente.</span></div><div className="grid-2" style={{ marginTop: 18 }}><div className="card card-pad"><div className="section-head"><div><div className="section-title">Accès production</div><p className="section-note" style={{ marginTop: 8 }}>Configuration requise avant le premier encaissement.</p></div><LockKeyhole size={19} /></div><div className="summary-box" style={{ marginTop: 18 }}><div className="summary-line"><span>Base URL</span><strong>/api/v1</strong></div><div className="summary-line"><span>Produit</span><strong>Payin Mobile Money</strong></div><div className="summary-line"><span>Opérateur</span><strong>DrimPay</strong></div><div className="summary-line"><span>Statut</span><span className="pill pill-pending">À configurer</span></div></div></div><div className="card card-pad"><div className="section-title">Contrat d’intégration</div><div className="step-list" style={{ marginTop: 14 }}><div className="step"><div className="step-number">01</div><div><div className="step-title">Clé serveur</div><div className="step-copy">Ajoutez la clé API uniquement dans votre backend.</div></div></div><div className="step"><div className="step-number">02</div><div><div className="step-title">Idempotence</div><div className="step-copy">Envoyez un <code>Idempotency-Key</code> unique par tentative.</div></div></div><div className="step"><div className="step-number">03</div><div><div className="step-title">Webhook signé</div><div className="step-copy">Traitez les statuts après vérification HMAC du webhook DrimPay.</div></div></div></div></div></div><div className="card card-pad" style={{ marginTop: 18 }}><div className="section-head"><div><div className="section-title">Ressources disponibles</div><p className="section-note">Commencez par le Payin, puis suivez les confirmations dans l’historique Mulapay.</p></div><Link href="/app/transactions" className="button button-ghost button-sm"><Activity size={14} /> Voir les transactions</Link></div><div className="api-endpoint-list"><div><span className="api-method">POST</span><code>/api/v1/deposits</code><span>Créer une collecte Mobile Money</span></div><div><span className="api-method api-method-muted">POST</span><code>/api/v1/webhooks/drimpay</code><span>Recevoir les statuts signés</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/bootstrap</code><span>Lire wallets et transactions</span></div></div></div></main>;
+  const { toast } = useStore();
+  const [keys, setKeys] = useState<ApiKey[]>([]);
+  const [name, setName] = useState('');
+  const [newKey, setNewKey] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState('');
+
+  const loadKeys = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('/api/v1/api-keys', { credentials: 'include' });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? 'Impossible de charger les clés API.');
+      setKeys(body);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'Impossible de charger les clés API.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { void loadKeys(); }, []);
+
+  const createKey = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!name.trim()) {
+      setError('Donnez un nom à cette intégration.');
+      return;
+    }
+    setCreating(true);
+    setError('');
+    try {
+      const response = await fetch('/api/v1/api-keys', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim() }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? 'La clé API n’a pas pu être créée.');
+      setNewKey(body.key);
+      setName('');
+      await loadKeys();
+      toast('Clé API Mulapay créée. Copiez-la maintenant, elle ne sera plus affichée.');
+    } catch (createError) {
+      setError(createError instanceof Error ? createError.message : 'La clé API n’a pas pu être créée.');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const revokeKey = async (id: string) => {
+    if (!window.confirm('Révoquer cette clé API ? Les intégrations qui l’utilisent seront immédiatement bloquées.')) return;
+    const response = await fetch(`/api/v1/api-keys/${id}`, { method: 'DELETE', credentials: 'include' });
+    const body = await response.json();
+    if (!response.ok) {
+      setError(body.error ?? 'La clé API n’a pas pu être révoquée.');
+      return;
+    }
+    await loadKeys();
+    toast('Clé API révoquée.');
+  };
+
+  return <main className="page-wrap">
+    <PageIntro eyebrow="Pour les partenaires" title="API partenaire" subtitle="Créez une clé Mulapay et connectez votre backend en quelques minutes." action={<Link href="/app/api-docs" className="button button-ghost"><FileCheck2 size={15} /> Documentation</Link>} />
+    {error && <div className="notice notice-error"><CircleAlert size={15} /><span>{error}</span></div>}
+    {newKey && <div className="card card-pad api-key-reveal" style={{ marginTop: 18 }}><div className="section-head"><div><div className="section-title">Votre clé est prête</div><p className="section-note" style={{ marginTop: 6 }}>Copiez-la maintenant. Pour votre sécurité, elle ne sera plus affichée après cette page.</p></div><LockKeyhole size={19} /></div><div className="api-key-secret"><code>{newKey}</code><button className="button button-ghost button-sm" onClick={() => { void navigator.clipboard?.writeText(newKey); toast('Clé copiée.'); }}><Copy size={14} /> Copier</button></div><button className="button button-ghost button-sm" style={{ marginTop: 12 }} onClick={() => setNewKey(null)}>J’ai copié la clé</button></div>}
+    <div className="card card-pad" style={{ marginTop: 18 }}>
+      <div className="section-head"><div><h2 className="section-title">Créer une clé API</h2><p className="section-note">Une clé par application facilite la révocation et le suivi de vos intégrations.</p></div><Plus size={19} /></div>
+      <form onSubmit={createKey} className="api-key-create-form" style={{ marginTop: 16 }}><div className="field" style={{ marginBottom: 0 }}><label htmlFor="api-key-name">Nom de l’intégration</label><input id="api-key-name" value={name} onChange={event => setName(event.target.value)} placeholder="Ex. Boutique web" maxLength={80} /></div><button className="button button-primary" type="submit" disabled={creating}>{creating ? 'Création…' : 'Créer une clé API'}</button></form>
+    </div>
+    <div className="card card-pad" style={{ marginTop: 18 }}>
+      <div className="section-head"><div><h2 className="section-title">Vos clés API</h2><p className="section-note">Utilisez-les uniquement depuis votre serveur, jamais dans une application cliente.</p></div><span className="pill pill-neutral">{keys.filter(key => !key.revokedAt).length} active(s)</span></div>
+      {loading ? <div className="loading-line" style={{ marginTop: 18 }} /> : keys.length === 0 ? <div className="empty-state"><LockKeyhole size={25} /><strong>Aucune clé API</strong><p>Créez votre première clé pour commencer l’intégration.</p></div> : <div className="api-key-list">{keys.map(key => <div className={`api-key-row ${key.revokedAt ? 'revoked' : ''}`} key={key.id}><div><div className="activity-name">{key.name}</div><div className="activity-meta"><code>{key.keyPrefix}••••••••</code> · créée le {new Date(key.createdAt).toLocaleDateString('fr-FR')}{key.lastUsedAt ? ` · utilisée le ${new Date(key.lastUsedAt).toLocaleDateString('fr-FR')}` : ''}</div></div>{key.revokedAt ? <span className="pill pill-danger">Révoquée</span> : <button className="button button-danger button-sm" onClick={() => void revokeKey(key.id)}>Révoquer</button>}</div>)}</div>}
+    </div>
+  </main>;
+}
+
+function ApiAccessLegacy() {
+  return <main className="page-wrap"><PageIntro eyebrow="Pour les partenaires" title="API partenaire" subtitle="Créez une clé Mulapay et connectez votre backend en quelques minutes." action={<Link href="/app/api-docs" className="button button-primary"><FileCheck2 size={15} /> Lire la documentation</Link>} /><div className="notice"><ShieldCheck size={15} /><span>Les clés sont affichées une seule fois et doivent rester dans votre serveur. Révoquez immédiatement une clé compromise.</span></div><div className="card card-pad" style={{ marginTop: 18 }}><div className="section-head"><div><div className="section-title">Accès API Mulapay</div><p className="section-note" style={{ marginTop: 8 }}>Créez une clé distincte pour chaque application ou environnement.</p></div><LockKeyhole size={19} /></div><div className="summary-box" style={{ marginTop: 18 }}><div className="summary-line"><span>Base URL</span><strong>/api/v1</strong></div><div className="summary-line"><span>Authentification</span><strong>Bearer API key</strong></div><div className="summary-line"><span>Opérations</span><strong>Dépôts et statuts</strong></div></div></div></main>;
 }
 
 function ApiPayinDocsLegacy() {
   return <main className="page-wrap"><PageIntro eyebrow="Documentation partenaire" title="Documentation API Payin" subtitle="Encaissez du Mobile Money sans redirection : Mulapay transmet la demande à DrimPay et crédite le wallet local après webhook signé." action={<Link href="/app/api" className="button button-primary"><Settings2 size={15} /> Gérer l’accès API</Link>} /><div className="api-docs-grid"><div className="card card-pad"><div className="section-head"><div><h2 className="section-title">Démarrer un Payin</h2><p className="section-note">Initialisez une collecte sur le wallet correspondant au pays du client.</p></div><img className="api-docs-icon" src={dashboardIcon('documents.png')} alt="" /></div><div className="api-endpoint"><span className="api-method">POST</span><code>/api/v1/deposits</code></div><pre className="api-code">{`{\n  "walletId": "wallet_togo",\n  "amount": 10000,\n  "method": "mobile_money",\n  "country": "Togo",\n  "operator": "Mixx by Yas",\n  "phone": "+22890000000"\n}`}</pre><p className="section-note" style={{ marginTop: 14 }}>Mulapay transmet ensuite <code>country_code</code>, <code>operator</code>, <code>order_id</code> et <code>webhook_url</code> à DrimPay.</p></div><div className="card card-pad"><h2 className="section-title">Sécurité et confirmation</h2><div className="step-list" style={{ marginTop: 14 }}><div className="step"><div className="step-number">01</div><div><div className="step-title">Clé côté serveur</div><div className="step-copy">La clé DrimPay n’est jamais envoyée au navigateur. Mulapay utilise un secret Replit côté API.</div></div></div><div className="step"><div className="step-number">02</div><div><div className="step-title">Idempotence</div><div className="step-copy">Envoyez une valeur unique dans <code>Idempotency-Key</code>. Une nouvelle tentative ne crée pas de double débit.</div></div></div><div className="step"><div className="step-number">03</div><div><div className="step-title">Webhook HMAC</div><div className="step-copy">Mulapay vérifie <code>X-DrimPay-Signature</code> et refuse les signatures de plus de cinq minutes.</div></div></div></div></div></div><div className="card card-pad api-docs-endpoints"><div className="section-head"><div><h2 className="section-title">Flux et opérateurs</h2><p className="section-note">Le statut passe par En attente, En traitement, Effectué, Échoué, Expiré ou Remboursé.</p></div><Link href="/app/transactions" className="button button-ghost button-sm">Voir l’historique</Link></div><div className="api-endpoint-list"><div><span className="api-method">POST</span><code>/api/v1/deposits</code><span>Créer un Payin DrimPay</span></div><div><span className="api-method api-method-muted">POST</span><code>/api/v1/webhooks/drimpay</code><span>Recevoir les statuts signés</span></div><div><span className="api-method api-method-muted">POST</span><code>/api/v1/withdrawals</code><span>Non couvert par l’API Payin actuelle</span></div></div><div className="notice" style={{ marginTop: 18 }}><Info size={15} /><span>Wave renvoie un <code>payment_url</code>. Orange Money peut demander un <code>operatorOtp</code> en Côte d’Ivoire, au Sénégal, au Burkina Faso et au Mali.</span></div></div></main>;
 }
 
-function ApiPayinDocs() {
+function ApiPayinDocsLegacy2() {
   return <main className="page-wrap">
-    <PageIntro eyebrow="Documentation partenaire" title="Documentation API Payin" subtitle="Guide complet pour encaisser du Mobile Money en production avec Mulapay et DrimPay." action={<Link href="/app/api" className="button button-primary"><Settings2 size={15} /> Gérer l’accès API</Link>} />
-    <div className="notice"><ShieldCheck size={15} /><span>Les secrets DrimPay restent côté serveur. Le navigateur de votre client ne doit jamais recevoir votre clé API ni votre secret webhook.</span></div>
+    <PageIntro eyebrow="Documentation partenaire" title="Documentation API Payin" subtitle="Guide complet pour encaisser du Mobile Money en production avec Mulapay." action={<Link href="/app/api" className="button button-primary"><Settings2 size={15} /> Gérer l’accès API</Link>} />
+    <div className="notice"><ShieldCheck size={15} /><span>Votre clé Mulapay reste côté serveur. Le navigateur de votre client ne doit jamais la recevoir.</span></div>
 
     <div className="card card-pad" style={{ marginTop: 18 }}>
       <div className="section-head"><div><h2 className="section-title">1. Vue d’ensemble</h2><p className="section-note">Un Payin est une demande d’encaissement qui crédite le wallet local uniquement après confirmation fournisseur.</p></div><img className="api-docs-icon" src={dashboardIcon('documents.png')} alt="" /></div>
       <div className="feature-grid" style={{ marginTop: 18, gridTemplateColumns: 'repeat(3, 1fr)' }}>
         <div><div className="eyebrow">Créer</div><p className="section-note" style={{ marginTop: 8 }}>Votre backend appelle <code>POST /api/v1/deposits</code> avec le pays, l’opérateur, le téléphone et le montant.</p></div>
-        <div><div className="eyebrow">Confirmer</div><p className="section-note" style={{ marginTop: 8 }}>DrimPay envoie les changements d’état à votre webhook Mulapay signé en HMAC-SHA256.</p></div>
+        <div><div className="eyebrow">Confirmer</div><p className="section-note" style={{ marginTop: 8 }}>Mulapay suit les changements d’état et sécurise la confirmation de chaque opération.</p></div>
         <div><div className="eyebrow">Créditer</div><p className="section-note" style={{ marginTop: 8 }}>Le ledger crédite le wallet du montant net et retire le montant de la file d’attente.</p></div>
       </div>
     </div>
@@ -536,11 +617,11 @@ function ApiPayinDocs() {
     <div className="api-docs-grid" style={{ marginTop: 18 }}>
       <div className="card card-pad">
         <h2 className="section-title">2. Endpoint Payin</h2>
-        <p className="section-note" style={{ marginTop: 8 }}>Base URL : <code>/api</code>. Les appels doivent être effectués depuis votre serveur avec une session Clerk authentifiée.</p>
+        <p className="section-note" style={{ marginTop: 8 }}>Base URL : <code>/api</code>. Les appels doivent être effectués depuis votre serveur avec une clé API Mulapay active.</p>
         <div className="api-endpoint" style={{ marginTop: 16 }}><span className="api-method">POST</span><code>/api/v1/deposits</code></div>
         <div className="section-title" style={{ marginTop: 22, fontSize: 12 }}>En-têtes</div>
         <pre className="api-code">{`Content-Type: application/json
-Cookie: session Clerk authentifiée
+Authorization: Bearer mp_live_votre_cle
 Idempotency-Key: commande-unique-123`}</pre>
         <div className="section-title" style={{ marginTop: 18, fontSize: 12 }}>Corps de la requête</div>
         <pre className="api-code">{`{
@@ -596,18 +677,18 @@ Idempotency-Key: commande-unique-123`}</pre>
       </div>
       <div className="card card-pad">
         <h2 className="section-title">6. Idempotence</h2>
-        <p className="section-note" style={{ marginTop: 8 }}>Envoyez la même valeur <code>Idempotency-Key</code> lors d’une nouvelle tentative réseau. Mulapay l’enregistre comme <code>order_id</code> fournisseur et renvoie la transaction existante.</p>
+        <p className="section-note" style={{ marginTop: 8 }}>Envoyez la même valeur <code>Idempotency-Key</code> lors d’une nouvelle tentative réseau. Mulapay l’utilise pour éviter les doubles opérations et renvoie la transaction existante.</p>
         <pre className="api-code" style={{ marginTop: 16 }}>{`Idempotency-Key: checkout-20260905-0001`}</pre>
         <p className="section-note" style={{ marginTop: 12 }}>Ne réutilisez jamais cette clé pour une nouvelle commande ou un autre montant.</p>
       </div>
     </div>
 
     <div className="card card-pad" style={{ marginTop: 18 }}>
-      <div className="section-head"><div><h2 className="section-title">7. Webhook signé</h2><p className="section-note">Configurez l’URL publique HTTPS fournie par Mulapay dans DrimPay. Le webhook est traité automatiquement par l’API.</p></div><LockKeyhole size={19} /></div>
-      <div className="api-endpoint" style={{ marginTop: 16 }}><span className="api-method api-method-muted">POST</span><code>/api/v1/webhooks/drimpay</code></div>
+      <div className="section-head"><div><h2 className="section-title">7. Confirmation sécurisée</h2><p className="section-note">Mulapay confirme les opérations côté serveur. Votre application suit le statut avec la référence retournée par l’API.</p></div><LockKeyhole size={19} /></div>
+      <div className="api-endpoint" style={{ marginTop: 16 }}><span className="api-method api-method-muted">GET</span><code>/api/v1/deposits/:reference</code></div>
       <div className="api-docs-grid" style={{ marginTop: 16 }}>
-        <div><div className="step"><div className="step-number">01</div><div><div className="step-title">Vérifier l’en-tête</div><div className="step-copy">Mulapay lit <code>X-DrimPay-Signature</code> sous la forme <code>t=timestamp,v1=signature</code>.</div></div></div><div className="step"><div className="step-number">02</div><div><div className="step-title">Recalculer la signature</div><div className="step-copy">La signature attendue est le HMAC-SHA256 du texte <code>timestamp.raw_body</code> avec le secret webhook.</div></div></div></div>
-        <div><div className="step"><div className="step-number">03</div><div><div className="step-title">Refuser les rejeux</div><div className="step-copy">Les timestamps de plus de cinq minutes sont refusés. Comparez le corps brut, avant toute re-sérialisation JSON.</div></div></div><div className="step"><div className="step-number">04</div><div><div className="step-title">Répondre rapidement</div><div className="step-copy">Retournez un statut HTTP 2xx après traitement. Les événements sont idempotents côté ledger.</div></div></div></div>
+        <div><div className="step"><div className="step-number">01</div><div><div className="step-title">Conserver la référence</div><div className="step-copy">Enregistrez la référence retournée par <code>POST /api/v1/deposits</code>.</div></div></div><div className="step"><div className="step-number">02</div><div><div className="step-title">Consulter le statut</div><div className="step-copy">Appelez <code>GET /api/v1/deposits/:reference</code> depuis votre serveur.</div></div></div></div>
+        <div><div className="step"><div className="step-number">03</div><div><div className="step-title">Attendre la confirmation</div><div className="step-copy">Ne créditez pas votre propre système avant le statut <code>Completed</code>.</div></div></div><div className="step"><div className="step-number">04</div><div><div className="step-title">Éviter les doubles opérations</div><div className="step-copy">Réutilisez la même <code>Idempotency-Key</code> en cas de nouvelle tentative.</div></div></div></div>
       </div>
       <pre className="api-code" style={{ marginTop: 16 }}>{`{
   "reference": "DP-XXXXXXXX",
@@ -624,7 +705,7 @@ Idempotency-Key: commande-unique-123`}</pre>
 
     <div className="card card-pad" style={{ marginTop: 18 }}>
       <h2 className="section-title">8. Pays et opérateurs</h2>
-      <p className="section-note" style={{ marginTop: 8 }}>Les dépôts Payin disponibles dans Mulapay couvrent les pays documentés par DrimPay.</p>
+        <p className="section-note" style={{ marginTop: 8 }}>Les dépôts Payin disponibles dans Mulapay couvrent les pays et opérateurs activés sur votre compte.</p>
       <div className="api-endpoint-list" style={{ marginTop: 16 }}>
         <div><strong>Togo</strong><span>Mixx by Yas · Moov Money</span></div>
         <div><strong>Bénin</strong><span>MTN MoMo · Moov Money</span></div>
@@ -633,7 +714,7 @@ Idempotency-Key: commande-unique-123`}</pre>
         <div><strong>Sénégal</strong><span>Orange Money · Wave · Wizall</span></div>
         <div><strong>Mali</strong><span>Orange Money · Moov Money · MTN MoMo</span></div>
       </div>
-      <p className="section-note" style={{ marginTop: 14 }}>Le Niger est visible dans les wallets Mulapay, mais le Payin DrimPay n’y est pas disponible dans cette version.</p>
+      <p className="section-note" style={{ marginTop: 14 }}>La disponibilité d’un pays ou d’un opérateur peut dépendre de l’activation de votre compte.</p>
     </div>
 
     <div className="card card-pad" style={{ marginTop: 18 }}>
@@ -643,15 +724,37 @@ Idempotency-Key: commande-unique-123`}</pre>
         <div><span className="pill pill-danger">401</span><span>Session Clerk absente ou signature webhook invalide/expirée.</span></div>
         <div><span className="pill pill-danger">404</span><span>Référence ou transaction webhook introuvable.</span></div>
         <div><span className="pill pill-danger">501</span><span>Les retraits ne sont pas encore couverts par l’API Payin.</span></div>
-        <div><span className="pill pill-danger">503</span><span>Configuration serveur DrimPay incomplète ou indisponible.</span></div>
+        <div><span className="pill pill-danger">503</span><span>Service de paiement temporairement indisponible ou configuration du compte incomplète.</span></div>
       </div>
       <div className="notice" style={{ marginTop: 18 }}><Info size={15} /><span>Ne créditez jamais votre propre base après la réponse de création. Attendez le webhook <code>success</code> et utilisez la référence Mulapay pour rapprocher l’opération.</span></div>
     </div>
 
     <div className="card card-pad api-docs-endpoints" style={{ marginTop: 18 }}>
       <div className="section-head"><div><h2 className="section-title">10. Ressources API</h2><p className="section-note">Endpoints actuellement exposés par Mulapay.</p></div><Link href="/app/transactions" className="button button-ghost button-sm">Voir l’historique</Link></div>
-      <div className="api-endpoint-list"><div><span className="api-method">POST</span><code>/api/v1/deposits</code><span>Créer un Payin DrimPay</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/bootstrap</code><span>Lire les wallets et transactions du compte</span></div><div><span className="api-method api-method-muted">POST</span><code>/api/v1/webhooks/drimpay</code><span>Recevoir les statuts fournisseur signés</span></div><div><span className="api-method api-method-muted">POST</span><code>/api/v1/withdrawals</code><span>Réservé : non couvert par le Payin actuel</span></div></div>
+      <div className="api-endpoint-list"><div><span className="api-method">POST</span><code>/api/v1/deposits</code><span>Créer un dépôt Mobile Money</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/deposits/:reference</code><span>Consulter le statut d’un dépôt</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/bootstrap</code><span>Lire les wallets et transactions du compte</span></div><div><span className="api-method api-method-muted">POST</span><code>/api/v1/withdrawals</code><span>Réservé : non couvert par le Payin actuel</span></div></div>
     </div>
+  </main>;
+}
+
+function ApiPayinDocs() {
+  return <main className="page-wrap">
+    <PageIntro eyebrow="Documentation partenaire" title="Documentation API Payin" subtitle="Encaissez du Mobile Money avec l’API Mulapay et suivez chaque opération par sa référence." action={<Link href="/app/api" className="button button-primary"><Settings2 size={15} /> Gérer mes clés</Link>} />
+    <div className="api-docs-grid">
+      <div className="card card-pad"><div className="section-head"><div><h2 className="section-title">Créer un dépôt</h2><p className="section-note">Utilisez une clé API Mulapay créée depuis votre espace partenaire.</p></div><img className="api-docs-icon" src={dashboardIcon('documents.png')} alt="" /></div><div className="api-endpoint" style={{ marginTop: 16 }}><span className="api-method">POST</span><code>/api/v1/deposits</code></div><pre className="api-code">{`Authorization: Bearer mp_live_votre_cle
+Content-Type: application/json
+Idempotency-Key: commande-unique-123
+
+{
+  "walletId": "wallet_togo",
+  "amount": 10000,
+  "method": "mobile_money",
+  "country": "Togo",
+  "operator": "Mixx by Yas",
+  "phone": "+22890000000"
+}`}</pre><p className="section-note" style={{ marginTop: 14 }}>La réponse contient une <code>reference</code>, un <code>status</code>, les frais et le montant net éventuel.</p></div>
+      <div className="card card-pad"><h2 className="section-title">Règles essentielles</h2><div className="step-list" style={{ marginTop: 14 }}><div className="step"><div className="step-number">01</div><div><div className="step-title">Clé serveur</div><div className="step-copy">Conservez la clé uniquement dans votre backend. Ne l’utilisez jamais dans le navigateur ou une application distribuée.</div></div></div><div className="step"><div className="step-number">02</div><div><div className="step-title">Idempotence</div><div className="step-copy">Réutilisez la même valeur <code>Idempotency-Key</code> si votre requête doit être rejouée.</div></div></div><div className="step"><div className="step-number">03</div><div><div className="step-title">Suivi</div><div className="step-copy">Consultez <code>GET /api/v1/deposits/:reference</code> jusqu’à la confirmation.</div></div></div></div></div>
+    </div>
+    <div className="card card-pad api-docs-endpoints" style={{ marginTop: 18 }}><div className="section-head"><div><h2 className="section-title">Endpoints Mulapay</h2><p className="section-note">Toutes les routes publiques utilisent votre clé API dans l’en-tête Authorization.</p></div><Link href="/app/transactions" className="button button-ghost button-sm">Voir l’historique</Link></div><div className="api-endpoint-list"><div><span className="api-method">POST</span><code>/api/v1/deposits</code><span>Créer un dépôt Mobile Money</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/deposits/:reference</code><span>Consulter le statut d’un dépôt</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/bootstrap</code><span>Lire wallets et transactions</span></div><div><span className="api-method api-method-muted">POST</span><code>/api/v1/withdrawals</code><span>Non disponible actuellement</span></div></div><div className="notice" style={{ marginTop: 18 }}><Info size={15} /><span>Les statuts possibles sont En attente, En traitement, Effectué, Échoué, Expiré, Annulé ou Remboursé.</span></div></div>
   </main>;
 }
 

@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { getAuth } from "@clerk/express";
-import { createHmac, timingSafeEqual } from "node:crypto";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@workspace/db";
 import {
   DecideExchangeBody,
@@ -22,6 +22,7 @@ import {
   DecideKycResponse,
 } from "@workspace/api-zod";
 import {
+  apiKeys,
   exchanges,
   kycVerifications,
   ledgerEntries,
@@ -65,7 +66,7 @@ function parseDrimPayWebhookSignature(header: string | undefined, rawBody: Buffe
 async function handleDrimPayWebhook(req: Request, res: Response) {
   const rawBody = (req as Request & { rawBody?: Buffer }).rawBody;
   if (!rawBody || !parseDrimPayWebhookSignature(req.header("X-DrimPay-Signature"), rawBody)) {
-    res.status(401).json({ error: "Signature DrimPay invalide ou expirée." });
+    res.status(401).json({ error: "Signature de confirmation invalide ou expirée." });
     return;
   }
 
@@ -79,7 +80,7 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
     operator?: string;
   };
   if (!payload.reference || !payload.status || !payload.amount || !payload.currency || !payload.country_code || !payload.operator) {
-    res.status(400).json({ error: "Payload DrimPay incomplet." });
+    res.status(400).json({ error: "Notification de confirmation incomplète." });
     return;
   }
 
@@ -112,7 +113,7 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
         entryType: "CREDIT",
         amount: netAmount,
         currency: transaction.currency,
-        description: `Pay-in DrimPay confirmé · ${payload.reference}`,
+        description: `Dépôt Mulapay confirmé · ${payload.reference}`,
       });
       await tx.insert(notifications).values({
         id: crypto.randomUUID(),
@@ -138,13 +139,13 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
         entryType: "DEBIT",
         amount: netAmount,
         currency: transaction.currency,
-        description: `Pay-in DrimPay remboursé · ${payload.reference}`,
+        description: `Dépôt Mulapay remboursé · ${payload.reference}`,
       });
       await tx.insert(notifications).values({
         id: crypto.randomUUID(),
         userId: transaction.userId,
         title: "Dépôt remboursé",
-        body: `Le dépôt DrimPay ${payload.reference} a été remboursé.`,
+        body: `Le dépôt Mulapay ${payload.reference} a été remboursé.`,
         read: false,
       });
       return { found: true };
@@ -161,7 +162,7 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
   });
 
   if (!result.found) {
-    res.status(404).json({ error: "Transaction DrimPay introuvable." });
+    res.status(404).json({ error: "Transaction de paiement introuvable." });
     return;
   }
   res.status(200).json({ received: true });
@@ -169,12 +170,47 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
 
 router.post("/v1/webhooks/drimpay", handleDrimPayWebhook);
 
-router.use((req, res, next) => {
-  if (!getAuth(req).userId) {
+type MulapayRequest = Request & { mulapayUserId?: string; mulapayAuthMode?: "clerk" | "api_key" };
+
+function apiKeyFromRequest(req: Request) {
+  const bearer = req.header("Authorization");
+  if (bearer?.startsWith("Bearer ")) return bearer.slice(7).trim();
+  return req.header("X-Mulapay-Key")?.trim();
+}
+
+function hashApiKey(value: string) {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+async function resolveApiKeyUserId(req: Request) {
+  const rawKey = apiKeyFromRequest(req);
+  if (!rawKey) return null;
+  const stored = await db.query.apiKeys.findFirst({
+    where: and(eq(apiKeys.keyHash, hashApiKey(rawKey)), isNull(apiKeys.revokedAt)),
+  });
+  if (!stored) return null;
+  await db.update(apiKeys).set({ lastUsedAt: new Date() }).where(eq(apiKeys.id, stored.id));
+  return stored.userId;
+}
+
+router.use(async (req, res, next) => {
+  const clerkUserId = getAuth(req).userId;
+  if (clerkUserId) {
+    (req as MulapayRequest).mulapayAuthMode = "clerk";
+    next();
+    return;
+  }
+  const apiUserId = await resolveApiKeyUserId(req);
+  if (apiUserId) {
+    (req as MulapayRequest).mulapayUserId = apiUserId;
+    (req as MulapayRequest).mulapayAuthMode = "api_key";
+    next();
+    return;
+  }
+  if (!clerkUserId) {
     res.status(401).json({ error: "Authentification requise." });
     return;
   }
-  next();
 });
 
 const COUNTRY_WALLETS = [
@@ -196,7 +232,7 @@ function reference(prefix: string) {
 }
 
 function currentUserId(req: Request) {
-  return getAuth(req).userId;
+  return getAuth(req).userId ?? (req as MulapayRequest).mulapayUserId;
 }
 
 async function ensureUser(req: Request) {
@@ -228,6 +264,67 @@ async function ensureUser(req: Request) {
   }
   return (await db.query.users.findFirst({ where: eq(users.id, id) }))!;
 }
+
+async function ensureClerkUser(req: Request) {
+  if (!getAuth(req).userId) throw new Error("AUTHENTICATION_REQUIRED");
+  return ensureUser(req);
+}
+
+const DEFAULT_API_KEY_SCOPES = ["wallets:read", "transactions:read", "deposits:write"];
+
+router.get("/v1/api-keys", async (req, res) => {
+  const user = await ensureClerkUser(req);
+  const keys = await db.select().from(apiKeys).where(eq(apiKeys.userId, user.id)).orderBy(desc(apiKeys.createdAt));
+  res.json(keys.map((key) => ({
+    id: key.id,
+    name: key.name,
+    keyPrefix: key.keyPrefix,
+    scopes: key.scopes,
+    lastUsedAt: key.lastUsedAt?.toISOString() ?? null,
+    revokedAt: key.revokedAt?.toISOString() ?? null,
+    createdAt: key.createdAt.toISOString(),
+  })));
+});
+
+router.post("/v1/api-keys", async (req, res) => {
+  const user = await ensureClerkUser(req);
+  const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+  if (name.length < 2 || name.length > 80) {
+    res.status(400).json({ error: "Le nom de la clé doit contenir entre 2 et 80 caractères." });
+    return;
+  }
+  const rawKey = `mp_live_${randomBytes(32).toString("base64url")}`;
+  const [created] = await db.insert(apiKeys).values({
+    id: crypto.randomUUID(),
+    userId: user.id,
+    name,
+    keyPrefix: rawKey.slice(0, 16),
+    keyHash: hashApiKey(rawKey),
+    scopes: DEFAULT_API_KEY_SCOPES,
+  }).returning();
+  res.status(201).json({
+    id: created.id,
+    name: created.name,
+    key: rawKey,
+    keyPrefix: created.keyPrefix,
+    scopes: created.scopes,
+    createdAt: created.createdAt.toISOString(),
+    warning: "Cette clé ne sera plus affichée après cette fermeture.",
+  });
+});
+
+router.delete("/v1/api-keys/:id", async (req, res) => {
+  const user = await ensureClerkUser(req);
+  const [revoked] = await db.update(apiKeys)
+    .set({ revokedAt: new Date() })
+    .where(and(eq(apiKeys.id, req.params.id), eq(apiKeys.userId, user.id), isNull(apiKeys.revokedAt)))
+    .returning({ id: apiKeys.id });
+  if (!revoked) {
+    res.status(404).json({ error: "Clé API introuvable ou déjà révoquée." });
+    return;
+  }
+  res.json({ ok: true, message: "Clé API révoquée." });
+});
 
 function formatWallet(wallet: typeof wallets.$inferSelect) {
   return { id: wallet.id, country: wallet.country, code: wallet.code, currency: wallet.currency, balance: wallet.balance, pending: wallet.pending, status: wallet.status };
@@ -371,7 +468,7 @@ router.post("/v1/deposits", async (req, res) => {
   const validatedAmount = amount as number;
   const countryCode = countryCodeForName(input.country);
   if (!countryCode || countryCode === "NE") {
-    res.status(400).json({ error: "DrimPay ne prend pas encore en charge les dépôts dans ce pays." });
+    res.status(400).json({ error: "Les dépôts ne sont pas encore disponibles dans ce pays." });
     return;
   }
   if (!/^\+[1-9]\d{7,14}$/.test(input.phone)) {
@@ -393,7 +490,18 @@ router.post("/v1/deposits", async (req, res) => {
   const orderId = orderIdHeader && orderIdHeader.length <= 128 ? orderIdHeader : `order_${crypto.randomUUID()}`;
   const existing = await db.query.transactions.findFirst({ where: eq(transactions.providerOrderId, orderId) });
   if (existing) {
-    res.status(200).json({ ok: true, message: "Cette demande de dépôt existe déjà.", reference: existing.reference, status: existing.status });
+    res.status(200).json({
+      ok: true,
+      message: "Cette demande de dépôt existe déjà.",
+      reference: existing.reference,
+      status: existing.status,
+      amount: existing.amount,
+      currency: existing.currency,
+      paymentUrl: existing.paymentUrl,
+      expiresAt: existing.expiresAt?.toISOString() ?? null,
+      fee: existing.fee,
+      netAmount: existing.netAmount,
+    });
     return;
   }
 
@@ -423,9 +531,12 @@ router.post("/v1/deposits", async (req, res) => {
         status: providerStatusToTransactionStatus(provider.status),
         amount: validatedAmount,
         netAmount: provider.net_amount,
+        paymentUrl: provider.payment_url ?? null,
+        expiresAt: provider.expires_at ? new Date(provider.expires_at) : null,
+        fee: provider.fee ?? null,
         currency: wallet.currency,
         country: wallet.country,
-        counterparty: `DrimPay · ${input.operator}`,
+        counterparty: `Dépôt Mobile Money · ${input.operator}`,
         reference: provider.reference,
         providerOrderId: orderId,
       });
@@ -442,15 +553,42 @@ router.post("/v1/deposits", async (req, res) => {
     });
   } catch (error) {
     if (error instanceof DrimPayError) {
-      res.status(error.statusCode).json({ error: error.message, code: error.code });
+      const isConfigurationError = error.code === "DRIMPAY_NOT_CONFIGURED";
+      res.status(error.statusCode).json({
+        error: isConfigurationError ? "Le service de paiement n’est pas encore configuré." : error.statusCode >= 500 ? "Le service de paiement est temporairement indisponible." : error.message,
+        code: isConfigurationError ? "PAYMENT_SERVICE_NOT_CONFIGURED" : "PAYMENT_SERVICE_ERROR",
+      });
       return;
     }
     throw error;
   }
 });
 
+router.get("/v1/deposits/:reference", async (req, res) => {
+  const user = await ensureUser(req);
+  const transaction = await db.query.transactions.findFirst({
+    where: and(eq(transactions.reference, req.params.reference), eq(transactions.userId, user.id), eq(transactions.type, "Deposit")),
+  });
+  if (!transaction) {
+    res.status(404).json({ error: "Dépôt introuvable." });
+    return;
+  }
+  res.json({
+    ok: true,
+    reference: transaction.reference,
+    status: transaction.status,
+    amount: transaction.amount,
+    currency: transaction.currency,
+    fee: transaction.fee,
+    netAmount: transaction.netAmount,
+    paymentUrl: transaction.paymentUrl,
+    expiresAt: transaction.expiresAt?.toISOString() ?? null,
+    createdAt: transaction.createdAt.toISOString(),
+  });
+});
+
 router.post("/v1/withdrawals", async (_req, res) => {
-  res.status(501).json({ error: "L’API Payin DrimPay ne couvre pas encore les retraits. Aucun wallet n’a été débité." });
+  res.status(501).json({ error: "Les retraits ne sont pas encore disponibles via l’API. Aucun wallet n’a été débité." });
 });
 
 router.patch("/v1/notifications/:id/read", async (req, res) => {
