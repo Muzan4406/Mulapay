@@ -50,6 +50,40 @@ export class AshtechPayOtpRequiredError extends AshtechPayError {
 
 const ASHTECHPAY_BASE_URL = "https://ashtechpay.top";
 
+export const ASHTECHPAY_COUNTRY_CURRENCIES: Record<string, string> = {
+  BJ: "XOFB",
+  BF: "XOFF",
+  CI: "XOFC",
+  CM: "XAF",
+  GA: "XAFG",
+  ML: "XOFM",
+  NE: "XOFN",
+  CD: "CDF",
+  SN: "XOFS",
+  TG: "XOFT",
+};
+
+export const ASHTECHPAY_OPERATORS: Record<string, string[]> = {
+  BJ: ["Celtiis Money", "Coris Money", "Moov Money", "MTN Money"],
+  BF: ["Moov Money", "Orange Money (OTP)", "Wallet LigdiCash"],
+  CM: ["MTN Money", "Orange Money"],
+  CI: ["Moov Money", "MTN Money", "Orange (OTP)", "Wave Money"],
+  GA: ["Airtel Money", "Moov Money"],
+  ML: ["Moov Money", "Orange Money"],
+  NE: ["Airtel Money"],
+  CD: ["Afri Money", "Airtel", "Mpesa Money", "Orange", "Vodacom"],
+  SN: ["E-money", "Free Money", "Orange Money (OTP)", "Wave Money"],
+  TG: ["Flooz (Moov)", "T-Money"],
+};
+
+export function ashtechPayCurrencyForCountry(countryCode: string) {
+  return ASHTECHPAY_COUNTRY_CURRENCIES[countryCode];
+}
+
+export function isAshtechPayOperatorSupported(countryCode: string, operator: string) {
+  return ASHTECHPAY_OPERATORS[countryCode]?.includes(operator) ?? false;
+}
+
 function apiKey() {
   const value = process.env.ASHTECHPAY_API_KEY;
   if (!value) throw new AshtechPayError("La clé API AshtechPay n’est pas configurée.", 503, "ASHTECHPAY_NOT_CONFIGURED");

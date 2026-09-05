@@ -50,8 +50,10 @@ import {
 import {
   AshtechPayError,
   AshtechPayOtpRequiredError,
+  ashtechPayCurrencyForCountry,
   ashtechPayWebhookUrl,
   initiateAshtechPayin,
+  isAshtechPayOperatorSupported,
   isAshtechPayConfigured,
 } from "../services/ashtechpay";
 
@@ -176,8 +178,14 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
     if (payload.status === "success" && transaction.status !== "Completed") {
       const wallet = await tx.query.wallets.findFirst({ where: eq(wallets.id, transaction.walletId ?? "") });
       if (!wallet) throw new Error("WALLET_NOT_FOUND");
+      if (
+        !depositPayloadMatchesWallet(transaction, wallet, payload.country_code!, payload.currency!, "DRIMPAY") ||
+        payload.amount !== transaction.amount
+      ) {
+        return { found: true, walletMismatch: true };
+      }
       const netAmount = payload.net_amount ?? transaction.netAmount;
-      if (netAmount == null) throw new Error("MISSING_PROVIDER_NET_AMOUNT");
+      if (netAmount == null || netAmount <= 0 || netAmount > payload.amount) throw new Error("INVALID_PROVIDER_NET_AMOUNT");
       await tx
         .update(wallets)
         .set({
@@ -251,6 +259,10 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
     res.status(404).json({ error: "Transaction de paiement introuvable." });
     return;
   }
+  if ("walletMismatch" in result && result.walletMismatch) {
+    res.status(422).json({ error: "Le webhook DrimPay ne correspond pas au wallet et au montant de la transaction." });
+    return;
+  }
   res.status(200).json({ received: true });
 }
 
@@ -258,6 +270,19 @@ function ashtechStatusToTransactionStatus(status: string) {
   if (status === "completed" || status === "success") return "Completed";
   if (status === "failed") return "Failed";
   return "Pending";
+}
+
+function depositPayloadMatchesWallet(
+  transaction: typeof transactions.$inferSelect,
+  wallet: typeof wallets.$inferSelect,
+  countryCode: string,
+  currency: string,
+  provider: PaymentProvider,
+) {
+  if (transaction.type !== "Deposit") return true;
+  if (wallet.code !== countryCode) return false;
+  if (provider === "ASHTECHPAY") return ashtechPayCurrencyForCountry(wallet.code) === currency;
+  return transaction.currency === currency;
 }
 
 async function handleAshtechPayWebhook(req: Request, res: Response) {
@@ -311,6 +336,14 @@ async function handleAshtechPayWebhook(req: Request, res: Response) {
       if (!wallet) throw new Error("WALLET_NOT_FOUND");
       const netAmount = payload.amount;
       if (typeof netAmount !== "number") throw new Error("ASH TECHPAY_NET_AMOUNT_MISSING");
+      if (
+        !depositPayloadMatchesWallet(transaction, wallet, payload.country_code ?? wallet.code, payload.currency, "ASHTECHPAY") ||
+        (typeof payload.total_amount === "number" && payload.total_amount !== transaction.amount) ||
+        netAmount <= 0 ||
+        netAmount > (payload.total_amount ?? transaction.amount)
+      ) {
+        return { found: true, duplicate: false, walletMismatch: true };
+      }
       await tx.update(wallets).set({
         balance: sql`${wallets.balance} + ${netAmount}`,
         pending: sql`GREATEST(${wallets.pending} - ${transaction.amount}, 0)`,
@@ -351,6 +384,10 @@ async function handleAshtechPayWebhook(req: Request, res: Response) {
 
   if (!result.found) {
     res.status(404).json({ error: "Transaction AshtechPay introuvable." });
+    return;
+  }
+  if ("walletMismatch" in result && result.walletMismatch) {
+    res.status(422).json({ error: "Le webhook AshtechPay ne correspond pas au wallet et au montant de la transaction." });
     return;
   }
   res.status(200).json({ received: true, duplicate: result.duplicate, event: payload.event ?? null });
@@ -752,9 +789,11 @@ router.post("/v1/public/payment-links/:token/payments", async (req, res) => {
       providerStatus: string;
     };
     if (providerSelection.provider === "ASHTECHPAY") {
+      const ashtechCurrency = ashtechPayCurrencyForCountry(countryCode);
+      if (!ashtechCurrency) throw new AshtechPayError("AshtechPay ne prend pas en charge la devise de ce pays.", 400, "COUNTRY_NOT_SUPPORTED");
       const provider = await initiateAshtechPayin({
         amount: input.amount,
-        currency: ownerWallet.currency,
+        currency: ashtechCurrency,
         countryCode,
         operator: providerSelection.operator,
         phone: input.phone,
@@ -975,9 +1014,11 @@ router.post("/v1/deposits", async (req, res) => {
       expiresAt: Date | null;
     };
     if (providerSelection.provider === "ASHTECHPAY") {
+      const ashtechCurrency = ashtechPayCurrencyForCountry(countryCode);
+      if (!ashtechCurrency) throw new AshtechPayError("AshtechPay ne prend pas en charge la devise de ce pays.", 400, "COUNTRY_NOT_SUPPORTED");
       const provider = await initiateAshtechPayin({
         amount: validatedAmount,
-        currency: wallet.currency,
+        currency: ashtechCurrency,
         countryCode,
         operator: providerSelection.operator,
         phone: input.phone,
@@ -1169,6 +1210,10 @@ router.put("/v1/admin/payment-provider-routes", requireAdmin, async (req, res) =
   }
   if (input.provider === "ASHTECHPAY" && !isAshtechPayConfigured()) {
     res.status(503).json({ error: "AshtechPay ne peut pas être sélectionné tant que ses secrets serveur ne sont pas configurés." });
+    return;
+  }
+  if (input.provider === "ASHTECHPAY" && !isAshtechPayOperatorSupported(input.countryCode, input.providerOperator)) {
+    res.status(400).json({ error: "Cet opérateur n’est pas disponible chez AshtechPay pour le pays sélectionné." });
     return;
   }
   const [route] = await db.insert(paymentProviderRoutes).values({
