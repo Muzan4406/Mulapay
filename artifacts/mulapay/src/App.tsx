@@ -390,7 +390,6 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
   const [phone, setPhone] = useState('');
   const [operator, setOperator] = useState('');
   const [operatorOtp, setOperatorOtp] = useState('');
-  const [feePayer, setFeePayer] = useState<'sender' | 'recipient'>('sender');
   const [paymentUrl, setPaymentUrl] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const isDeposit = kind === 'deposit';
@@ -421,7 +420,6 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
           operator,
           phone: `${selectedCountry.dialCode}${phone.replace(/\D/g, '')}`,
           ...(isDeposit && operatorOtp ? { operatorOtp } : {}),
-          ...(isDeposit ? {} : { feePayer }),
         }),
       });
       const payload = await response.json();
@@ -528,21 +526,6 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
         <div className="input-prefix">
           <span>XOF</span>
           <input id="withdrawal-amount" type="number" min="1" value={amount} onChange={event => setAmount(event.target.value)} placeholder="0" required />
-        </div>
-      </div>
-      <div className="field">
-        <label>Prise en charge des frais</label>
-        <div className="fee-options" role="radiogroup" aria-label="Choisir qui prend les frais">
-          <label className={`fee-option ${feePayer === 'sender' ? 'selected' : ''}`}>
-            <input type="radio" name="withdrawal-fee-payer" value="sender" checked={feePayer === 'sender'} onChange={() => setFeePayer('sender')} />
-            <span><strong>Je prends les frais</strong><small>Le destinataire reçoit le montant demandé.</small></span>
-            {feePayer === 'sender' && <CheckCircle2 size={16} />}
-          </label>
-          <label className={`fee-option ${feePayer === 'recipient' ? 'selected' : ''}`}>
-            <input type="radio" name="withdrawal-fee-payer" value="recipient" checked={feePayer === 'recipient'} onChange={() => setFeePayer('recipient')} />
-            <span><strong>À la charge du destinataire</strong><small>Les frais seront déduits du montant reçu.</small></span>
-            {feePayer === 'recipient' && <CheckCircle2 size={16} />}
-          </label>
         </div>
       </div>
       <button className="button button-primary button-wide" type="submit" disabled={submitting}>
