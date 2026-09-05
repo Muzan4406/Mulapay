@@ -984,8 +984,8 @@ function Transfer() {
   const [amount, setAmount] = useState('');
   const [country, setCountry] = useState(wallets[0]?.country ?? mobileMoneyCountryOptions[0].country);
   const [operator, setOperator] = useState('');
-  const [recipient, setRecipient] = useState('');
-  const [note, setNote] = useState('');
+  const [phone, setPhone] = useState('');
+  const [feePayer, setFeePayer] = useState<'sender' | 'recipient'>('sender');
   const walletForCountry = (countryName: string) => wallets.find(wallet => wallet.country === countryName || countryLabel(wallet.country) === countryName);
   const selectedCountry = mobileMoneyCountryOptions.find(option => option.country === country) ?? mobileMoneyCountryOptions[0];
   const selectedWallet = walletForCountry(country);
@@ -996,23 +996,24 @@ function Transfer() {
   }, [operator, selectedCountry]);
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (!amount || !recipient || !selectedWallet) return;
-    transfer({ amount: Number(amount), currency: selectedWallet.currency, country: selectedWallet.country, counterparty: recipient, note });
+    if (!amount || !phone || !selectedWallet || !operator) return;
+    const recipientPhone = `${selectedCountry.dialCode}${phone.replace(/\D/g, '')}`;
+    transfer({ amount: Number(amount), currency: selectedWallet.currency, country: selectedWallet.country, counterparty: `${recipientPhone} · ${operator}`, note: `Frais à la charge de ${feePayer === 'sender' ? 'moi' : 'du destinataire'}` });
     setAmount('');
-    setRecipient('');
-    setNote('');
+    setPhone('');
   };
   return <main className="page-wrap deposit-page">
-    <PageIntro eyebrow="Transfert Mulapay" title="Envoyer de l’argent" />
+    <PageIntro eyebrow="Mobile Money" title="Envoyer de l’argent" />
     <form className="card card-pad deposit-form" onSubmit={submit}>
       <div className="field">
-        <label htmlFor="transfer-country">Depuis le wallet</label>
+        <label htmlFor="transfer-country">Pays</label>
         <div className="country-select">
           <img src={`${import.meta.env.BASE_URL}countries/${selectedCountry.flagSrc}`} alt="" />
           <select id="transfer-country" value={country} onChange={event => setCountry(event.target.value)} required data-testid="select-transfer-wallet">
             {mobileMoneyCountryOptions.map(option => {
               const wallet = walletForCountry(option.country);
-              return <option key={option.country} value={option.country} disabled={!wallet || wallet.status !== 'Active'}>{option.country} · {wallet?.currency ?? 'XOF'}{wallet ? ` · ${new Intl.NumberFormat('fr-FR').format(Math.max(0, wallet.balance - wallet.pending))} disponibles` : ' · indisponible'}</option>;
+              const balance = wallet ? Math.max(0, wallet.balance - wallet.pending) : 0;
+              return <option key={option.country} value={option.country}>{option.country} · Disponible : {money(balance, wallet?.currency ?? 'XOF')}</option>;
             })}
           </select>
           <ChevronDown className="country-select-chevron" size={16} aria-hidden="true" />
@@ -1030,22 +1031,35 @@ function Transfer() {
         </div>
       </div>
       <div className="field">
-        <label htmlFor="recipient">Destinataire</label>
-        <input id="recipient" value={recipient} onChange={e => setRecipient(e.target.value)} placeholder="Numéro de téléphone ou @identifiant" data-testid="input-transfer-recipient" required />
-        <div className="field-hint">Le destinataire doit disposer d’un compte Mulapay actif.</div>
-      </div>
-      <div className="field">
-        <label htmlFor="amount">Montant</label>
-        <div className="input-prefix">
-          <span>{selectedWallet?.currency ?? 'XOF'}</span>
-          <input id="amount" type="number" min="1" max={availableBalance || undefined} value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" data-testid="input-transfer-amount" required />
+        <label htmlFor="transfer-phone">Numéro de téléphone</label>
+        <div className="phone-input">
+          <span className="phone-prefix" aria-label={`Indicatif ${selectedCountry.dialCode}`}>{selectedCountry.dialCode}</span>
+          <input id="transfer-phone" type="tel" inputMode="numeric" value={phone} onChange={event => setPhone(event.target.value.replace(/\D/g, ''))} placeholder="90 00 00 00" autoComplete="tel-national" data-testid="input-transfer-recipient" required />
         </div>
       </div>
       <div className="field">
-        <label htmlFor="note">Note <span style={{ color: 'hsl(203 18% 46%)', fontWeight: 400 }}>(facultative)</span></label>
-        <textarea id="note" value={note} onChange={e => setNote(e.target.value)} placeholder="À quoi sert ce transfert ?" data-testid="input-transfer-note" />
+        <label htmlFor="transfer-amount">Montant</label>
+        <div className="input-prefix">
+          <span>XOF</span>
+          <input id="transfer-amount" type="number" min="1" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" data-testid="input-transfer-amount" required />
+        </div>
       </div>
-      <button className="button button-primary button-wide" type="submit" disabled={!amount || !recipient || !selectedWallet} data-testid="button-submit-transfer"><Send size={15} /> Envoyer maintenant</button>
+      <div className="field">
+        <label>Prise en charge des frais</label>
+        <div className="fee-options" role="radiogroup" aria-label="Choisir qui prend les frais">
+          <label className={`fee-option ${feePayer === 'sender' ? 'selected' : ''}`}>
+            <input type="radio" name="transfer-fee-payer" value="sender" checked={feePayer === 'sender'} onChange={() => setFeePayer('sender')} />
+            <span><strong>Je prends les frais</strong><small>Le destinataire reçoit le montant demandé.</small></span>
+            {feePayer === 'sender' && <CheckCircle2 size={16} />}
+          </label>
+          <label className={`fee-option ${feePayer === 'recipient' ? 'selected' : ''}`}>
+            <input type="radio" name="transfer-fee-payer" value="recipient" checked={feePayer === 'recipient'} onChange={() => setFeePayer('recipient')} />
+            <span><strong>À la charge du destinataire</strong><small>Les frais seront déduits du montant reçu.</small></span>
+            {feePayer === 'recipient' && <CheckCircle2 size={16} />}
+          </label>
+        </div>
+      </div>
+      <button className="button button-primary button-wide" type="submit" disabled={!amount || !phone || !selectedWallet || !operator} data-testid="button-submit-transfer"><Send size={15} /> Envoyer maintenant</button>
     </form>
   </main>;
 }
