@@ -288,6 +288,24 @@ function depositPayloadMatchesWallet(
   return transaction.currency === currency;
 }
 
+function respondWithPaymentProviderError(res: Response, error: DrimPayError | AshtechPayError, provider: PaymentProvider) {
+  const minimumAmountMatch = error.message.match(/minimum allowed.*?\bis\s+(\d+)\s+([A-Z]+)/i);
+  if (minimumAmountMatch) {
+    res.status(400).json({
+      error: `Le montant minimum accepté par ${provider === "ASHTECHPAY" ? "AshtechPay" : "le fournisseur"} est de ${minimumAmountMatch[1]} ${minimumAmountMatch[2]}.`,
+      code: "PAYMENT_AMOUNT_TOO_LOW",
+      provider,
+    });
+    return;
+  }
+  const isConfigurationError = error.code === "DRIMPAY_NOT_CONFIGURED" || error.code === "ASHTECHPAY_NOT_CONFIGURED";
+  res.status(error.statusCode).json({
+    error: isConfigurationError ? "Le service de paiement n’est pas encore configuré." : error.statusCode >= 500 ? "Le service de paiement est temporairement indisponible." : error.message,
+    code: isConfigurationError ? "PAYMENT_SERVICE_NOT_CONFIGURED" : "PAYMENT_SERVICE_ERROR",
+    provider,
+  });
+}
+
 async function handleAshtechPayWebhook(req: Request, res: Response) {
   const eventId = req.header("X-Ashtech-Event-Id");
   if (!eventId || eventId.length > 200) {
@@ -865,8 +883,7 @@ router.post("/v1/public/payment-links/:token/payments", async (req, res) => {
       return;
     }
     if (error instanceof DrimPayError || error instanceof AshtechPayError) {
-      const isConfigurationError = error.code === "DRIMPAY_NOT_CONFIGURED" || error.code === "ASHTECHPAY_NOT_CONFIGURED";
-      res.status(error.statusCode).json({ error: isConfigurationError ? "Le service de paiement n’est pas encore configuré." : error.statusCode >= 500 ? "Le service de paiement est temporairement indisponible." : error.message, code: isConfigurationError ? "PAYMENT_SERVICE_NOT_CONFIGURED" : "PAYMENT_SERVICE_ERROR", provider: providerSelection.provider });
+      respondWithPaymentProviderError(res, error, providerSelection.provider);
       return;
     }
     throw error;
@@ -1110,12 +1127,7 @@ router.post("/v1/deposits", async (req, res) => {
       return;
     }
     if (error instanceof DrimPayError || error instanceof AshtechPayError) {
-      const isConfigurationError = error.code === "DRIMPAY_NOT_CONFIGURED" || error.code === "ASHTECHPAY_NOT_CONFIGURED";
-      res.status(error.statusCode).json({
-        error: isConfigurationError ? "Le service de paiement n’est pas encore configuré." : error.statusCode >= 500 ? "Le service de paiement est temporairement indisponible." : error.message,
-        code: isConfigurationError ? "PAYMENT_SERVICE_NOT_CONFIGURED" : "PAYMENT_SERVICE_ERROR",
-        provider: providerSelection.provider,
-      });
+      respondWithPaymentProviderError(res, error, providerSelection.provider);
       return;
     }
     throw error;
