@@ -406,6 +406,7 @@ components:
       properties:
         amount: { type: number, exclusiveMinimum: 0 }
         currency: { type: string }
+        country: { type: string }
         counterparty: { type: string, minLength: 2 }
         note: { type: string }
     ExchangeInput:
