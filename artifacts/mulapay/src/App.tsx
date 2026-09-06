@@ -1343,6 +1343,7 @@ function PaymentLinks() {
   const [formError, setFormError] = useState('');
   const [copiedId, setCopiedId] = useState('');
   const [qrLink, setQrLink] = useState<PaymentLink | null>(null);
+  const [showForm, setShowForm] = useState(false);
 
   const expiryValue = () => {
     if (validity === 'never') return '';
@@ -1408,6 +1409,7 @@ function PaymentLinks() {
     setFormError('');
   };
   const beginEdit = (link: PaymentLink) => {
+    setShowForm(true);
     setEditingLink(link);
     setCreatedLink(null);
     setProductName(link.productName ?? '');
@@ -1434,7 +1436,15 @@ function PaymentLinks() {
   };
   const cancelEdit = () => {
     setEditingLink(null);
+    setShowForm(false);
     resetForm();
+  };
+  const beginCreate = () => {
+    setEditingLink(null);
+    setCreatedLink(null);
+    resetForm();
+    setShowForm(true);
+    window.requestAnimationFrame(() => document.getElementById('link-product-name')?.focus());
   };
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -1471,6 +1481,7 @@ function PaymentLinks() {
     const onSuccess = (link: PaymentLink) => {
       setCreatedLink(link);
       setEditingLink(null);
+      setShowForm(false);
       resetForm();
       void queryClient.invalidateQueries({ queryKey: getGetBootstrapQueryKey() });
       toast(editingLink ? 'Votre lien de paiement a été mis à jour.' : 'Votre lien de paiement est prêt à être partagé.');
@@ -1496,6 +1507,7 @@ function PaymentLinks() {
       </div>
       <button className="payment-success-close" aria-label="Masquer la confirmation" onClick={() => setCreatedLink(null)}><X size={16} /></button>
     </section>}
+    {showForm || editingLink ? (
     <div className="payment-builder-layout">
       <form className="payment-builder card" onSubmit={submit}>
         <div className="builder-header"><div><span className="eyebrow">{editingLink ? 'Modification du lien' : 'Nouveau lien'}</span><h2>Les informations du paiement</h2><p>{editingLink ? `Modifiez les paramètres de « ${editingLink.productName} » puis enregistrez.` : 'Les champs marqués d’un astérisque sont obligatoires.'}</p></div><div className="builder-step"><span>01</span><small>{editingLink ? 'Édition' : 'Configuration'}</small></div></div>
@@ -1525,6 +1537,12 @@ function PaymentLinks() {
       </form>
        <aside className="payment-builder-aside"><div className="payment-preview card"><div className="preview-top"><div><span className="eyebrow">Aperçu</span><h2>Ce que votre client verra</h2></div><Eye size={17} /></div><div className="preview-payment"><div className="preview-brand"><span className="preview-mark">M</span><span>Mulapay</span><ShieldCheck size={13} /></div><div className="preview-product"><span className="preview-label">Paiement demandé</span><strong>{productName.trim() || 'Votre produit ou service'}</strong><p>{description.trim() || 'La description de votre paiement apparaîtra ici.'}</p></div><div className="preview-amount"><span>{amountType === 'FIXED' ? 'Montant' : 'Montant libre'}</span><strong>{amountType === 'FIXED' && amount ? money(Number(amount), wallets.find(wallet => wallet.id === walletId)?.currency ?? wallets[0]?.currency ?? 'XOF') : amountType === 'FIXED' ? '—' : 'Au choix'}</strong></div><div className="preview-detail"><span><Clock3 size={13} /> {validity === 'never' ? 'Sans expiration' : validity === 'custom' && customDate ? `Jusqu’au ${new Date(`${customDate}T12:00:00`).toLocaleDateString('fr-FR')}` : `Valide ${validity === '24h' ? '24 heures' : validity === '7d' ? '7 jours' : '30 jours'}`}</span><span><ShieldCheck size={13} /> Paiement sécurisé</span></div><div className="preview-button">Continuer vers le paiement <ArrowRight size={14} /></div></div></div></aside>
     </div>
+    ) : (
+      <section className="payment-builder-collapsed card card-pad">
+        <div><span className="eyebrow">Créer un lien</span><h2 className="section-title">Prêt à recevoir un paiement ?</h2><p className="section-note">Configurez le montant, le wallet de réception et les informations que votre client verra.</p></div>
+        <button className="button button-primary" type="button" onClick={beginCreate} data-testid="button-new-payment-link"><Plus size={15} /> Créer un nouveau lien</button>
+      </section>
+    )}
     <section className="existing-links-section"><div className="section-head"><div><span className="eyebrow">Votre activité</span><h2 className="section-title">Liens existants</h2><p className="section-note">{links.length ? `${links.length} lien${links.length > 1 ? 's' : ''} enregistré${links.length > 1 ? 's' : ''}` : 'Vos liens créés apparaîtront ici.'}</p></div><span className="link-count-badge">{links.length}</span></div>
         {links.length === 0 ? <div className="empty-state card payment-links-empty"><Link2 size={25} /><strong>Aucun lien pour le moment</strong><p>Configurez votre premier lien ci-dessus pour commencer à recevoir des paiements.</p></div> : <div className="links-table card"><div className="links-table-head"><span>Produit / service</span><span>Montant</span><span>Référence</span><span>Statut</span><span>Validité</span><span>Paiements</span><span>Actions</span></div>{links.map(link => <div className={`links-table-row ${editingLink?.id === link.id ? 'is-editing' : ''}`} key={link.id} data-testid={`card-payment-link-${link.id}`}><div className="link-product"><span className="link-product-icon"><Link2 size={14} /></span><span><strong>{link.productName || link.description || 'Lien de paiement'}</strong><small>{link.description || 'Sans description'}</small></span></div><strong className="table-amount">{renderLinkAmount(link)}</strong><code>{link.reference || '—'}</code><span className={`pill ${link.status === 'Active' ? 'pill-success' : link.status === 'Expired' ? 'pill-danger' : 'pill-neutral'}`}>{statusLabel(link.status)}</span><span className="table-muted">{renderLinkExpiry(link)}</span><span className="table-muted">{link.payments}{link.maxPayments ? ` / ${link.maxPayments}` : ''}</span><div className="link-actions"><button className="icon-button" title="Modifier le lien" onClick={() => beginEdit(link)} data-testid={`button-edit-link-${link.id}`}><Pencil size={15} /></button><a className="icon-button" href={link.slug} target="_blank" rel="noreferrer" title="Aperçu du lien" data-testid={`button-preview-link-${link.id}`}><Eye size={15} /></a><button className="icon-button" title={copiedId === link.id ? 'Lien copié' : 'Copier le lien'} onClick={() => copyLink(link)} data-testid={`button-copy-link-${link.id}`}>{copiedId === link.id ? <Check size={15} /> : <Copy size={15} />}</button><button className="icon-button" title="Partager le lien" onClick={() => shareLink(link)} data-testid={`button-share-link-${link.id}`}><Send size={15} /></button><button className="icon-button" title="Afficher le QR code" onClick={() => setQrLink(link)} data-testid={`button-qr-link-${link.id}`}><QrCode size={15} /></button><button className="icon-button" title="Supprimer définitivement" onClick={() => removeLink(link)} disabled={deletePaymentLink.isPending} data-testid={`button-delete-link-${link.id}`}><Trash2 size={15} /></button></div></div>)}</div>}
     </section>
