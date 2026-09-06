@@ -167,3 +167,7 @@ export async function initiateAshtechPayin(input: AshtechPayinInput) {
     }),
   });
 }
+
+export async function getAshtechTransaction(transactionId: string) {
+  return request<AshtechPayinResponse>(`/v1/transaction/${encodeURIComponent(transactionId)}`);
+}

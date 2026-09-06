@@ -74,6 +74,7 @@ export const transactions = pgTable(
     counterparty: text("counterparty").notNull(),
     reference: text("reference").notNull().unique(),
     providerOrderId: text("provider_order_id").unique(),
+    providerTransactionId: text("provider_transaction_id"),
     netAmount: integer("net_amount"),
     platformFee: integer("platform_fee"),
     merchantAmount: integer("merchant_amount"),

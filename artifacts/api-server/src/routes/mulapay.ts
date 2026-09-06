@@ -55,6 +55,7 @@ import {
   ashtechPayCurrencyForCountry,
   ashtechPayPhoneForCountry,
   ashtechPayWebhookUrl,
+  getAshtechTransaction,
   initiateAshtechPayin,
   isAshtechPayOperatorSupported,
   isAshtechPayConfigured,
@@ -63,7 +64,9 @@ import {
 const router: IRouter = Router();
 
 const ORANGE_OTP_COUNTRIES = new Set(["CI", "SN", "BF", "ML"]);
-const TERMINAL_PROVIDER_STATUSES = new Set(["success", "failed", "expired", "cancelled", "reversed"]);
+const TERMINAL_PROVIDER_STATUSES = new Set(["success", "completed", "failed", "expired", "cancelled", "reversed"]);
+const PUBLIC_PAYMENT_MIN_AMOUNT = 300;
+const PUBLIC_PAYMENT_MAX_AMOUNT = 500_000;
 const PLATFORM_SETTINGS_ID = "global";
 const DEFAULT_FEE_PERCENTAGE = 1;
 const DRIMPAY_PAYOUT_FEE_RATE = 0.035;
@@ -242,7 +245,7 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
         return { found: true, walletMismatch: true };
       }
 
-      if (payload.status === "success" && transaction.status !== "Completed") {
+      if (nextStatus === "Completed" && transaction.status !== "Completed") {
         if (
           typeof payload.fee !== "number" ||
           typeof payload.total_debited !== "number" ||
@@ -288,7 +291,7 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
         return { found: true };
       }
 
-      if (payload.status === "reversed" && transaction.status === "Completed") {
+      if (nextStatus === "Reversed" && transaction.status === "Completed") {
         const debitAmount = transaction.amount + (transaction.fee ?? 0);
         await tx.update(wallets).set({ balance: sql`${wallets.balance} + ${debitAmount}` }).where(eq(wallets.id, wallet.id));
         await tx.update(transactions).set({ status: "Reversed" }).where(eq(transactions.id, transaction.id));
@@ -321,7 +324,7 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
       return { found: true };
     }
 
-    if (payload.status === "success" && transaction.status !== "Completed") {
+    if (nextStatus === "Completed" && transaction.status !== "Completed") {
       const wallet = await tx.query.wallets.findFirst({ where: eq(wallets.id, transaction.walletId ?? "") });
       if (!wallet) throw new Error("WALLET_NOT_FOUND");
       if (
@@ -366,7 +369,7 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
       return { found: true };
     }
 
-    if (payload.status === "reversed" && transaction.status === "Completed") {
+    if (nextStatus === "Reversed" && transaction.status === "Completed") {
       const wallet = await tx.query.wallets.findFirst({ where: eq(wallets.id, transaction.walletId ?? "") });
       if (!wallet) throw new Error("WALLET_NOT_FOUND");
       const merchantAmount = transaction.merchantAmount ?? transaction.netAmount;
@@ -415,8 +418,9 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
 }
 
 function ashtechStatusToTransactionStatus(status: string) {
-  if (status === "completed" || status === "success") return "Completed";
-  if (status === "failed") return "Failed";
+  const normalized = status.trim().toLowerCase();
+  if (normalized === "completed" || normalized === "success" || normalized === "successful") return "Completed";
+  if (normalized === "failed" || normalized === "failure" || normalized === "cancelled" || normalized === "canceled" || normalized === "expired") return "Failed";
   return "Pending";
 }
 
@@ -1182,6 +1186,13 @@ router.post("/v1/public/payment-links/:token/payments", async (req, res) => {
     res.status(400).json({ error: "Le montant doit être un entier positif." });
     return;
   }
+  if (link.amountType === "CUSTOMER_CHOOSES" && (input.amount < PUBLIC_PAYMENT_MIN_AMOUNT || input.amount > PUBLIC_PAYMENT_MAX_AMOUNT)) {
+    res.status(400).json({
+      error: `Le montant doit être compris entre ${PUBLIC_PAYMENT_MIN_AMOUNT.toLocaleString("fr-FR")} et ${PUBLIC_PAYMENT_MAX_AMOUNT.toLocaleString("fr-FR")} ${link.currency}.`,
+      code: "PAYMENT_AMOUNT_OUT_OF_RANGE",
+    });
+    return;
+  }
   const countryCode = countryCodeForName(input.country);
   if (!countryCode || countryCode === "NE") {
     res.status(400).json({ error: "Les paiements ne sont pas encore disponibles dans ce pays." });
@@ -1223,6 +1234,7 @@ router.post("/v1/public/payment-links/:token/payments", async (req, res) => {
       paymentUrl: string | null;
       expiresAt: Date | null;
       providerStatus: string;
+      transactionId: string | null;
     };
     if (providerSelection.provider === "ASHTECHPAY") {
       const ashtechCurrency = ashtechPayCurrencyForCountry(countryCode);
@@ -1244,6 +1256,7 @@ router.post("/v1/public/payment-links/:token/payments", async (req, res) => {
         netAmount: provider.credited_amount,
         paymentUrl: provider.flow === "wave" ? provider.wave_url ?? null : null,
         expiresAt: null,
+        transactionId: provider.transaction_id,
       };
     } else {
       const provider = await initiatePayin({
@@ -1266,6 +1279,7 @@ router.post("/v1/public/payment-links/:token/payments", async (req, res) => {
         netAmount: provider.net_amount,
         paymentUrl: provider.payment_url ?? null,
         expiresAt: provider.expires_at ? new Date(provider.expires_at) : null,
+        transactionId: null,
       };
     }
     await db.transaction(async (tx) => {
@@ -1290,9 +1304,10 @@ router.post("/v1/public/payment-links/:token/payments", async (req, res) => {
         counterparty: `Paiement par lien · ${link.productName}`,
         reference: normalizedProvider.reference,
         providerOrderId: orderId,
+        providerTransactionId: normalizedProvider.transactionId,
       });
     });
-    res.status(201).json({ ok: true, message: normalizedProvider.paymentUrl ? "Ouvrez le lien de paiement pour confirmer." : "Confirmez le paiement sur votre téléphone.", reference: normalizedProvider.reference, status: normalizedProvider.providerStatus, paymentUrl: normalizedProvider.paymentUrl, expiresAt: normalizedProvider.expiresAt?.toISOString() ?? null, fee: normalizedProvider.fee, netAmount: normalizedProvider.netAmount, platformFee: mulapayAmount.platformFee, merchantAmount: mulapayAmount.merchantAmount, provider: providerSelection.provider });
+    res.status(201).json({ ok: true, message: normalizedProvider.paymentUrl ? "Ouvrez le lien de paiement pour confirmer." : "Confirmez le paiement sur votre téléphone.", reference: normalizedProvider.reference, status: "Pending", paymentUrl: normalizedProvider.paymentUrl, expiresAt: normalizedProvider.expiresAt?.toISOString() ?? null, fee: normalizedProvider.fee, netAmount: normalizedProvider.netAmount, platformFee: mulapayAmount.platformFee, merchantAmount: mulapayAmount.merchantAmount, provider: providerSelection.provider });
   } catch (error) {
     if (error instanceof AshtechPayOtpRequiredError) {
       res.status(400).json({ error: error.message, code: error.code, otpRequired: true, reference: error.reference, ussdCode: error.ussdCode, provider: "ASHTECHPAY" });
@@ -1330,6 +1345,15 @@ router.get("/v1/public/payment-links/:token/payments/:reference", async (req, re
     res.status(404).json({ error: "Paiement introuvable." });
     return;
   }
+  let providerStatus: string | null = null;
+  if (transaction.paymentProvider === "ASHTECHPAY" && transaction.status === "Pending" && transaction.providerTransactionId) {
+    try {
+      const provider = await getAshtechTransaction(transaction.providerTransactionId);
+      providerStatus = ashtechStatusToTransactionStatus(provider.status);
+    } catch {
+      providerStatus = null;
+    }
+  }
   res.json({
     ok: true,
     reference: transaction.reference,
@@ -1342,6 +1366,7 @@ router.get("/v1/public/payment-links/:token/payments/:reference", async (req, re
     merchantAmount: transaction.merchantAmount,
     paymentUrl: transaction.paymentUrl,
     expiresAt: transaction.expiresAt?.toISOString() ?? null,
+    providerStatus,
     createdAt: transaction.createdAt.toISOString(),
   });
 });
@@ -1493,6 +1518,7 @@ router.post("/v1/deposits", async (req, res) => {
       netAmount: number;
       paymentUrl: string | null;
       expiresAt: Date | null;
+      transactionId: string | null;
     };
     if (providerSelection.provider === "ASHTECHPAY") {
       const ashtechCurrency = ashtechPayCurrencyForCountry(countryCode);
@@ -1515,6 +1541,7 @@ router.post("/v1/deposits", async (req, res) => {
         netAmount: provider.credited_amount,
         paymentUrl: provider.flow === "wave" ? provider.wave_url ?? null : null,
         expiresAt: null,
+        transactionId: provider.transaction_id,
       };
     } else {
       const provider = await initiatePayin({
@@ -1537,6 +1564,7 @@ router.post("/v1/deposits", async (req, res) => {
         netAmount: provider.net_amount,
         paymentUrl: provider.payment_url ?? null,
         expiresAt: provider.expires_at ? new Date(provider.expires_at) : null,
+        transactionId: null,
       };
     }
     await db.transaction(async (tx) => {
@@ -1563,6 +1591,7 @@ router.post("/v1/deposits", async (req, res) => {
         counterparty: `Dépôt Mobile Money · ${input.operator}`,
           reference: normalizedProvider.reference,
         providerOrderId: orderId,
+        providerTransactionId: normalizedProvider.transactionId,
       });
     });
     res.status(201).json({

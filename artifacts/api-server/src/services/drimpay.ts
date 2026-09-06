@@ -242,14 +242,16 @@ export async function getPayin(reference: string) {
 }
 
 export function providerStatusToTransactionStatus(status: string) {
+  const normalized = status.trim().toLowerCase();
   return ({
     queued: "Pending",
     pending: "Pending",
     processing: "Processing",
     success: "Completed",
+    completed: "Completed",
     failed: "Failed",
     expired: "Expired",
     cancelled: "Cancelled",
     reversed: "Reversed",
-  } as Record<string, string>)[status] ?? "Pending";
+  } as Record<string, string>)[normalized] ?? "Pending";
 }

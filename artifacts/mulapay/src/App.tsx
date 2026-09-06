@@ -56,7 +56,7 @@ type AdminSummary = { kycAwaiting: number; exchangeQueue: number; volume: number
 type PaymentProviderId = 'DRIMPAY' | 'ASHTECHPAY';
 type DepositTracking = { reference: string; status: string; amount: number; currency: string; fee: number | null; netAmount: number | null; platformFee: number | null; merchantAmount: number | null; paymentUrl: string | null };
 type WithdrawalTracking = { reference: string; status: string; amount: number; currency: string; fee: number | null; totalDebited: number | null };
-type PublicPaymentResult = { reference: string; status: string; operator?: string; message?: string; amount?: number; currency?: string; fee?: number | null; netAmount?: number | null; platformFee?: number | null; merchantAmount?: number | null; paymentUrl?: string | null; expiresAt?: string | null };
+type PublicPaymentResult = { reference: string; status: string; providerStatus?: string | null; operator?: string; message?: string; amount?: number; currency?: string; fee?: number | null; netAmount?: number | null; platformFee?: number | null; merchantAmount?: number | null; paymentUrl?: string | null; expiresAt?: string | null };
 type Store = {
   profile: { id: string; firstName: string; lastName: string; email: string; role: string; country: string; kycStatus: string };
   wallets: Wallet[]; transactions: Transaction[]; exchanges: Exchange[]; links: PaymentLink[]; notifications: Notification[];
@@ -89,8 +89,11 @@ function statusLabel(status: string) {
 }
 
 function depositStatusIsTerminal(status: string) {
-  return ['completed', 'failed', 'expired', 'cancelled', 'reversed'].includes(status.toLowerCase());
+  return ['completed', 'success', 'failed', 'expired', 'cancelled', 'reversed'].includes(status.toLowerCase());
 }
+
+const PUBLIC_PAYMENT_MIN_AMOUNT = 300;
+const PUBLIC_PAYMENT_MAX_AMOUNT = 500_000;
 
 function movementLabel(type: string) {
   return ({ Received: 'Reçu', Sent: 'Envoyé', Exchange: 'Échange', Deposit: 'Dépôt', Withdrawal: 'Retrait', Payment: 'Paiement' } as Record<string, string>)[type] ?? type;
@@ -436,7 +439,7 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
         setDepositStatusError('');
         setDepositTracking(current => current ? {
           ...current,
-          status: payload.status ?? current.status,
+          status: payload.status?.toLowerCase() === 'success' ? 'Completed' : payload.status ?? current.status,
           fee: typeof payload.fee === 'number' ? payload.fee : current.fee,
           netAmount: typeof payload.netAmount === 'number' ? payload.netAmount : current.netAmount,
           platformFee: typeof payload.platformFee === 'number' ? payload.platformFee : current.platformFee,
@@ -1600,6 +1603,7 @@ function PublicPaymentPage() {
         setPaymentResult(current => current ? {
           ...current,
           status: payload.status ?? current.status,
+          providerStatus: payload.providerStatus ?? current.providerStatus,
           amount: typeof payload.amount === 'number' ? payload.amount : current.amount,
           currency: payload.currency ?? current.currency,
           fee: typeof payload.fee === 'number' ? payload.fee : current.fee,
@@ -1622,7 +1626,7 @@ function PublicPaymentPage() {
   }, [paymentResult?.reference, paymentResult?.status, token]);
 
   useEffect(() => {
-    if (!paymentResult?.reference || depositStatusIsTerminal(paymentResult.status)) return;
+    if (!paymentResult?.reference || depositStatusIsTerminal(paymentResult.status) || paymentResult.providerStatus?.toLowerCase() === 'completed') return;
     const interval = window.setInterval(() => {
       setPaymentSecondsLeft(current => Math.max(0, current - 1));
     }, 1000);
@@ -1630,7 +1634,7 @@ function PublicPaymentPage() {
   }, [paymentResult?.reference, paymentResult?.status]);
 
   useEffect(() => {
-    if (!paymentResult?.reference || depositStatusIsTerminal(paymentResult.status)) return;
+    if (!paymentResult?.reference || depositStatusIsTerminal(paymentResult.status) || paymentResult.providerStatus?.toLowerCase() === 'completed') return;
     let redirectTimer: number | undefined;
     const timeout = window.setTimeout(() => {
       setPaymentResult(current => current && !depositStatusIsTerminal(current.status) ? { ...current, status: 'Failed', message: 'Le paiement n’a pas été confirmé après 60 secondes.' } : current);
@@ -1649,7 +1653,7 @@ function PublicPaymentPage() {
     }
   }, [link, paymentResult?.reference, paymentResult?.status]);
 
-  if (state === 'loading') return <div className="loading-screen">Chargement du paiement…</div>;
+  if (state === 'loading') return <main className="public-payment-loading" aria-busy="true"><div className="public-payment-loading-card"><div className="public-payment-loading-head"><Logo /><span className="public-payment-loading-lock"><LockKeyhole size={13} /> Sécurisé</span></div><div className="public-payment-loading-art"><span /><span /><span /></div><div className="public-payment-loading-copy"><span className="eyebrow">Mulapay</span><h1>Préparation de votre paiement</h1><p>Nous vérifions le lien reçu. Cela ne prendra qu’un instant.</p><div className="public-payment-loading-progress"><span /></div></div></div></main>;
   if (state === 'error' || !link) return <main className="page-wrap public-payment-page"><div className="public-payment-header"><Logo /></div><PageIntro eyebrow="Paiement Mulapay" title="Lien indisponible" subtitle="Vérifiez l’adresse reçue ou demandez un nouveau lien au commerçant." /><div className="card card-pad public-payment-unavailable"><CircleAlert size={22} /><strong>Ce lien de paiement n’est plus disponible.</strong><Link className="button button-primary" href="/">Retour à Mulapay</Link></div></main>;
 
   const selectedCustomerCountry = mobileMoneyCountryOptions.find(option => option.country === customerCountry) ?? mobileMoneyCountryOptions[0];
@@ -1667,6 +1671,11 @@ function PublicPaymentPage() {
     setPaymentSecondsLeft(60);
     setPaymentSubmitting(true);
     const selectedAmount = link.amountType === 'FIXED' ? link.amount : Number(amount);
+    if (link.amountType === 'CUSTOMER_CHOOSES' && (!Number.isInteger(selectedAmount) || selectedAmount < PUBLIC_PAYMENT_MIN_AMOUNT || selectedAmount > PUBLIC_PAYMENT_MAX_AMOUNT)) {
+      setPaymentError(`Le montant doit être compris entre ${PUBLIC_PAYMENT_MIN_AMOUNT.toLocaleString('fr-FR')} et ${PUBLIC_PAYMENT_MAX_AMOUNT.toLocaleString('fr-FR')} ${link.currency}.`);
+      setPaymentSubmitting(false);
+      return;
+    }
     try {
       const response = await fetch(`/api/v1/public/payment-links/${encodeURIComponent(token)}/payments`, {
         method: 'POST',
@@ -1687,6 +1696,7 @@ function PublicPaymentPage() {
       setPaymentResult({
         reference: payload.reference,
         status: payload.status ?? 'Pending',
+        providerStatus: payload.providerStatus ?? null,
         operator: customerOperator,
         message: payload.message,
         amount: selectedAmount,
@@ -1704,8 +1714,9 @@ function PublicPaymentPage() {
       setPaymentSubmitting(false);
     }
   };
-  const paymentCompleted = paymentResult?.status.toLowerCase() === 'completed';
-  const paymentFailed = paymentResult ? ['failed', 'expired', 'cancelled', 'reversed'].includes(paymentResult.status.toLowerCase()) : false;
+  const paymentProviderConfirmed = paymentResult?.providerStatus?.toLowerCase() === 'completed';
+  const paymentCompleted = paymentResult ? ['completed', 'success'].includes(paymentResult.status.toLowerCase()) : false;
+  const paymentFailed = paymentResult ? ['failed', 'expired', 'cancelled', 'reversed'].includes(paymentResult.status.toLowerCase()) || ['failed', 'expired', 'cancelled', 'reversed'].includes(paymentResult.providerStatus?.toLowerCase() ?? '') : false;
   const paymentOperator = paymentResult?.operator ?? customerOperator;
   const paymentOperatorOption = selectedCustomerCountry.operators.find(option => option.name === paymentOperator);
   const paymentAmountLabel = money(paymentResult?.merchantAmount ?? paymentResult?.amount ?? selectedAmount, paymentResult?.currency ?? link.currency);
@@ -1722,19 +1733,19 @@ function PublicPaymentPage() {
           {paymentResult ? <div className={`public-payment-result ${paymentCompleted ? 'is-complete' : paymentFailed ? 'is-failed' : ''}`} aria-live="polite">
             <div className="public-payment-provider">{paymentOperatorOption ? <img src={`${import.meta.env.BASE_URL}mobile-money/${paymentOperatorOption.src}`} alt="" /> : <span className="public-payment-provider-fallback"><WalletCards size={18} /></span>}<span><small>Opération Mobile Money</small><strong>{paymentOperator}</strong></span></div>
             <span className="public-payment-result-icon">{paymentCompleted ? <CheckCircle2 size={22} /> : paymentFailed ? <CircleAlert size={22} /> : <RefreshCw size={22} className="loading-spin" />}</span>
-            <span className="eyebrow">{paymentCompleted ? 'Paiement confirmé' : paymentFailed ? 'Paiement non confirmé' : 'Paiement en cours'}</span>
-            <h2>{paymentCompleted ? 'Votre paiement est confirmé' : paymentFailed ? 'Le paiement n’a pas abouti' : 'Validez sur votre téléphone'}</h2>
-            <p>{paymentCompleted ? `Le paiement de ${paymentGrossAmountLabel} a été confirmé par le service de paiement.` : paymentFailed ? 'Le service de paiement n’a pas confirmé cette opération dans le délai prévu.' : paymentResult.message ?? 'Ouvrez votre application Mobile Money et validez la demande. Mulapay vérifie automatiquement la confirmation.'}</p>
+            <span className="eyebrow">{paymentCompleted ? 'Paiement confirmé' : paymentProviderConfirmed ? 'Paiement reçu' : paymentFailed ? 'Paiement non confirmé' : 'Paiement en cours'}</span>
+            <h2>{paymentCompleted ? 'Votre paiement est confirmé' : paymentProviderConfirmed ? 'Confirmation sécurisée en cours' : paymentFailed ? 'Le paiement n’a pas abouti' : 'Validez sur votre téléphone'}</h2>
+            <p>{paymentCompleted ? `Le paiement de ${paymentGrossAmountLabel} a été confirmé par le service de paiement.` : paymentProviderConfirmed ? 'AshtechPay a confirmé le paiement. Mulapay attend encore la notification signée pour finaliser le crédit sécurisé.' : paymentFailed ? 'Le service de paiement n’a pas confirmé cette opération dans le délai prévu.' : paymentResult.message ?? 'Ouvrez votre application Mobile Money et validez la demande. Mulapay vérifie automatiquement la confirmation.'}</p>
             <div className="public-payment-amount"><small>Net après frais Mulapay</small><strong>{paymentAmountLabel}</strong><span>Montant du paiement : {paymentGrossAmountLabel} · via {paymentOperator}</span></div>
             {!paymentCompleted && !paymentFailed && <div className="public-payment-progress"><div><span>Confirmation automatique</span><strong>{paymentSecondsLeft}s</strong></div><span className="public-payment-progress-track"><span style={{ width: `${Math.round((paymentSecondsLeft / 60) * 100)}%` }} /></span></div>}
             {!paymentCompleted && !paymentFailed && paymentResult.paymentUrl && <a className="button button-primary button-wide" href={paymentResult.paymentUrl} target="_blank" rel="noreferrer">Ouvrir le paiement sécurisé <ChevronRight size={15} /></a>}
-            {!paymentCompleted && !paymentFailed && <div className="public-payment-waiting"><RefreshCw size={15} className="loading-spin" /> Statut vérifié automatiquement.</div>}
+            {!paymentCompleted && !paymentFailed && <div className="public-payment-waiting"><RefreshCw size={15} className="loading-spin" /> {paymentProviderConfirmed ? 'Paiement reçu, finalisation sécurisée en cours.' : 'Statut vérifié automatiquement.'}</div>}
             {paymentStatusError && <div className="form-error public-payment-error"><CircleAlert size={14} /> {paymentStatusError}</div>}
             {paymentFailed && <button className="button button-ghost button-wide" type="button" onClick={() => { setPaymentResult(null); setPaymentStatusError(''); setPaymentError(''); setPaymentSecondsLeft(60); }}>Réessayer le paiement</button>}
           </div> : <>
            {link.amountType === 'FIXED' && <div className="public-payment-fixed-amount"><div><span>Montant à payer</span><small>Paiement sécurisé en {link.currency}</small></div><strong>{money(link.amount, link.currency)}</strong></div>}
-           <div className="public-payment-form-head"><div><span className="eyebrow">Vos informations</span><h2>Préparez votre paiement</h2><p>Renseignez les coordonnées utilisées pour le paiement.</p></div><span className="public-payment-step">1 / 1</span></div>
-           {link.amountType === 'CUSTOMER_CHOOSES' && <div className="field public-payment-custom-amount"><label htmlFor="public-payment-amount">Montant à payer</label><div className="input-prefix"><span>{link.currency}</span><input id="public-payment-amount" type="number" min="1" step="1" value={amount} onChange={event => setAmount(event.target.value)} placeholder="0" required /></div><small className="field-hint">Saisissez un montant entier en {link.currency}.</small></div>}
+           <div className="public-payment-form-head"><div><span className="eyebrow">Vos informations</span><h2>Préparez votre paiement</h2><p>Renseignez les coordonnées utilisées pour le paiement.</p></div></div>
+           {link.amountType === 'CUSTOMER_CHOOSES' && <div className="field public-payment-custom-amount"><label htmlFor="public-payment-amount">Montant à payer</label><div className="input-prefix"><span>{link.currency}</span><input id="public-payment-amount" type="number" min={PUBLIC_PAYMENT_MIN_AMOUNT} max={PUBLIC_PAYMENT_MAX_AMOUNT} step="1" value={amount} onChange={event => setAmount(event.target.value)} placeholder="300" required /></div><small className="field-hint">Choisissez un montant entier entre {PUBLIC_PAYMENT_MIN_AMOUNT.toLocaleString('fr-FR')} et {PUBLIC_PAYMENT_MAX_AMOUNT.toLocaleString('fr-FR')} {link.currency}.</small></div>}
            {hasField('full_name') && <div className="field"><label htmlFor="public-payment-full-name">Nom complet</label><input id="public-payment-full-name" value={customerValues.full_name ?? ''} onChange={event => updateCustomerValue('full_name', event.target.value)} autoComplete="name" placeholder="Votre nom et prénom" required /></div>}
            {hasField('country') && <div className="field"><label htmlFor="public-payment-country">Pays du payeur</label><div className="country-select"><img src={`${import.meta.env.BASE_URL}countries/${selectedCustomerCountry.flagSrc}`} alt="" /><select id="public-payment-country" value={customerCountry} onChange={event => { setCustomerCountry(event.target.value); const next = mobileMoneyCountryOptions.find(option => option.country === event.target.value); setCustomerOperator(next?.operators[0]?.name ?? ''); }} required>{mobileMoneyCountryOptions.map(option => <option key={option.country} value={option.country} disabled={option.code === 'NE'}>{option.country} · {option.dialCode}{option.code === 'NE' ? ' · bientôt disponible' : ''}</option>)}</select><ChevronDown className="country-select-chevron" size={16} aria-hidden="true" /></div></div>}
            {hasField('operator') && <div className="field"><label>Opérateur Mobile Money</label><div className="mobile-money-options" role="radiogroup" aria-label="Choisir un opérateur Mobile Money">{selectedCustomerCountry.operators.map(option => <label className={`mobile-money-option ${customerOperator === option.name ? 'selected' : ''}`} key={option.name}><input type="radio" name="public-payment-operator" value={option.name} checked={customerOperator === option.name} onChange={event => setCustomerOperator(event.target.value)} required /><img src={`${import.meta.env.BASE_URL}mobile-money/${option.src}`} alt="" /><span>{option.name}</span></label>)}</div></div>}

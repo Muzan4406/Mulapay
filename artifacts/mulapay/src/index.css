@@ -967,6 +967,26 @@ h1,h2,h3,p { margin:0; }
 .preview-button { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:11px 12px; border-radius:8px; background:hsl(var(--primary)); color:hsl(var(--primary-foreground)); font-size:10px; font-weight:700; }
 .help-icon { width:26px; height:26px; display:grid; place-items:center; flex:0 0 auto; border-radius:8px; background:hsl(var(--accent) / .26); color:hsl(34 47% 29%); }
 .payment-success { position:relative; display:flex; align-items:flex-start; gap:14px; margin:18px 0; padding:20px 46px 20px 20px; border-color:hsl(var(--primary) / .3); background:linear-gradient(120deg,hsl(var(--primary) / .09),hsl(var(--card))); box-shadow:0 13px 30px hsl(205 38% 16% / .06); animation:payment-reveal .35s ease both; }
+.public-payment-loading { min-height:100vh; display:grid; place-items:center; padding:24px 20px; background:radial-gradient(circle at 15% 0%,hsl(194 82% 73% / .2),transparent 32%),linear-gradient(180deg,hsl(204 42% 97%),hsl(210 30% 94%)); }
+.public-payment-loading-card { width:min(100%,430px); overflow:hidden; border:1px solid hsl(205 26% 86%); border-radius:20px; background:hsl(0 0% 100% / .95); box-shadow:0 20px 48px hsl(205 38% 16% / .1); }
+.public-payment-loading-head { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:17px 18px; }
+.public-payment-loading-head .brand { margin:0; padding:0; }
+.public-payment-loading-head .brand-image { width:106px; max-height:50px; }
+.public-payment-loading-lock { display:flex; align-items:center; gap:6px; padding:7px 9px; border-radius:9px; background:hsl(161 51% 38% / .1); color:hsl(161 51% 30%); font-size:9px; font-weight:700; }
+.public-payment-loading-art { position:relative; height:164px; overflow:hidden; background:linear-gradient(140deg,#122f55 0%,#176d88 54%,#68d1c1 100%); }
+.public-payment-loading-art::before, .public-payment-loading-art::after { content:""; position:absolute; border:1px solid hsl(0 0% 100% / .2); border-radius:50%; }
+.public-payment-loading-art::before { width:230px; height:230px; right:-86px; top:-94px; }
+.public-payment-loading-art::after { width:150px; height:150px; left:-62px; bottom:-88px; }
+.public-payment-loading-art > span { position:absolute; display:block; border-radius:99px; transform:rotate(38deg); }
+.public-payment-loading-art > span:nth-child(1) { width:112px; height:27px; left:14%; top:44px; background:hsl(193 88% 82% / .7); }
+.public-payment-loading-art > span:nth-child(2) { width:94px; height:94px; top:32px; left:50%; border-radius:50%; background:radial-gradient(circle at 32% 26%,#d9fff6 0 7%,#4fd3bf 8% 26%,#155b82 69%); box-shadow:0 17px 35px hsl(205 74% 18% / .28); transform:translateX(-50%); }
+.public-payment-loading-art > span:nth-child(3) { width:125px; height:34px; right:8%; bottom:34px; background:hsl(161 70% 82% / .46); }
+.public-payment-loading-copy { padding:23px 22px 25px; }
+.public-payment-loading-copy h1 { margin-top:7px; color:hsl(var(--foreground)); font-size:24px; letter-spacing:-.06em; }
+.public-payment-loading-copy p { margin-top:8px; color:hsl(var(--muted-foreground)); font-size:11px; line-height:1.5; }
+.public-payment-loading-progress { height:6px; overflow:hidden; margin-top:22px; border-radius:99px; background:hsl(205 26% 88%); }
+.public-payment-loading-progress span { display:block; width:42%; height:100%; border-radius:inherit; background:linear-gradient(90deg,hsl(201 76% 38%),hsl(161 51% 49%)); animation:public-payment-loading-progress 1.35s ease-in-out infinite; }
+@keyframes public-payment-loading-progress { 0% { transform:translateX(-115%); } 100% { transform:translateX(270%); } }
 .public-payment-page { min-height:100vh; padding-top:24px; padding-bottom:52px; background:radial-gradient(circle at 16% 0%,hsl(194 82% 73% / .18),transparent 29%),linear-gradient(180deg,hsl(204 42% 97%),hsl(210 30% 94%)); }
 .public-payment-header, .public-payment-intro, .public-payment-product-card, .public-payment-layout { width:min(100% - 40px,680px); margin-left:auto; margin-right:auto; }
 .public-payment-header { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:17px; padding:12px 15px; border:1px solid hsl(205 26% 86%); border-radius:16px; background:hsl(0 0% 100% / .86); box-shadow:0 9px 26px hsl(205 38% 16% / .06); }
