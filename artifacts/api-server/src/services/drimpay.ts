@@ -38,30 +38,27 @@ export type DrimPayPayoutInput = {
   countryCode: string;
   operator: string;
   phone: string;
-  externalRef: string;
+  orderId: string;
   webhookUrl: string;
   description?: string;
+  metadata?: Record<string, string>;
 };
 
 export type DrimPayPayoutResponse = {
   id?: string;
   reference: string;
+  order_id: string;
   status: string;
-  type?: string;
   amount: number;
   fee: number;
-  total_debit: number;
-  fee_rate?: string;
+  total_debited: number;
   currency: string;
   country_code: string;
   operator: string;
   phone: string;
-  description?: string;
-  wallet_debited?: boolean;
-  wallet_id?: string;
   wallet_balance_after?: number;
-  created_at?: string;
-  estimated_completion?: string;
+  mode?: string;
+  created_at: string;
 };
 
 export type DrimPayWebhookPayload = {
@@ -224,7 +221,7 @@ export async function initiatePayin(input: DrimPayPayinInput) {
 
 export async function initiatePayout(input: DrimPayPayoutInput) {
   const operator = normalizeDrimPayOperator(input.operator);
-  return request<DrimPayPayoutResponse>("/payout/initiate", {
+  return request<DrimPayPayoutResponse>("/payout/send", {
     method: "POST",
     body: JSON.stringify({
       amount: input.amount,
@@ -232,9 +229,10 @@ export async function initiatePayout(input: DrimPayPayoutInput) {
       country_code: input.countryCode,
       operator,
       phone: input.phone,
-      external_ref: input.externalRef,
+      order_id: input.orderId,
       webhook_url: input.webhookUrl,
       ...(input.description ? { description: input.description } : {}),
+      ...(input.metadata ? { metadata: input.metadata } : {}),
     }),
   });
 }

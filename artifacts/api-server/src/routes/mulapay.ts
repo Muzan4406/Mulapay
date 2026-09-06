@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { getAuth } from "@clerk/express";
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { and, desc, eq, inArray, isNull, like, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, like, lte, ne, or, sql } from "drizzle-orm";
 import { db } from "@workspace/db";
 import {
   DecideExchangeBody,
@@ -44,6 +44,7 @@ import {
   DrimPayError,
   drimPayWebhookUrl,
   initiatePayin,
+  initiatePayout,
   isDrimPayConfigured,
   operatorSlugForName,
   providerStatusToTransactionStatus,
@@ -65,6 +66,7 @@ const ORANGE_OTP_COUNTRIES = new Set(["CI", "SN", "BF", "ML"]);
 const TERMINAL_PROVIDER_STATUSES = new Set(["success", "failed", "expired", "cancelled", "reversed"]);
 const PLATFORM_SETTINGS_ID = "global";
 const DEFAULT_FEE_PERCENTAGE = 1;
+const DRIMPAY_PAYOUT_FEE_RATE = 0.035;
 type PaymentProvider = "DRIMPAY" | "ASHTECHPAY";
 
 function firstHeaderValue(value: string | string[] | undefined) {
@@ -104,6 +106,28 @@ async function getPlatformSettings() {
 function calculateMulapayNetAmount(amount: number, feePercentage: number) {
   const platformFee = Math.round(amount * feePercentage / 100);
   return { platformFee, merchantAmount: Math.max(0, amount - platformFee) };
+}
+
+function estimateDrimPayPayoutFee(amount: number) {
+  return Math.ceil(amount * DRIMPAY_PAYOUT_FEE_RATE);
+}
+
+function withdrawalReservationAmount(transaction: typeof transactions.$inferSelect) {
+  return transaction.type === "Withdrawal" ? transaction.amount + (transaction.fee ?? 0) : transaction.amount;
+}
+
+function withdrawalPayloadMatchesWallet(
+  transaction: typeof transactions.$inferSelect,
+  wallet: typeof wallets.$inferSelect,
+  payload: { country_code: string; currency: string; operator: string },
+) {
+  if (transaction.type !== "Withdrawal") return true;
+  const expectedOperator = transaction.counterparty.split("·").at(-1)?.trim();
+  return (
+    wallet.code === payload.country_code &&
+    transaction.currency === payload.currency &&
+    Boolean(expectedOperator && operatorSlugForName(expectedOperator) === payload.operator)
+  );
 }
 
 function parseDrimPayWebhookSignature(header: string | undefined, rawBody: Buffer) {
@@ -160,27 +184,138 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
   }
 
   const payload = req.body as {
+    event?: string;
     reference?: string;
+    order_id?: string;
     status?: string;
     amount?: number;
+    fee?: number;
+    total_debited?: number;
     net_amount?: number;
     currency?: string;
     country_code?: string;
     operator?: string;
+    failure_reason?: string | null;
   };
-  if (!payload.reference || !payload.status || !payload.amount || !payload.currency || !payload.country_code || !payload.operator) {
+  if (
+    !payload.reference ||
+    !payload.status ||
+    typeof payload.amount !== "number" ||
+    !payload.currency ||
+    !payload.country_code ||
+    !payload.operator
+  ) {
     res.status(400).json({ error: "Notification de confirmation incomplète." });
     return;
   }
 
   const result = await db.transaction(async (tx) => {
     const transaction = await tx.query.transactions.findFirst({
-      where: and(eq(transactions.reference, payload.reference!), eq(transactions.paymentProvider, "DRIMPAY")),
+      where: and(
+        eq(transactions.paymentProvider, "DRIMPAY"),
+        or(
+          eq(transactions.reference, payload.reference!),
+          ...(payload.order_id ? [eq(transactions.providerOrderId, payload.order_id)] : []),
+        ),
+      ),
     });
     if (!transaction) return { found: false };
     const nextStatus = providerStatusToTransactionStatus(payload.status!);
     const currentIsTerminal = ["Completed", "Failed", "Expired", "Cancelled", "Reversed"].includes(transaction.status);
     if (currentIsTerminal && transaction.status !== "Completed" && nextStatus !== "Reversed") {
+      return { found: true };
+    }
+
+    if (transaction.type === "Withdrawal") {
+      const wallet = await tx.query.wallets.findFirst({ where: eq(wallets.id, transaction.walletId ?? "") });
+      if (!wallet) throw new Error("WALLET_NOT_FOUND");
+      if (
+        !withdrawalPayloadMatchesWallet(transaction, wallet, {
+          country_code: payload.country_code!,
+          currency: payload.currency!,
+          operator: payload.operator!,
+        }) ||
+        payload.amount !== transaction.amount
+      ) {
+        return { found: true, walletMismatch: true };
+      }
+
+      if (payload.status === "success" && transaction.status !== "Completed") {
+        if (
+          typeof payload.fee !== "number" ||
+          typeof payload.total_debited !== "number" ||
+          payload.fee < 0 ||
+          payload.total_debited !== payload.amount + payload.fee
+        ) {
+          throw new Error("INVALID_PROVIDER_PAYOUT_TOTAL");
+        }
+        const debitAmount = payload.total_debited;
+        const reservedAmount = withdrawalReservationAmount(transaction);
+        const updatedWallets = await tx
+          .update(wallets)
+          .set({
+            balance: sql`${wallets.balance} - ${debitAmount}`,
+            pending: sql`GREATEST(${wallets.pending} - ${reservedAmount}, 0)`,
+          })
+          .where(and(eq(wallets.id, wallet.id), gte(wallets.balance, debitAmount)))
+          .returning({ id: wallets.id });
+        if (!updatedWallets.length) throw new Error("WITHDRAWAL_BALANCE_UNAVAILABLE");
+        await tx.update(transactions).set({
+          status: "Completed",
+          fee: payload.fee,
+          netAmount: payload.amount,
+          merchantAmount: payload.amount,
+        }).where(eq(transactions.id, transaction.id));
+        await tx.insert(ledgerEntries).values({
+          id: crypto.randomUUID(),
+          userId: transaction.userId,
+          walletId: wallet.id,
+          transactionId: transaction.id,
+          entryType: "DEBIT",
+          amount: debitAmount,
+          currency: transaction.currency,
+          description: `Retrait DrimPay confirmé · ${payload.reference}`,
+        });
+        await tx.insert(notifications).values({
+          id: crypto.randomUUID(),
+          userId: transaction.userId,
+          title: "Retrait confirmé",
+          body: `${payload.amount.toLocaleString("fr-FR")} ${transaction.currency} ont été envoyés vers ${transaction.counterparty}.`,
+          read: false,
+        });
+        return { found: true };
+      }
+
+      if (payload.status === "reversed" && transaction.status === "Completed") {
+        const debitAmount = transaction.amount + (transaction.fee ?? 0);
+        await tx.update(wallets).set({ balance: sql`${wallets.balance} + ${debitAmount}` }).where(eq(wallets.id, wallet.id));
+        await tx.update(transactions).set({ status: "Reversed" }).where(eq(transactions.id, transaction.id));
+        await tx.insert(ledgerEntries).values({
+          id: crypto.randomUUID(),
+          userId: transaction.userId,
+          walletId: wallet.id,
+          transactionId: transaction.id,
+          entryType: "CREDIT",
+          amount: debitAmount,
+          currency: transaction.currency,
+          description: `Retrait DrimPay remboursé · ${payload.reference}`,
+        });
+        await tx.insert(notifications).values({
+          id: crypto.randomUUID(),
+          userId: transaction.userId,
+          title: "Retrait remboursé",
+          body: `Le retrait DrimPay ${payload.reference} a été remboursé.`,
+          read: false,
+        });
+        return { found: true };
+      }
+
+      if (TERMINAL_PROVIDER_STATUSES.has(payload.status!)) {
+        await tx.update(wallets)
+          .set({ pending: sql`GREATEST(${wallets.pending} - ${withdrawalReservationAmount(transaction)}, 0)` })
+          .where(eq(wallets.id, wallet.id));
+      }
+      await tx.update(transactions).set({ status: nextStatus }).where(eq(transactions.id, transaction.id));
       return { found: true };
     }
 
@@ -271,10 +406,10 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
     return;
   }
   if ("walletMismatch" in result && result.walletMismatch) {
-    res.status(422).json({ error: "Le webhook DrimPay ne correspond pas au wallet et au montant de la transaction." });
+    res.status(422).json({ error: "Le webhook DrimPay ne correspond pas au wallet, à l’opérateur ou au montant de la transaction." });
     return;
   }
-  res.status(200).json({ received: true });
+  res.status(200).json({ received: true, event: payload.event ?? null });
 }
 
 function ashtechStatusToTransactionStatus(status: string) {
@@ -608,7 +743,12 @@ async function expireAndReconcilePending(userId: string) {
   const cutoff = new Date(Date.now() - 60_000);
   const activeStatuses = ["Pending", "Processing"];
   const stale = await db.query.transactions.findMany({
-    where: and(eq(transactions.userId, userId), inArray(transactions.status, activeStatuses), lte(transactions.createdAt, cutoff)),
+    where: and(
+      eq(transactions.userId, userId),
+      inArray(transactions.status, activeStatuses),
+      lte(transactions.createdAt, cutoff),
+      ne(transactions.type, "Withdrawal"),
+    ),
   });
 
   for (const transaction of stale) {
@@ -628,7 +768,11 @@ async function expireAndReconcilePending(userId: string) {
     db.select().from(wallets).where(eq(wallets.userId, userId)),
     db.select({ walletId: transactions.walletId, amount: transactions.amount })
       .from(transactions)
-      .where(and(eq(transactions.userId, userId), inArray(transactions.status, activeStatuses))),
+      .where(and(
+        eq(transactions.userId, userId),
+        inArray(transactions.status, activeStatuses),
+        ne(transactions.type, "Withdrawal"),
+      )),
   ]);
   const pendingByWallet = new Map<string, number>();
   for (const transaction of liveTransactions) {
@@ -1265,6 +1409,31 @@ router.get("/v1/deposits/:reference", async (req, res) => {
   });
 });
 
+router.get("/v1/withdrawals/:reference", async (req, res) => {
+  const user = await ensureUser(req);
+  const transaction = await db.query.transactions.findFirst({
+    where: and(
+      eq(transactions.reference, req.params.reference),
+      eq(transactions.userId, user.id),
+      eq(transactions.type, "Withdrawal"),
+    ),
+  });
+  if (!transaction) {
+    res.status(404).json({ error: "Retrait introuvable." });
+    return;
+  }
+  res.json({
+    ok: true,
+    reference: transaction.reference,
+    status: transaction.status,
+    amount: transaction.amount,
+    currency: transaction.currency,
+    fee: transaction.fee,
+    totalDebited: transaction.amount + (transaction.fee ?? 0),
+    createdAt: transaction.createdAt.toISOString(),
+  });
+});
+
 router.get("/v1/payments/:reference", async (req, res) => {
   const user = await ensureUser(req);
   await expireAndReconcilePending(user.id);
@@ -1289,8 +1458,176 @@ router.get("/v1/payments/:reference", async (req, res) => {
   });
 });
 
-router.post("/v1/withdrawals", async (_req, res) => {
-  res.status(501).json({ error: "Les retraits ne sont pas encore disponibles via l’API. Aucun wallet n’a été débité." });
+router.post("/v1/withdrawals", async (req, res) => {
+  const input = req.body as {
+    walletId?: string;
+    amount?: number;
+    country?: string;
+    operator?: string;
+    phone?: string;
+    method?: string;
+  };
+  if (
+    !input.walletId ||
+    typeof input.amount !== "number" ||
+    !Number.isInteger(input.amount) ||
+    input.amount <= 0 ||
+    !input.country ||
+    !input.operator ||
+    !input.phone ||
+    input.method !== "mobile_money"
+  ) {
+    res.status(400).json({ error: "Wallet, montant, pays, opérateur, téléphone et méthode Mobile Money sont obligatoires." });
+    return;
+  }
+  if (input.amount > 10_000_000) {
+    res.status(400).json({ error: "Le montant maximum d’un retrait DrimPay est de 10 000 000 FCFA." });
+    return;
+  }
+  const countryCode = countryCodeForName(input.country);
+  if (!countryCode || countryCode === "NE") {
+    res.status(400).json({ error: "Les retraits ne sont pas encore disponibles dans ce pays." });
+    return;
+  }
+  if (!operatorSlugForName(input.operator)) {
+    res.status(400).json({ error: "L’opérateur Mobile Money sélectionné n’est pas pris en charge." });
+    return;
+  }
+  if (!/^\+[1-9]\d{7,14}$/.test(input.phone)) {
+    res.status(400).json({ error: "Le téléphone doit être au format international, par exemple +22890000000." });
+    return;
+  }
+  const requestedAmount = input.amount;
+  const requestedCountry = input.country;
+  const requestedOperator = input.operator;
+  const requestedPhone = input.phone;
+  const requestedWalletId = input.walletId;
+
+  const user = await ensureUser(req);
+  const wallet = await db.query.wallets.findFirst({
+    where: and(eq(wallets.id, requestedWalletId), eq(wallets.userId, user.id), eq(wallets.code, countryCode)),
+  });
+  if (!wallet) {
+    res.status(400).json({ error: "Le wallet sélectionné ne correspond pas au pays du retrait." });
+    return;
+  }
+
+  const rawIdempotencyKey = req.header("Idempotency-Key");
+  const orderId = rawIdempotencyKey && rawIdempotencyKey.length <= 128
+    ? `mp_wd_${createHash("sha256").update(`${user.id}:${rawIdempotencyKey}`).digest("hex").slice(0, 56)}`
+    : `mp_wd_${crypto.randomUUID()}`;
+  const existing = await db.query.transactions.findFirst({
+    where: and(eq(transactions.providerOrderId, orderId), eq(transactions.userId, user.id), eq(transactions.type, "Withdrawal")),
+  });
+  if (existing) {
+    res.status(200).json({
+      ok: true,
+      message: "Cette demande de retrait existe déjà.",
+      reference: existing.reference,
+      status: existing.status,
+      amount: existing.amount,
+      currency: existing.currency,
+      fee: existing.fee,
+      totalDebited: existing.amount + (existing.fee ?? 0),
+    });
+    return;
+  }
+
+  const estimatedFee = estimateDrimPayPayoutFee(requestedAmount);
+  const estimatedTotal = requestedAmount + estimatedFee;
+  let localTransaction: typeof transactions.$inferSelect | undefined;
+  try {
+    if (!isDrimPayConfigured()) {
+      throw new DrimPayError("Le service payout DrimPay n’est pas encore configuré.", 503, "DRIMPAY_NOT_CONFIGURED");
+    }
+    const webhookUrl = drimPayWebhookUrl();
+    [localTransaction] = await db.transaction(async (tx) => {
+      const reserved = await tx
+        .update(wallets)
+        .set({ pending: sql`${wallets.pending} + ${estimatedTotal}` })
+        .where(and(
+          eq(wallets.id, wallet.id),
+          sql`${wallets.balance} - ${wallets.pending} >= ${estimatedTotal}`,
+        ))
+        .returning({ id: wallets.id });
+      if (!reserved.length) throw new DrimPayError("Solde disponible insuffisant pour couvrir le montant et les frais du retrait.", 400, "INSUFFICIENT_FUNDS");
+
+      return tx.insert(transactions).values({
+        id: crypto.randomUUID(),
+        userId: user.id,
+        walletId: wallet.id,
+        type: "Withdrawal",
+        paymentProvider: "DRIMPAY",
+        status: "Pending",
+        amount: requestedAmount,
+        currency: wallet.currency,
+        country: wallet.country,
+        counterparty: `Retrait Mobile Money · ${requestedOperator}`,
+        reference: orderId,
+        providerOrderId: orderId,
+        fee: estimatedFee,
+        netAmount: requestedAmount,
+        merchantAmount: requestedAmount,
+      }).returning();
+    });
+
+    const provider = await initiatePayout({
+      amount: requestedAmount,
+      currency: wallet.currency,
+      countryCode,
+      operator: requestedOperator,
+      phone: requestedPhone,
+      orderId,
+      webhookUrl,
+      description: `Retrait Mulapay · ${wallet.country}`,
+      metadata: { mulapay_user_id: user.id, mulapay_wallet_id: wallet.id },
+    });
+    const providerTotal = provider.total_debited;
+    if (
+      provider.amount !== requestedAmount ||
+      providerTotal !== provider.amount + provider.fee ||
+      providerTotal <= 0
+    ) {
+      throw new DrimPayError("La réponse payout DrimPay est incohérente. Le retrait reste en attente de vérification.", 502, "INVALID_PAYOUT_RESPONSE");
+    }
+
+    await db.transaction(async (tx) => {
+      await tx.update(wallets)
+        .set({ pending: sql`${wallets.pending} + ${providerTotal - estimatedTotal}` })
+        .where(eq(wallets.id, wallet.id));
+      await tx.update(transactions).set({
+        reference: provider.reference,
+        fee: provider.fee,
+        netAmount: provider.amount,
+        merchantAmount: provider.amount,
+      }).where(eq(transactions.id, localTransaction!.id));
+    });
+    res.status(201).json({
+      ok: true,
+      message: "Retrait en cours de traitement. Le wallet sera débité après confirmation DrimPay.",
+      reference: provider.reference,
+      status: provider.status,
+      amount: provider.amount,
+      currency: provider.currency,
+      fee: provider.fee,
+      totalDebited: providerTotal,
+      provider: "DRIMPAY",
+    });
+  } catch (error) {
+    if (localTransaction && (error instanceof DrimPayError ? error.statusCode < 500 : false)) {
+      await db.transaction(async (tx) => {
+        await tx.update(wallets)
+          .set({ pending: sql`GREATEST(${wallets.pending} - ${estimatedTotal}, 0)` })
+          .where(eq(wallets.id, wallet.id));
+        await tx.update(transactions).set({ status: "Failed" }).where(eq(transactions.id, localTransaction!.id));
+      });
+    }
+    if (error instanceof DrimPayError) {
+      respondWithPaymentProviderError(res, error, "DRIMPAY");
+      return;
+    }
+    throw error;
+  }
 });
 
 router.patch("/v1/notifications/:id/read", async (req, res) => {

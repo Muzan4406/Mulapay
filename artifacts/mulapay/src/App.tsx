@@ -55,6 +55,7 @@ type AdminKycCase = { id: string; userId: string; name: string; country: string;
 type AdminSummary = { kycAwaiting: number; exchangeQueue: number; volume: number; successRate: number };
 type PaymentProviderId = 'DRIMPAY' | 'ASHTECHPAY';
 type DepositTracking = { reference: string; status: string; amount: number; currency: string; fee: number | null; netAmount: number | null; platformFee: number | null; merchantAmount: number | null; paymentUrl: string | null };
+type WithdrawalTracking = { reference: string; status: string; amount: number; currency: string; fee: number | null; totalDebited: number | null };
 type PublicPaymentResult = { reference: string; status: string; operator?: string; message?: string; amount?: number; currency?: string; fee?: number | null; netAmount?: number | null; platformFee?: number | null; merchantAmount?: number | null; paymentUrl?: string | null; expiresAt?: string | null };
 type Store = {
   profile: { id: string; firstName: string; lastName: string; email: string; role: string; country: string; kycStatus: string };
@@ -191,7 +192,7 @@ const mobileMoneyCountryOptions = [
 
 const landingFeatures = [
   { icon: ArrowDownLeft, eyebrow: '01', title: 'Dépôt', copy: 'Ajoutez de l’argent facilement avec les moyens de paiement disponibles.' },
-  { icon: ArrowUpRight, eyebrow: '02', title: 'Retrait', copy: 'Le retrait sera ouvert dès que le service de règlement réel sera disponible.' },
+  { icon: ArrowUpRight, eyebrow: '02', title: 'Retrait', copy: 'Envoyez vos fonds vers un wallet Mobile Money via le payout DrimPay.' },
   { icon: Send, eyebrow: '03', title: 'Transfert', copy: 'Le transfert sera ouvert après raccordement à un service de règlement réel.' },
   { icon: RefreshCw, eyebrow: '04', title: 'Échange', copy: 'Les conversions entre pays seront disponibles après activation du règlement réel.' },
   { icon: Link2, eyebrow: '05', title: 'Payment Links', copy: 'Créez un lien simple pour recevoir des paiements à distance.' },
@@ -401,7 +402,9 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
   const [operatorOtp, setOperatorOtp] = useState('');
   const [paymentUrl, setPaymentUrl] = useState('');
   const [depositTracking, setDepositTracking] = useState<DepositTracking | null>(null);
+  const [withdrawalTracking, setWithdrawalTracking] = useState<WithdrawalTracking | null>(null);
   const [depositStatusError, setDepositStatusError] = useState('');
+  const [withdrawalStatusError, setWithdrawalStatusError] = useState('');
   const [depositSecondsLeft, setDepositSecondsLeft] = useState(60);
   const [submitting, setSubmitting] = useState(false);
   const isDeposit = kind === 'deposit';
@@ -411,7 +414,7 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
   const selectedWallet = wallets.find(wallet => wallet.id === walletId) ?? walletForCountry(country) ?? wallets[0];
   const availableBalance = selectedWallet ? Math.max(0, selectedWallet.balance - selectedWallet.pending) : 0;
   const operationAmount = Number(amount) || 0;
-  const operationFee = calculateFee(operationAmount, feePercentage);
+  const operationFee = isDeposit ? calculateFee(operationAmount, feePercentage) : Math.ceil(operationAmount * 3.5 / 100);
   const operationDebitAmount = operationAmount + operationFee;
 
   useEffect(() => {
@@ -453,10 +456,44 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
   }, [depositTracking?.reference, depositTracking?.status, isDeposit]);
 
   useEffect(() => {
+    if (isDeposit || !withdrawalTracking?.reference || depositStatusIsTerminal(withdrawalTracking.status)) return;
+    let active = true;
+    const refreshStatus = async () => {
+      try {
+        const response = await fetch(`/api/v1/withdrawals/${encodeURIComponent(withdrawalTracking.reference)}`);
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error ?? 'Statut indisponible.');
+        if (!active) return;
+        setWithdrawalStatusError('');
+        setWithdrawalTracking(current => current ? {
+          ...current,
+          status: payload.status ?? current.status,
+          fee: typeof payload.fee === 'number' ? payload.fee : current.fee,
+          totalDebited: typeof payload.totalDebited === 'number' ? payload.totalDebited : current.totalDebited,
+        } : current);
+      } catch (error) {
+        if (active) setWithdrawalStatusError(error instanceof Error ? error.message : 'Le statut est momentanément indisponible.');
+      }
+    };
+    void refreshStatus();
+    const interval = window.setInterval(() => void refreshStatus(), 4000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [withdrawalTracking?.reference, withdrawalTracking?.status, isDeposit]);
+
+  useEffect(() => {
     if (!isDeposit || !depositTracking?.reference || depositTracking.status.toLowerCase() !== 'completed') return;
     toast('Dépôt confirmé. Votre dashboard va être actualisé.');
     setLocation('/app');
   }, [depositTracking?.reference, depositTracking?.status, isDeposit]);
+
+  useEffect(() => {
+    if (isDeposit || !withdrawalTracking?.reference || withdrawalTracking.status.toLowerCase() !== 'completed') return;
+    void queryClient.invalidateQueries({ queryKey: getGetBootstrapQueryKey() });
+    toast('Retrait confirmé. Le wallet a été débité.');
+  }, [withdrawalTracking?.reference, withdrawalTracking?.status, isDeposit]);
 
   useEffect(() => {
     if (!isDeposit || !depositTracking?.reference || depositStatusIsTerminal(depositTracking.status)) return;
@@ -513,6 +550,16 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
         });
         setDepositStatusError('');
         setDepositSecondsLeft(60);
+      } else if (!isDeposit && payload.reference) {
+        setWithdrawalTracking({
+          reference: payload.reference,
+          status: payload.status ?? 'Pending',
+          amount: typeof payload.amount === 'number' ? payload.amount : Number(amount),
+          currency: payload.currency ?? selectedWallet?.currency ?? 'XOF',
+          fee: typeof payload.fee === 'number' ? payload.fee : null,
+          totalDebited: typeof payload.totalDebited === 'number' ? payload.totalDebited : null,
+        });
+        setWithdrawalStatusError('');
       } else {
         toast(payload.message ?? 'Opération créée.');
       }
@@ -606,6 +653,29 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
     </main>;
   }
 
+  if (withdrawalTracking) {
+    const terminal = depositStatusIsTerminal(withdrawalTracking.status);
+    const completed = withdrawalTracking.status.toLowerCase() === 'completed';
+    const failed = ['failed', 'expired', 'cancelled', 'reversed'].includes(withdrawalTracking.status.toLowerCase());
+    return <main className="page-wrap deposit-page">
+      <div className={`card card-pad deposit-status-card ${completed ? 'is-complete' : failed ? 'is-failed' : ''}`} data-testid="withdrawal-status-card">
+        {selectedOperator && <div className="deposit-status-provider"><img src={`${import.meta.env.BASE_URL}mobile-money/${selectedOperator.src}`} alt="" /><span><small>Retrait Mobile Money</small><strong>{operator}</strong></span></div>}
+        <div className="deposit-status-icon">{completed ? <CheckCircle2 size={26} /> : failed ? <CircleAlert size={26} /> : <RefreshCw size={26} className="loading-spin" />}</div>
+        <span className="deposit-status-kicker">{completed ? 'RETRAIT CONFIRMÉ' : failed ? 'RETRAIT NON CONFIRMÉ' : 'RETRAIT EN COURS'}</span>
+        <h2>{completed ? 'Les fonds ont été envoyés' : failed ? 'Le retrait n’a pas abouti' : 'Confirmation DrimPay en attente'}</h2>
+        <p className="deposit-status-copy">{completed ? 'DrimPay a confirmé le décaissement vers le numéro indiqué.' : failed ? 'La réservation du wallet a été libérée. Aucun débit définitif n’a été appliqué.' : 'Le wallet reste réservé jusqu’à la confirmation du fournisseur.'}</p>
+        <div className="deposit-status-amount">
+          <small>Montant envoyé</small>
+          <strong>{money(withdrawalTracking.amount, withdrawalTracking.currency)}</strong>
+          <span>Frais DrimPay : {withdrawalTracking.fee == null ? 'en attente' : money(withdrawalTracking.fee, withdrawalTracking.currency)} · Total débité : {withdrawalTracking.totalDebited == null ? 'en attente' : money(withdrawalTracking.totalDebited, withdrawalTracking.currency)}</span>
+        </div>
+        {!terminal && <div className="deposit-status-waiting"><RefreshCw size={14} className="loading-spin" /><span>Statut vérifié automatiquement.</span></div>}
+        {withdrawalStatusError && <div className="notice notice-error"><CircleAlert size={15} /><span>{withdrawalStatusError}</span></div>}
+        {terminal && <button className="button button-ghost button-wide" type="button" onClick={() => { setWithdrawalTracking(null); setWithdrawalStatusError(''); }}>Effectuer un autre retrait</button>}
+      </div>
+    </main>;
+  }
+
   return <main className="page-wrap deposit-page">
     <PageIntro eyebrow="Mobile Money" title="Retrait" />
     <form className="card card-pad deposit-form" onSubmit={submit}>
@@ -649,8 +719,8 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
       </div>
       {operationAmount > 0 && <div className="summary-box" style={{ marginBottom: 16 }} data-testid="withdrawal-fee-summary">
         <div className="summary-line"><span>Montant retiré</span><strong>{money(operationAmount, selectedWallet?.currency ?? 'XOF')}</strong></div>
-        <div className="summary-line"><span>Frais de retrait ({feePercentage}%)</span><strong>{money(operationFee, selectedWallet?.currency ?? 'XOF')}</strong></div>
-        <div className="summary-line"><span>Montant reçu après frais</span><strong>{money(operationAmount, selectedWallet?.currency ?? 'XOF')}</strong></div>
+        <div className="summary-line"><span>Frais DrimPay (3,5 %)</span><strong>{money(operationFee, selectedWallet?.currency ?? 'XOF')}</strong></div>
+        <div className="summary-line"><span>Montant reçu</span><strong>{money(operationAmount, selectedWallet?.currency ?? 'XOF')}</strong></div>
         <div className="summary-line total"><span>Total débité</span><strong>{money(operationDebitAmount, selectedWallet?.currency ?? 'XOF')}</strong></div>
       </div>}
       <button className="button button-primary button-wide" type="submit" disabled={submitting}>
@@ -662,22 +732,7 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
 
 function Deposit() { return <ProviderOperationForm kind="deposit" />; }
 
-function Withdrawal() {
-  return <main className="page-wrap deposit-page">
-    <PageIntro eyebrow="Mobile Money" title="Retrait" subtitle="Le service de règlement sortant sera activé dès qu’un fournisseur de paiement réel sera connecté." />
-    <div className="card card-pad withdrawal-unavailable-card" data-testid="withdrawal-unavailable">
-      <div className="withdrawal-unavailable-icon"><LockKeyhole size={26} /></div>
-      <span className="deposit-status-kicker withdrawal-unavailable-kicker">SERVICE NON DISPONIBLE</span>
-      <h2>Vos fonds restent protégés</h2>
-      <p className="deposit-status-copy">Les fournisseurs actuellement connectés permettent de recevoir des dépôts, mais pas encore d’exécuter des retraits réels.</p>
-      <div className="notice withdrawal-unavailable-notice"><ShieldCheck size={15} /><span>Aucun wallet ne sera débité. Nous n’affichons pas de demande de retrait tant que son règlement fournisseur n’est pas disponible.</span></div>
-      <div className="withdrawal-unavailable-actions">
-        <Link className="button button-ghost" href="/app">Retour au dashboard <ArrowLeft size={15} /></Link>
-        <Link className="button button-primary" href="/app/deposit">Faire un dépôt <ArrowDownLeft size={15} /></Link>
-      </div>
-    </div>
-  </main>;
-}
+function Withdrawal() { return <ProviderOperationForm kind="withdrawal" />; }
 
 function Receive() {
   const { links } = useStore();
@@ -911,7 +966,7 @@ Idempotency-Key: commande-unique-123`}</pre>
 
     <div className="card card-pad api-docs-endpoints" style={{ marginTop: 18 }}>
       <div className="section-head"><div><h2 className="section-title">10. Ressources API</h2><p className="section-note">Endpoints actuellement exposés par Mulapay.</p></div><Link href="/app/transactions" className="button button-ghost button-sm">Voir l’historique</Link></div>
-      <div className="api-endpoint-list"><div><span className="api-method">POST</span><code>/api/v1/deposits</code><span>Créer un dépôt Mobile Money</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/deposits/:reference</code><span>Consulter le statut d’un dépôt</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/payments/:reference</code><span>Consulter le statut d’un paiement</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/bootstrap</code><span>Lire les wallets et transactions du compte</span></div><div><span className="api-method api-method-muted">POST</span><code>/api/v1/withdrawals</code><span>Réservé : non couvert par le Payin actuel</span></div></div>
+      <div className="api-endpoint-list"><div><span className="api-method">POST</span><code>/api/v1/deposits</code><span>Créer un dépôt Mobile Money</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/deposits/:reference</code><span>Consulter le statut d’un dépôt</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/payments/:reference</code><span>Consulter le statut d’un paiement</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/withdrawals/:reference</code><span>Consulter le statut d’un retrait</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/bootstrap</code><span>Lire les wallets et transactions du compte</span></div><div><span className="api-method api-method-muted">POST</span><code>/api/v1/withdrawals</code><span>Créer un payout DrimPay</span></div></div>
     </div>
   </main>;
 }
@@ -1068,7 +1123,7 @@ Idempotency-Key: commande-unique-123`}</pre><p className="docs-inline-note"><Shi
 
         <section className="docs-resources card">
           <div><span className="docs-kicker">Référence API</span><h2>Endpoints disponibles</h2><p>Les routes publiques actuellement exposées par Mulapay.</p></div>
-          <div className="docs-resource-list"><div><span className="api-method">POST</span><code>/api/v1/deposits</code><span>Créer un dépôt Mobile Money</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/deposits/:reference</code><span>Consulter le statut d’un dépôt</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/bootstrap</code><span>Lire les wallets et transactions du compte</span></div><div><span className="api-method api-method-muted">POST</span><code>/api/v1/withdrawals</code><span>Non disponible actuellement</span></div></div>
+          <div className="docs-resource-list"><div><span className="api-method">POST</span><code>/api/v1/deposits</code><span>Créer un dépôt Mobile Money</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/deposits/:reference</code><span>Consulter le statut d’un dépôt</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/withdrawals/:reference</code><span>Consulter le statut d’un retrait</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/bootstrap</code><span>Lire les wallets et transactions du compte</span></div><div><span className="api-method api-method-muted">POST</span><code>/api/v1/withdrawals</code><span>Créer un payout DrimPay</span></div></div>
           <div className="docs-bottom-cta"><div><strong>Prêt à connecter votre backend ?</strong><span>Créez une clé serveur et commencez avec le quickstart.</span></div><Link href="/app/api" className="button button-primary">Créer une clé API <ArrowRight size={15} /></Link></div>
         </section>
       </div>
