@@ -1660,8 +1660,8 @@ function PublicPaymentPage() {
     if (!paymentResult?.reference || depositStatusIsTerminal(paymentResult.status) || paymentResult.providerStatus?.toLowerCase() === 'completed') return;
     let redirectTimer: number | undefined;
     const timeout = window.setTimeout(() => {
-      setPaymentResult(current => current && !depositStatusIsTerminal(current.status) ? { ...current, status: 'Failed', message: 'Le paiement n’a pas été confirmé après 60 secondes.' } : current);
-      redirectTimer = window.setTimeout(() => setPaymentStatusError('Le paiement a échoué après 60 secondes sans confirmation.'), 800);
+      setPaymentResult(current => current && !depositStatusIsTerminal(current.status) && current.providerStatus?.toLowerCase() !== 'completed' ? { ...current, status: 'Failed', message: 'Le paiement n’a pas été confirmé après 60 secondes.' } : current);
+      redirectTimer = window.setTimeout(() => setPaymentStatusError('La confirmation comptable prend plus de temps que prévu. Le statut fournisseur est conservé.'), 800);
     }, 60000);
     return () => {
       window.clearTimeout(timeout);
@@ -1741,7 +1741,7 @@ function PublicPaymentPage() {
   };
   const paymentProviderConfirmed = paymentResult?.providerStatus?.toLowerCase() === 'completed';
   const paymentCompleted = paymentResult ? ['completed', 'success'].includes(paymentResult.status.toLowerCase()) : false;
-  const paymentFailed = paymentResult ? ['failed', 'expired', 'cancelled', 'reversed'].includes(paymentResult.status.toLowerCase()) || ['failed', 'expired', 'cancelled', 'reversed'].includes(paymentResult.providerStatus?.toLowerCase() ?? '') : false;
+  const paymentFailed = paymentResult ? !paymentProviderConfirmed && (['failed', 'expired', 'cancelled', 'reversed'].includes(paymentResult.status.toLowerCase()) || ['failed', 'expired', 'cancelled', 'reversed'].includes(paymentResult.providerStatus?.toLowerCase() ?? '')) : false;
   const paymentOperator = paymentResult?.operator ?? customerOperator;
   const paymentOperatorOption = selectedCustomerCountry.operators.find(option => option.name === paymentOperator);
   const paymentAmountLabel = money(paymentResult?.merchantAmount ?? paymentResult?.amount ?? selectedAmount, paymentResult?.currency ?? link.currency);

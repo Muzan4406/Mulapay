@@ -631,7 +631,7 @@ async function handleAshtechPayWebhook(req: Request, res: Response) {
     if (!transaction) return { found: false, duplicate: false };
     const nextStatus = ashtechStatusToTransactionStatus(payload.status!);
     const currentIsTerminal = ["Completed", "Failed", "Expired", "Cancelled", "Reversed"].includes(transaction.status);
-    if (currentIsTerminal) return { found: true, duplicate: false };
+    if (currentIsTerminal && !(nextStatus === "Completed" && transaction.status !== "Completed")) return { found: true, duplicate: false };
 
     if (nextStatus === "Completed") {
       const wallet = await tx.query.wallets.findFirst({ where: eq(wallets.id, transaction.walletId ?? "") });
@@ -886,6 +886,7 @@ async function expireAndReconcilePending(userId: string) {
       lte(transactions.createdAt, cutoff),
       ne(transactions.type, "Withdrawal"),
       ne(transactions.type, "Transfer"),
+      or(ne(transactions.paymentProvider, "ASHTECHPAY"), isNull(transactions.providerTransactionId)),
     ),
   });
 
@@ -1354,7 +1355,7 @@ router.get("/v1/public/payment-links/:token/payments/:reference", async (req, re
     return;
   }
   let providerStatus: string | null = null;
-  if (transaction.paymentProvider === "ASHTECHPAY" && transaction.status === "Pending" && transaction.providerTransactionId) {
+  if (transaction.paymentProvider === "ASHTECHPAY" && transaction.status !== "Completed" && transaction.providerTransactionId) {
     try {
       const provider = await getAshtechTransaction(transaction.providerTransactionId);
       providerStatus = ashtechStatusToTransactionStatus(provider.status);
