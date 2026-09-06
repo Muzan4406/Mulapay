@@ -193,7 +193,7 @@ const mobileMoneyCountryOptions = [
 const landingFeatures = [
   { icon: ArrowDownLeft, eyebrow: '01', title: 'Dépôt', copy: 'Ajoutez de l’argent facilement avec les moyens de paiement disponibles.' },
   { icon: ArrowUpRight, eyebrow: '02', title: 'Retrait', copy: 'Envoyez vos fonds vers un wallet Mobile Money via le payout DrimPay.' },
-  { icon: Send, eyebrow: '03', title: 'Transfert', copy: 'Le transfert sera ouvert après raccordement à un service de règlement réel.' },
+  { icon: Send, eyebrow: '03', title: 'Transfert', copy: 'Envoyez de l’argent vers un numéro Mobile Money via le payout DrimPay.' },
   { icon: RefreshCw, eyebrow: '04', title: 'Échange', copy: 'Les conversions entre pays seront disponibles après activation du règlement réel.' },
   { icon: Link2, eyebrow: '05', title: 'Payment Links', copy: 'Créez un lien simple pour recevoir des paiements à distance.' },
   { icon: QrCode, eyebrow: '06', title: 'QR Code', copy: 'Recevez des paiements en présentiel avec votre QR code Mulapay.' },
@@ -1155,21 +1155,20 @@ function Transactions() {
 }
 
 function Transfer() {
-  const { wallets, transfer, feePercentage } = useStore();
+  const { wallets, transfer } = useStore();
   const [amount, setAmount] = useState('');
   const [country, setCountry] = useState(wallets[0]?.country ?? mobileMoneyCountryOptions[0].country);
   const [operator, setOperator] = useState('');
   const [phone, setPhone] = useState('');
-  const [feePayer, setFeePayer] = useState<'sender' | 'recipient'>('sender');
   const walletForCountry = (countryName: string) => wallets.find(wallet => wallet.country === countryName || countryLabel(wallet.country) === countryName);
   const selectedCountry = mobileMoneyCountryOptions.find(option => option.country === country) ?? mobileMoneyCountryOptions[0];
   const selectedWallet = walletForCountry(country);
   const availableBalance = selectedWallet ? Math.max(0, selectedWallet.balance - selectedWallet.pending) : 0;
   const transferAmount = Number(amount) || 0;
-  const transferFee = calculateFee(transferAmount, feePercentage);
-  const recipientAmount = feePayer === 'recipient' ? Math.max(0, transferAmount - transferFee) : transferAmount;
-  const debitAmount = feePayer === 'sender' ? transferAmount + transferFee : transferAmount;
-  const canSubmit = transferAmount > 0 && phone.length > 0 && Boolean(selectedWallet) && operator.length > 0 && (feePayer === 'sender' || transferAmount > transferFee);
+  const transferFee = Math.ceil(transferAmount * 3.5 / 100);
+  const recipientAmount = transferAmount;
+  const debitAmount = transferAmount + transferFee;
+  const canSubmit = transferAmount > 0 && phone.length > 0 && Boolean(selectedWallet) && operator.length > 0;
   useEffect(() => {
     const nextOperator = selectedCountry.operators[0]?.name ?? '';
     setOperator(currentOperator => selectedCountry.operators.some(item => item.name === currentOperator) ? currentOperator : nextOperator);
@@ -1178,7 +1177,7 @@ function Transfer() {
     e.preventDefault();
     if (!amount || !phone || !selectedWallet || !operator) return;
     const recipientPhone = `${selectedCountry.dialCode}${phone.replace(/\D/g, '')}`;
-    transfer({ amount: transferAmount, currency: selectedWallet.currency, country: selectedWallet.country, counterparty: `${recipientPhone} · ${operator}`, note: `Frais à la charge de ${feePayer === 'sender' ? 'moi' : 'du destinataire'}`, feePayer });
+    transfer({ amount: transferAmount, currency: selectedWallet.currency, country: selectedWallet.country, counterparty: `${recipientPhone} · ${operator}`, note: 'Frais DrimPay à la charge de l’expéditeur', feePayer: 'sender' });
     setAmount('');
     setPhone('');
   };
@@ -1226,25 +1225,11 @@ function Transfer() {
       </div>
       {transferAmount > 0 && <div className="summary-box" style={{ marginBottom: 16 }} data-testid="transfer-fee-summary">
         <div className="summary-line"><span>Montant saisi</span><strong>{money(transferAmount, selectedWallet?.currency ?? 'XOF')}</strong></div>
-        <div className="summary-line"><span>Frais de transfert ({feePercentage}%)</span><strong>{money(transferFee, selectedWallet?.currency ?? 'XOF')}</strong></div>
-        <div className="summary-line"><span>Montant reçu après frais</span><strong>{money(recipientAmount, selectedWallet?.currency ?? 'XOF')}</strong></div>
+        <div className="summary-line"><span>Frais DrimPay (3,5%)</span><strong>{money(transferFee, selectedWallet?.currency ?? 'XOF')}</strong></div>
+        <div className="summary-line"><span>Montant reçu</span><strong>{money(recipientAmount, selectedWallet?.currency ?? 'XOF')}</strong></div>
         <div className="summary-line total"><span>Total débité</span><strong>{money(debitAmount, selectedWallet?.currency ?? 'XOF')}</strong></div>
       </div>}
-      <div className="field">
-        <label>Prise en charge des frais</label>
-        <div className="fee-options" role="radiogroup" aria-label="Choisir qui prend les frais">
-          <label className={`fee-option ${feePayer === 'sender' ? 'selected' : ''}`}>
-            <input type="radio" name="transfer-fee-payer" value="sender" checked={feePayer === 'sender'} onChange={() => setFeePayer('sender')} />
-            <span><strong>Je prends les frais</strong><small>Le destinataire reçoit le montant demandé.</small></span>
-            {feePayer === 'sender' && <CheckCircle2 size={16} />}
-          </label>
-          <label className={`fee-option ${feePayer === 'recipient' ? 'selected' : ''}`}>
-            <input type="radio" name="transfer-fee-payer" value="recipient" checked={feePayer === 'recipient'} onChange={() => setFeePayer('recipient')} />
-            <span><strong>À la charge du destinataire</strong><small>Les frais seront déduits du montant reçu.</small></span>
-            {feePayer === 'recipient' && <CheckCircle2 size={16} />}
-          </label>
-        </div>
-      </div>
+      <div className="notice" style={{ marginBottom: 16 }}><Info size={15} /><span>Le transfert est exécuté par DrimPay. Le destinataire reçoit le montant saisi et les frais DrimPay sont ajoutés au débit du wallet source.</span></div>
       <button className="button button-primary button-wide" type="submit" disabled={!canSubmit} data-testid="button-submit-transfer"><Send size={15} /> Envoyer maintenant</button>
     </form>
   </main>;
@@ -1928,7 +1913,8 @@ function RoutedApp() {
     void queryClient.invalidateQueries({ queryKey: getListAdminKycQueryKey() });
     void queryClient.invalidateQueries({ queryKey: getListAdminTransactionsQueryKey() });
   };
-  const transferMutation = useCreateTransfer();
+  const [transferRequestKey, setTransferRequestKey] = useState(() => crypto.randomUUID());
+  const transferMutation = useCreateTransfer({ request: { headers: { 'Idempotency-Key': transferRequestKey } } });
   const exchangeMutation = useCreateExchange();
   const exchangeDecisionMutation = useDecideExchange();
   const paymentLinkMutation = useCreatePaymentLink();
@@ -1939,7 +1925,7 @@ function RoutedApp() {
     profile: { ...(data?.profile ?? { id: '', firstName: 'Utilisateur', lastName: 'Mulapay', email: '', role: 'USER', country: 'Togo', kycStatus: 'NON_VERIFIE' }), firstName: user?.firstName ?? data?.profile.firstName ?? 'Utilisateur', lastName: user?.lastName ?? data?.profile.lastName ?? 'Mulapay', email: user?.primaryEmailAddress?.emailAddress ?? data?.profile.email ?? '' },
     wallets: data?.wallets ?? [], transactions: data?.transactions ?? [], exchanges: data?.exchanges ?? [], links: data?.links ?? [], notifications: data?.notifications ?? [],
     adminKyc: (adminKycQuery.data ?? []) as AdminKycCase[], adminTransactions: (adminTransactionsQuery.data ?? []) as Transaction[], adminSummary: adminSummaryQuery.data as AdminSummary | undefined, feePercentage: data?.feePercentage ?? 1,
-    transfer: ({ amount, currency, country, counterparty, note, feePayer }) => { transferMutation.mutate({ data: { amount, currency, country, counterparty, note, feePayer } }, { onSuccess: response => { invalidate(); toast(response.message); }, onError: () => toast('Transfert impossible. Vérifiez le solde disponible.') }); },
+    transfer: ({ amount, currency, country, counterparty, note, feePayer }) => { transferMutation.mutate({ data: { amount, currency, country, counterparty, note, feePayer } }, { onSuccess: response => { invalidate(); setTransferRequestKey(crypto.randomUUID()); toast(response.message); }, onError: () => { setTransferRequestKey(crypto.randomUUID()); toast('Transfert impossible. Vérifiez le solde disponible.'); } }); },
     exchange: ({ source, destination, amount }) => { exchangeMutation.mutate({ data: { source, destination, amount } }, { onSuccess: response => { invalidate(); toast(response.message); }, onError: () => toast('La demande d’échange n’a pas pu être créée.') }); },
     setExchangeStatus: (id, status) => { exchangeDecisionMutation.mutate({ id, data: { decision: status === 'Completed' ? 'APPROVED' : 'REJECTED' } }, { onSuccess: response => { invalidate(); toast(response.message); }, onError: () => toast('La décision d’échange n’a pas pu être enregistrée.') }); },
     addLink: data => { paymentLinkMutation.mutate({ data }, { onSuccess: response => { invalidate(); toast(`Lien de paiement ${response.slug} créé.`); }, onError: () => toast('Le lien de paiement n’a pas pu être créé.') }); },
