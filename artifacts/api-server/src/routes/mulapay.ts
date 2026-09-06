@@ -1066,6 +1066,10 @@ router.post("/v1/payment-links", async (req, res) => {
     res.status(400).json({ error: "Le montant minimum ne peut pas être négatif." });
     return;
   }
+  if (input.amountType === "CUSTOMER_CHOOSES" && (!Number.isInteger(input.amountMin) || !Number.isInteger(input.amountMax) || input.amountMin < PUBLIC_PAYMENT_MIN_AMOUNT || input.amountMax > PUBLIC_PAYMENT_MAX_AMOUNT || input.amountMin > input.amountMax)) {
+    res.status(400).json({ error: `Le montant libre doit être compris entre ${PUBLIC_PAYMENT_MIN_AMOUNT.toLocaleString("fr-FR")} et ${PUBLIC_PAYMENT_MAX_AMOUNT.toLocaleString("fr-FR")}, avec un minimum inférieur ou égal au maximum.` });
+    return;
+  }
   if (input.maxPayments !== null && (!Number.isInteger(input.maxPayments) || input.maxPayments < 1)) {
     res.status(400).json({ error: "La limite de paiements doit être un entier positif." });
     return;
@@ -1102,6 +1106,8 @@ router.post("/v1/payment-links", async (req, res) => {
     description: input.description,
     walletId: input.walletId,
     amountType: input.amountType,
+    amountMin: input.amountType === "CUSTOMER_CHOOSES" ? input.amountMin : PUBLIC_PAYMENT_MIN_AMOUNT,
+    amountMax: input.amountType === "CUSTOMER_CHOOSES" ? input.amountMax : PUBLIC_PAYMENT_MAX_AMOUNT,
     customerFields: input.customerFields,
     status: "Active",
     expiresAt: input.expiresAt,
@@ -1142,6 +1148,8 @@ router.get("/v1/public/payment-links/:token", async (req, res) => {
     currency: link.currency,
     description: link.description,
     amountType: link.amountType,
+    amountMin: link.amountMin,
+    amountMax: link.amountMax,
     customerFields: link.customerFields,
     status: link.status,
     expiresAt: link.expiresAt,
@@ -1186,9 +1194,9 @@ router.post("/v1/public/payment-links/:token/payments", async (req, res) => {
     res.status(400).json({ error: "Le montant doit être un entier positif." });
     return;
   }
-  if (link.amountType === "CUSTOMER_CHOOSES" && (input.amount < PUBLIC_PAYMENT_MIN_AMOUNT || input.amount > PUBLIC_PAYMENT_MAX_AMOUNT)) {
+  if (link.amountType === "CUSTOMER_CHOOSES" && (input.amount < link.amountMin || input.amount > link.amountMax)) {
     res.status(400).json({
-      error: `Le montant doit être compris entre ${PUBLIC_PAYMENT_MIN_AMOUNT.toLocaleString("fr-FR")} et ${PUBLIC_PAYMENT_MAX_AMOUNT.toLocaleString("fr-FR")} ${link.currency}.`,
+      error: `Le montant doit être compris entre ${link.amountMin.toLocaleString("fr-FR")} et ${link.amountMax.toLocaleString("fr-FR")} ${link.currency}.`,
       code: "PAYMENT_AMOUNT_OUT_OF_RANGE",
     });
     return;
@@ -1393,6 +1401,10 @@ router.patch("/v1/payment-links/:id", async (req, res) => {
     res.status(400).json({ error: "Le montant minimum ne peut pas être négatif." });
     return;
   }
+  if (input.amountType === "CUSTOMER_CHOOSES" && (!Number.isInteger(input.amountMin) || !Number.isInteger(input.amountMax) || input.amountMin < PUBLIC_PAYMENT_MIN_AMOUNT || input.amountMax > PUBLIC_PAYMENT_MAX_AMOUNT || input.amountMin > input.amountMax)) {
+    res.status(400).json({ error: `Le montant libre doit être compris entre ${PUBLIC_PAYMENT_MIN_AMOUNT.toLocaleString("fr-FR")} et ${PUBLIC_PAYMENT_MAX_AMOUNT.toLocaleString("fr-FR")}, avec un minimum inférieur ou égal au maximum.` });
+    return;
+  }
   if (input.maxPayments !== null && (!Number.isInteger(input.maxPayments) || input.maxPayments < 1)) {
     res.status(400).json({ error: "La limite de paiements doit être un entier positif." });
     return;
@@ -1424,6 +1436,8 @@ router.patch("/v1/payment-links/:id", async (req, res) => {
     currency: input.currency,
     walletId: input.walletId,
     amountType: input.amountType,
+    amountMin: input.amountType === "CUSTOMER_CHOOSES" ? input.amountMin : PUBLIC_PAYMENT_MIN_AMOUNT,
+    amountMax: input.amountType === "CUSTOMER_CHOOSES" ? input.amountMax : PUBLIC_PAYMENT_MAX_AMOUNT,
     customerFields: input.customerFields,
     expiresAt: input.expiresAt,
     maxPayments: input.maxPayments,

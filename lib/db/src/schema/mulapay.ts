@@ -143,6 +143,8 @@ export const paymentLinks = pgTable(
     description: text("description").notNull(),
     walletId: text("wallet_id"),
     amountType: text("amount_type").notNull().default("FIXED"),
+    amountMin: integer("amount_min").notNull().default(300),
+    amountMax: integer("amount_max").notNull().default(500_000),
     customerFields: jsonb("customer_fields").$type<string[]>().notNull().default(sql`'["full_name","phone","email"]'::jsonb`),
     status: text("status").notNull().default("Active"),
     expiresAt: text("expires_at").notNull(),

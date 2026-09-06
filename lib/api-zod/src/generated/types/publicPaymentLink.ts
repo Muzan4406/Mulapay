@@ -18,6 +18,8 @@ export interface PublicPaymentLink {
   currency: string;
   description: string;
   amountType: PublicPaymentLinkAmountType;
+  amountMin: number;
+  amountMax: number;
   customerFields: PublicPaymentLinkCustomerFieldsItem[];
   status: string;
   expiresAt: string;

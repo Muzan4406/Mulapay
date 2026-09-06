@@ -22,6 +22,16 @@ export interface PaymentLinkInput {
   /** @nullable */
   walletId: string | null;
   amountType: PaymentLinkInputAmountType;
+  /**
+     * @minimum 300
+     * @maximum 500000
+     */
+  amountMin: number;
+  /**
+     * @minimum 300
+     * @maximum 500000
+     */
+  amountMax: number;
   customerFields: PaymentLinkInputCustomerFieldsItem[];
   expiresAt: string;
   /**

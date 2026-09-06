@@ -95,6 +95,8 @@ export interface PaymentLink {
   /** @nullable */
   walletId: string | null;
   amountType: PaymentLinkAmountType;
+  amountMin: number;
+  amountMax: number;
   customerFields: PaymentLinkCustomerFieldsItem[];
   status: string;
   expiresAt: string;
@@ -145,6 +147,8 @@ export interface PublicPaymentLink {
   currency: string;
   description: string;
   amountType: PublicPaymentLinkAmountType;
+  amountMin: number;
+  amountMax: number;
   customerFields: PublicPaymentLinkCustomerFieldsItem[];
   status: string;
   expiresAt: string;
@@ -288,6 +292,16 @@ export interface PaymentLinkInput {
   /** @nullable */
   walletId: string | null;
   amountType: PaymentLinkInputAmountType;
+  /**
+     * @minimum 300
+     * @maximum 500000
+     */
+  amountMin: number;
+  /**
+     * @minimum 300
+     * @maximum 500000
+     */
+  amountMax: number;
   customerFields: PaymentLinkInputCustomerFieldsItem[];
   expiresAt: string;
   /**

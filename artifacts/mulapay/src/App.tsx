@@ -1332,6 +1332,8 @@ function PaymentLinks() {
   const [walletId, setWalletId] = useState('all');
   const [amountType, setAmountType] = useState<'FIXED' | 'CUSTOMER_CHOOSES'>('FIXED');
   const [amount, setAmount] = useState('');
+  const [amountMin, setAmountMin] = useState(String(PUBLIC_PAYMENT_MIN_AMOUNT));
+  const [amountMax, setAmountMax] = useState(String(PUBLIC_PAYMENT_MAX_AMOUNT));
   const [validity, setValidity] = useState('30d');
   const [customDate, setCustomDate] = useState('');
   const [paymentLimit, setPaymentLimit] = useState<'unlimited' | 'limited'>('unlimited');
@@ -1400,6 +1402,8 @@ function PaymentLinks() {
     setWalletId('all');
     setAmountType('FIXED');
     setAmount('');
+    setAmountMin(String(PUBLIC_PAYMENT_MIN_AMOUNT));
+    setAmountMax(String(PUBLIC_PAYMENT_MAX_AMOUNT));
     setValidity('30d');
     setCustomDate('');
     setPaymentLimit('unlimited');
@@ -1420,6 +1424,8 @@ function PaymentLinks() {
     setWalletId(link.walletId ?? 'all');
     setAmountType(link.amountType);
     setAmount(link.amountType === 'FIXED' ? String(link.amount || '') : '');
+    setAmountMin(String(link.amountMin ?? PUBLIC_PAYMENT_MIN_AMOUNT));
+    setAmountMax(String(link.amountMax ?? PUBLIC_PAYMENT_MAX_AMOUNT));
     if (!link.expiresAt) {
       setValidity('never');
       setCustomDate('');
@@ -1456,6 +1462,10 @@ function PaymentLinks() {
     const cleanDescription = description.trim();
     if (cleanName.length < 2) { setFormError('Indiquez le nom du produit ou du service.'); return; }
     if (amountType === 'FIXED' && (!amount || Number(amount) <= 0)) { setFormError('Indiquez un montant fixe supérieur à zéro.'); return; }
+    if (amountType === 'CUSTOMER_CHOOSES' && (!Number.isInteger(Number(amountMin)) || !Number.isInteger(Number(amountMax)) || Number(amountMin) < PUBLIC_PAYMENT_MIN_AMOUNT || Number(amountMax) > PUBLIC_PAYMENT_MAX_AMOUNT || Number(amountMin) > Number(amountMax))) {
+      setFormError(`Le montant libre doit avoir un minimum entre ${PUBLIC_PAYMENT_MIN_AMOUNT.toLocaleString('fr-FR')} et ${PUBLIC_PAYMENT_MAX_AMOUNT.toLocaleString('fr-FR')}, et un maximum supérieur ou égal au minimum.`);
+      return;
+    }
     if (validity === 'custom' && !expiryValue()) { setFormError('Choisissez une date de fin de validité.'); return; }
     if (paymentLimit === 'limited' && (!maxPayments || !Number.isInteger(Number(maxPayments)) || Number(maxPayments) < 1)) { setFormError('La limite doit être un nombre entier positif.'); return; }
     if (afterPaymentAction === 'REDIRECT') {
@@ -1467,6 +1477,8 @@ function PaymentLinks() {
     const selectedWallet = wallets.find(wallet => wallet.id === walletId);
     const data: PaymentLinkInput = {
       amount: amountType === 'FIXED' ? Number(amount) : null,
+      amountMin: amountType === 'CUSTOMER_CHOOSES' ? Number(amountMin) : PUBLIC_PAYMENT_MIN_AMOUNT,
+      amountMax: amountType === 'CUSTOMER_CHOOSES' ? Number(amountMax) : PUBLIC_PAYMENT_MAX_AMOUNT,
       currency: selectedWallet?.currency ?? wallets[0]?.currency ?? 'XOF',
       productName: cleanName,
       description: cleanDescription,
@@ -1522,6 +1534,7 @@ function PaymentLinks() {
           <div className="field"><label htmlFor="link-wallet">Wallet de réception</label><select id="link-wallet" value={walletId} onChange={event => setWalletId(event.target.value)} data-testid="select-link-wallet"><option value="all">Tous les wallets disponibles</option>{wallets.map(wallet => <option key={wallet.id} value={wallet.id}>{countryLabel(wallet.country)} · {wallet.currency}</option>)}</select><span className="field-hint">Mulapay dirigera le paiement vers le wallet choisi.</span></div>
           <div className="choice-grid"><label className={`choice-card ${amountType === 'FIXED' ? 'selected' : ''}`}><input type="radio" name="amount-type" checked={amountType === 'FIXED'} onChange={() => setAmountType('FIXED')} /><span className="choice-radio" /><span><strong>Montant fixe</strong><small>Le client paie exactement le montant indiqué.</small></span></label><label className={`choice-card ${amountType === 'CUSTOMER_CHOOSES' ? 'selected' : ''}`}><input type="radio" name="amount-type" checked={amountType === 'CUSTOMER_CHOOSES'} onChange={() => setAmountType('CUSTOMER_CHOOSES')} /><span className="choice-radio" /><span><strong>Montant choisi par le client</strong><small>Le client saisit le montant au moment du paiement.</small></span></label></div>
           {amountType === 'FIXED' && <div className="field amount-field"><label htmlFor="link-amount">Montant à payer <b>*</b></label><div className="input-prefix"><span>{wallets.find(wallet => wallet.id === walletId)?.currency ?? wallets[0]?.currency ?? 'XOF'}</span><input id="link-amount" type="number" min="1" step="1" value={amount} onChange={event => setAmount(event.target.value)} placeholder="0" required data-testid="input-link-amount" /></div></div>}
+          {amountType === 'CUSTOMER_CHOOSES' && <div className="builder-amount-range"><div className="field"><label htmlFor="link-amount-min">Montant minimum <b>*</b></label><div className="input-prefix"><span>{wallets.find(wallet => wallet.id === walletId)?.currency ?? wallets[0]?.currency ?? 'XOF'}</span><input id="link-amount-min" type="number" min={PUBLIC_PAYMENT_MIN_AMOUNT} max={PUBLIC_PAYMENT_MAX_AMOUNT} step="1" value={amountMin} onChange={event => setAmountMin(event.target.value)} required data-testid="input-link-amount-min" /></div></div><div className="field"><label htmlFor="link-amount-max">Montant maximum <b>*</b></label><div className="input-prefix"><span>{wallets.find(wallet => wallet.id === walletId)?.currency ?? wallets[0]?.currency ?? 'XOF'}</span><input id="link-amount-max" type="number" min={PUBLIC_PAYMENT_MIN_AMOUNT} max={PUBLIC_PAYMENT_MAX_AMOUNT} step="1" value={amountMax} onChange={event => setAmountMax(event.target.value)} required data-testid="input-link-amount-max" /></div></div><span className="field-hint">Le client pourra choisir un montant entier compris entre {PUBLIC_PAYMENT_MIN_AMOUNT.toLocaleString('fr-FR')} et {PUBLIC_PAYMENT_MAX_AMOUNT.toLocaleString('fr-FR')} {wallets.find(wallet => wallet.id === walletId)?.currency ?? wallets[0]?.currency ?? 'XOF'}.</span></div>}
         </div>
          <div className="builder-section"><div className="builder-section-title"><span className="section-index">03</span><div><h3>Règles du lien</h3><p>Gardez la main sur sa durée de vie et son nombre d’utilisations.</p></div></div>
           <div className="field"><label htmlFor="link-validity">Validité du lien</label><select id="link-validity" value={validity} onChange={event => setValidity(event.target.value)} data-testid="select-link-expiry"><option value="never">Sans expiration</option><option value="24h">24 heures</option><option value="7d">7 jours</option><option value="30d">30 jours</option><option value="custom">Date personnalisée</option></select></div>
@@ -1662,6 +1675,8 @@ function PublicPaymentPage() {
    const hasField = (_name: string) => true;
   const updateCustomerValue = (name: string, value: string) => setCustomerValues(values => ({ ...values, [name]: value }));
   const fixedAmount = link.amountType === 'FIXED' ? money(link.amount, link.currency) : 'Montant libre';
+  const paymentMinAmount = link.amountMin ?? PUBLIC_PAYMENT_MIN_AMOUNT;
+  const paymentMaxAmount = link.amountMax ?? PUBLIC_PAYMENT_MAX_AMOUNT;
    const selectedAmount = link.amountType === 'FIXED' ? link.amount : Number(amount) || 0;
    const selectedAmountLabel = selectedAmount > 0 ? money(selectedAmount, link.currency) : `À renseigner en ${link.currency}`;
   const submitPayment = async (event: FormEvent) => {
@@ -1671,8 +1686,8 @@ function PublicPaymentPage() {
     setPaymentSecondsLeft(60);
     setPaymentSubmitting(true);
     const selectedAmount = link.amountType === 'FIXED' ? link.amount : Number(amount);
-    if (link.amountType === 'CUSTOMER_CHOOSES' && (!Number.isInteger(selectedAmount) || selectedAmount < PUBLIC_PAYMENT_MIN_AMOUNT || selectedAmount > PUBLIC_PAYMENT_MAX_AMOUNT)) {
-      setPaymentError(`Le montant doit être compris entre ${PUBLIC_PAYMENT_MIN_AMOUNT.toLocaleString('fr-FR')} et ${PUBLIC_PAYMENT_MAX_AMOUNT.toLocaleString('fr-FR')} ${link.currency}.`);
+    if (link.amountType === 'CUSTOMER_CHOOSES' && (!Number.isInteger(selectedAmount) || selectedAmount < paymentMinAmount || selectedAmount > paymentMaxAmount)) {
+      setPaymentError(`Le montant doit être compris entre ${paymentMinAmount.toLocaleString('fr-FR')} et ${paymentMaxAmount.toLocaleString('fr-FR')} ${link.currency}.`);
       setPaymentSubmitting(false);
       return;
     }
@@ -1726,7 +1741,7 @@ function PublicPaymentPage() {
      <div className="public-payment-header"><Logo /><div className="public-payment-header-actions"><span className="public-payment-currency"><img src={`${import.meta.env.BASE_URL}countries/${selectedCustomerCountry.flagSrc}`} alt="" /> {link.currency}</span><span className="public-payment-trust"><LockKeyhole size={13} /> Paiement sécurisé</span></div></div>
      <section className="public-payment-product-card">
        <div className="public-payment-art" aria-hidden="true"><span className="public-payment-art-orb" /><span className="public-payment-art-shape public-payment-art-shape-one" /><span className="public-payment-art-shape public-payment-art-shape-two" /><span className="public-payment-art-mark">M</span></div>
-       <div className="public-payment-product-copy"><span className="eyebrow">Paiement demandé</span><h1>{link.productName}</h1><p>{link.description || 'Effectuez votre paiement Mobile Money en toute sécurité.'}</p><div className="public-payment-product-price"><small>{link.amountType === 'CUSTOMER_CHOOSES' ? 'Montant libre' : 'Montant à payer'}</small><strong>{link.amountType === 'CUSTOMER_CHOOSES' ? `À partir de ${link.currency}` : money(link.amount, link.currency)}</strong></div></div>
+       <div className="public-payment-product-copy"><span className="eyebrow">Paiement demandé</span><h1>{link.productName}</h1><p>{link.description || 'Effectuez votre paiement Mobile Money en toute sécurité.'}</p><div className="public-payment-product-price"><small>{link.amountType === 'CUSTOMER_CHOOSES' ? 'Montant libre' : 'Montant à payer'}</small><strong>{link.amountType === 'CUSTOMER_CHOOSES' ? `${money(paymentMinAmount, link.currency)} à ${money(paymentMaxAmount, link.currency)}` : money(link.amount, link.currency)}</strong></div></div>
      </section>
      <div className="public-payment-layout public-payment-layout-single">
        <form className="card card-pad deposit-form public-payment-form" onSubmit={submitPayment}>
@@ -1745,7 +1760,7 @@ function PublicPaymentPage() {
           </div> : <>
            {link.amountType === 'FIXED' && <div className="public-payment-fixed-amount"><div><span>Montant à payer</span><small>Paiement sécurisé en {link.currency}</small></div><strong>{money(link.amount, link.currency)}</strong></div>}
            <div className="public-payment-form-head"><div><span className="eyebrow">Vos informations</span><h2>Préparez votre paiement</h2><p>Renseignez les coordonnées utilisées pour le paiement.</p></div></div>
-           {link.amountType === 'CUSTOMER_CHOOSES' && <div className="field public-payment-custom-amount"><label htmlFor="public-payment-amount">Montant à payer</label><div className="input-prefix"><span>{link.currency}</span><input id="public-payment-amount" type="number" min={PUBLIC_PAYMENT_MIN_AMOUNT} max={PUBLIC_PAYMENT_MAX_AMOUNT} step="1" value={amount} onChange={event => setAmount(event.target.value)} placeholder="300" required /></div><small className="field-hint">Choisissez un montant entier entre {PUBLIC_PAYMENT_MIN_AMOUNT.toLocaleString('fr-FR')} et {PUBLIC_PAYMENT_MAX_AMOUNT.toLocaleString('fr-FR')} {link.currency}.</small></div>}
+           {link.amountType === 'CUSTOMER_CHOOSES' && <div className="field public-payment-custom-amount"><label htmlFor="public-payment-amount">Montant à payer</label><div className="input-prefix"><span>{link.currency}</span><input id="public-payment-amount" type="number" min={paymentMinAmount} max={paymentMaxAmount} step="1" value={amount} onChange={event => setAmount(event.target.value)} placeholder={String(paymentMinAmount)} required /></div><small className="field-hint">Choisissez un montant entier entre {paymentMinAmount.toLocaleString('fr-FR')} et {paymentMaxAmount.toLocaleString('fr-FR')} {link.currency}.</small></div>}
            {hasField('full_name') && <div className="field"><label htmlFor="public-payment-full-name">Nom complet</label><input id="public-payment-full-name" value={customerValues.full_name ?? ''} onChange={event => updateCustomerValue('full_name', event.target.value)} autoComplete="name" placeholder="Votre nom et prénom" required /></div>}
            {hasField('country') && <div className="field"><label htmlFor="public-payment-country">Pays du payeur</label><div className="country-select"><img src={`${import.meta.env.BASE_URL}countries/${selectedCustomerCountry.flagSrc}`} alt="" /><select id="public-payment-country" value={customerCountry} onChange={event => { setCustomerCountry(event.target.value); const next = mobileMoneyCountryOptions.find(option => option.country === event.target.value); setCustomerOperator(next?.operators[0]?.name ?? ''); }} required>{mobileMoneyCountryOptions.map(option => <option key={option.country} value={option.country} disabled={option.code === 'NE'}>{option.country} · {option.dialCode}{option.code === 'NE' ? ' · bientôt disponible' : ''}</option>)}</select><ChevronDown className="country-select-chevron" size={16} aria-hidden="true" /></div></div>}
            {hasField('operator') && <div className="field"><label>Opérateur Mobile Money</label><div className="mobile-money-options" role="radiogroup" aria-label="Choisir un opérateur Mobile Money">{selectedCustomerCountry.operators.map(option => <label className={`mobile-money-option ${customerOperator === option.name ? 'selected' : ''}`} key={option.name}><input type="radio" name="public-payment-operator" value={option.name} checked={customerOperator === option.name} onChange={event => setCustomerOperator(event.target.value)} required /><img src={`${import.meta.env.BASE_URL}mobile-money/${option.src}`} alt="" /><span>{option.name}</span></label>)}</div></div>}

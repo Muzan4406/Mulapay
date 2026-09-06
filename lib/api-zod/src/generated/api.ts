@@ -74,6 +74,8 @@ export const GetBootstrapResponse = zod.object({
   "description": zod.string(),
   "walletId": zod.string().nullable(),
   "amountType": zod.enum(['FIXED', 'CUSTOMER_CHOOSES']),
+  "amountMin": zod.number(),
+  "amountMax": zod.number(),
   "customerFields": zod.array(zod.enum(['full_name', 'country', 'operator', 'phone', 'email'])),
   "status": zod.string(),
   "expiresAt": zod.string(),
@@ -199,6 +201,12 @@ export const createPaymentLinkBodyAmountMin = 0;
 
 export const createPaymentLinkBodyProductNameMin = 2;
 
+export const createPaymentLinkBodyAmountMinMin = 300;
+export const createPaymentLinkBodyAmountMinMax = 500000;
+
+export const createPaymentLinkBodyAmountMaxMin = 300;
+export const createPaymentLinkBodyAmountMaxMax = 500000;
+
 
 
 
@@ -209,6 +217,8 @@ export const CreatePaymentLinkBody = zod.object({
   "description": zod.string(),
   "walletId": zod.string().nullable(),
   "amountType": zod.enum(['FIXED', 'CUSTOMER_CHOOSES']),
+  "amountMin": zod.number().min(createPaymentLinkBodyAmountMinMin).max(createPaymentLinkBodyAmountMinMax),
+  "amountMax": zod.number().min(createPaymentLinkBodyAmountMaxMin).max(createPaymentLinkBodyAmountMaxMax),
   "customerFields": zod.array(zod.enum(['full_name', 'country', 'operator', 'phone', 'email'])),
   "expiresAt": zod.string(),
   "maxPayments": zod.number().min(1).nullable(),
@@ -229,6 +239,8 @@ export const CreatePaymentLinkResponse = zod.object({
   "description": zod.string(),
   "walletId": zod.string().nullable(),
   "amountType": zod.enum(['FIXED', 'CUSTOMER_CHOOSES']),
+  "amountMin": zod.number(),
+  "amountMax": zod.number(),
   "customerFields": zod.array(zod.enum(['full_name', 'country', 'operator', 'phone', 'email'])),
   "status": zod.string(),
   "expiresAt": zod.string(),
@@ -255,6 +267,8 @@ export const ListPaymentLinksResponseItem = zod.object({
   "description": zod.string(),
   "walletId": zod.string().nullable(),
   "amountType": zod.enum(['FIXED', 'CUSTOMER_CHOOSES']),
+  "amountMin": zod.number(),
+  "amountMax": zod.number(),
   "customerFields": zod.array(zod.enum(['full_name', 'country', 'operator', 'phone', 'email'])),
   "status": zod.string(),
   "expiresAt": zod.string(),
@@ -284,6 +298,8 @@ export const GetPublicPaymentLinkResponse = zod.object({
   "currency": zod.string(),
   "description": zod.string(),
   "amountType": zod.enum(['FIXED', 'CUSTOMER_CHOOSES']),
+  "amountMin": zod.number(),
+  "amountMax": zod.number(),
   "customerFields": zod.array(zod.enum(['full_name', 'country', 'operator', 'phone', 'email'])),
   "status": zod.string(),
   "expiresAt": zod.string(),
@@ -351,6 +367,12 @@ export const updatePaymentLinkBodyAmountMin = 0;
 
 export const updatePaymentLinkBodyProductNameMin = 2;
 
+export const updatePaymentLinkBodyAmountMinMin = 300;
+export const updatePaymentLinkBodyAmountMinMax = 500000;
+
+export const updatePaymentLinkBodyAmountMaxMin = 300;
+export const updatePaymentLinkBodyAmountMaxMax = 500000;
+
 
 
 
@@ -361,6 +383,8 @@ export const UpdatePaymentLinkBody = zod.object({
   "description": zod.string(),
   "walletId": zod.string().nullable(),
   "amountType": zod.enum(['FIXED', 'CUSTOMER_CHOOSES']),
+  "amountMin": zod.number().min(updatePaymentLinkBodyAmountMinMin).max(updatePaymentLinkBodyAmountMinMax),
+  "amountMax": zod.number().min(updatePaymentLinkBodyAmountMaxMin).max(updatePaymentLinkBodyAmountMaxMax),
   "customerFields": zod.array(zod.enum(['full_name', 'country', 'operator', 'phone', 'email'])),
   "expiresAt": zod.string(),
   "maxPayments": zod.number().min(1).nullable(),
@@ -381,6 +405,8 @@ export const UpdatePaymentLinkResponse = zod.object({
   "description": zod.string(),
   "walletId": zod.string().nullable(),
   "amountType": zod.enum(['FIXED', 'CUSTOMER_CHOOSES']),
+  "amountMin": zod.number(),
+  "amountMax": zod.number(),
   "customerFields": zod.array(zod.enum(['full_name', 'country', 'operator', 'phone', 'email'])),
   "status": zod.string(),
   "expiresAt": zod.string(),

@@ -21,6 +21,8 @@ export interface PaymentLink {
   /** @nullable */
   walletId: string | null;
   amountType: PaymentLinkAmountType;
+  amountMin: number;
+  amountMax: number;
   customerFields: PaymentLinkCustomerFieldsItem[];
   status: string;
   expiresAt: string;
