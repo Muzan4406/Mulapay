@@ -164,6 +164,16 @@ function Logo({ light = false }: { light?: boolean }) {
   </div>;
 }
 
+function MulapayLoadingScreen({ message = 'Préparation de votre espace Mulapay', detail = 'Nous chargeons vos informations de manière sécurisée.' }: { message?: string; detail?: string }) {
+  return <main className="public-payment-loading" aria-busy="true">
+    <div className="public-payment-loading-card">
+      <div className="public-payment-loading-head"><Logo /><span className="public-payment-loading-lock"><LockKeyhole size={13} /> Sécurisé</span></div>
+      <div className="public-payment-loading-art"><span /><span /><span /></div>
+      <div className="public-payment-loading-copy"><span className="eyebrow">Mulapay</span><h1>{message}</h1><p>{detail}</p><div className="public-payment-loading-progress"><span /></div></div>
+    </div>
+  </main>;
+}
+
 const mobileMoneyProviders = [
   { name: 'Airtel Money', country: 'Régional', src: 'airtel-money_no_bg.png' },
   { name: 'Wave', country: 'Régional', src: 'wave_no_bg.png' },
@@ -1983,7 +1993,7 @@ function RoutedApp() {
     signOut: () => { void signOut({ redirectUrl: basePath || '/' }); },
     toast,
   };
-  if (!isLoaded || bootstrapQuery.isLoading) return <div className="loading-screen">Chargement de votre espace Mulapay…</div>;
+  if (!isLoaded || bootstrapQuery.isLoading) return <MulapayLoadingScreen />;
   if (!isSignedIn) return <Redirect to="/" />;
   const admin = location.startsWith('/admin') && data?.profile.role === 'ADMIN';
   if (location.startsWith('/admin') && !admin) return <Redirect to="/app" />;
@@ -2207,7 +2217,7 @@ function LegalPage({ kind }: { kind: 'terms' | 'privacy' }) {
 
 function HomeRedirect() {
   const { isLoaded, isSignedIn } = useAuth();
-  if (!isLoaded) return <div className="loading-screen">Chargement de Mulapay…</div>;
+  if (!isLoaded) return <MulapayLoadingScreen message="Préparation de Mulapay" detail="Nous préparons votre espace sécurisé." />;
   return isSignedIn ? <Redirect to="/app" /> : <Landing />;
 }
 
