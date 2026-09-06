@@ -45,6 +45,7 @@ import {
   drimPayWebhookUrl,
   initiatePayin,
   isDrimPayConfigured,
+  operatorSlugForName,
   providerStatusToTransactionStatus,
 } from "../services/drimpay";
 import {
@@ -1353,6 +1354,14 @@ router.put("/v1/admin/payment-provider-routes", requireAdmin, async (req, res) =
   }
   if (input.provider !== "DRIMPAY" && input.provider !== "ASHTECHPAY") {
     res.status(400).json({ error: "Fournisseur de paiement inconnu." });
+    return;
+  }
+  if (input.provider === "DRIMPAY" && !isDrimPayConfigured()) {
+    res.status(503).json({ error: "DrimPay ne peut pas être sélectionné tant que ses secrets serveur ne sont pas configurés." });
+    return;
+  }
+  if (input.provider === "DRIMPAY" && !operatorSlugForName(input.providerOperator.trim())) {
+    res.status(400).json({ error: "Cet opérateur n’est pas reconnu par DrimPay." });
     return;
   }
   if (input.provider === "ASHTECHPAY" && !isAshtechPayConfigured()) {
