@@ -252,6 +252,11 @@ h1,h2,h3,p { margin:0; }
 .deposit-status-summary { width:100%; margin:5px 0 3px; text-align:left; }
 .deposit-status-summary code { max-width:60%; overflow:hidden; color:hsl(var(--foreground)); font-family:var(--font-mono); font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
 .deposit-status-waiting { display:flex; align-items:center; gap:7px; width:100%; margin-top:8px; padding:10px 12px; border-radius:9px; background:hsl(var(--accent) / .22); color:hsl(34 47% 29%); font-size:10px; text-align:left; }
+.withdrawal-unavailable-card { max-width:680px; margin:25px auto 0; display:grid; justify-items:center; gap:11px; text-align:center; }
+.withdrawal-unavailable-icon { width:58px; height:58px; display:grid; place-items:center; border-radius:18px; background:hsl(39 82% 57% / .16); color:hsl(34 68% 39%); }
+.withdrawal-unavailable-kicker { color:hsl(34 68% 39%); }
+.withdrawal-unavailable-notice { width:100%; align-items:flex-start; text-align:left; line-height:1.5; }
+.withdrawal-unavailable-actions { display:flex; justify-content:center; gap:9px; width:100%; margin-top:5px; }
 .configuration-loading { display:flex; align-items:center; gap:7px; }
 .loading-spin { animation: mulapay-spin 1s linear infinite; }
 .payment-reference-label { margin-top:2px; color:hsl(var(--muted-foreground)); font-size:10px; }

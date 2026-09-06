@@ -661,7 +661,23 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
 }
 
 function Deposit() { return <ProviderOperationForm kind="deposit" />; }
-function Withdrawal() { return <ProviderOperationForm kind="withdrawal" />; }
+
+function Withdrawal() {
+  return <main className="page-wrap deposit-page">
+    <PageIntro eyebrow="Mobile Money" title="Retrait" subtitle="Le service de règlement sortant sera activé dès qu’un fournisseur de paiement réel sera connecté." />
+    <div className="card card-pad withdrawal-unavailable-card" data-testid="withdrawal-unavailable">
+      <div className="withdrawal-unavailable-icon"><LockKeyhole size={26} /></div>
+      <span className="deposit-status-kicker withdrawal-unavailable-kicker">SERVICE NON DISPONIBLE</span>
+      <h2>Vos fonds restent protégés</h2>
+      <p className="deposit-status-copy">Les fournisseurs actuellement connectés permettent de recevoir des dépôts, mais pas encore d’exécuter des retraits réels.</p>
+      <div className="notice withdrawal-unavailable-notice"><ShieldCheck size={15} /><span>Aucun wallet ne sera débité. Nous n’affichons pas de demande de retrait tant que son règlement fournisseur n’est pas disponible.</span></div>
+      <div className="withdrawal-unavailable-actions">
+        <Link className="button button-ghost" href="/app">Retour au dashboard <ArrowLeft size={15} /></Link>
+        <Link className="button button-primary" href="/app/deposit">Faire un dépôt <ArrowDownLeft size={15} /></Link>
+      </div>
+    </div>
+  </main>;
+}
 
 function Receive() {
   const { links } = useStore();
