@@ -402,9 +402,11 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
   const [paymentUrl, setPaymentUrl] = useState('');
   const [depositTracking, setDepositTracking] = useState<DepositTracking | null>(null);
   const [depositStatusError, setDepositStatusError] = useState('');
+  const [depositSecondsLeft, setDepositSecondsLeft] = useState(60);
   const [submitting, setSubmitting] = useState(false);
   const isDeposit = kind === 'deposit';
   const selectedCountry = mobileMoneyCountryOptions.find(option => option.country === country) ?? mobileMoneyCountryOptions[0];
+  const selectedOperator = selectedCountry.operators.find(item => item.name === operator);
   const walletForCountry = (countryName: string) => wallets.find(wallet => wallet.country === countryName || countryLabel(wallet.country) === countryName);
   const selectedWallet = wallets.find(wallet => wallet.id === walletId) ?? walletForCountry(country) ?? wallets[0];
   const availableBalance = selectedWallet ? Math.max(0, selectedWallet.balance - selectedWallet.pending) : 0;
@@ -470,6 +472,14 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
     };
   }, [depositTracking?.reference, depositTracking?.status, isDeposit]);
 
+  useEffect(() => {
+    if (!isDeposit || !depositTracking?.reference || depositStatusIsTerminal(depositTracking.status)) return;
+    const interval = window.setInterval(() => {
+      setDepositSecondsLeft(current => Math.max(0, current - 1));
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, [depositTracking?.reference, depositTracking?.status, isDeposit]);
+
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setSubmitting(true);
@@ -502,6 +512,7 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
           paymentUrl: payload.paymentUrl ?? null,
         });
         setDepositStatusError('');
+        setDepositSecondsLeft(60);
       } else {
         toast(payload.message ?? 'Opération créée.');
       }
@@ -520,20 +531,26 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
       const terminal = depositStatusIsTerminal(depositTracking.status);
       const completed = depositTracking.status.toLowerCase() === 'completed';
       const failed = ['failed', 'expired', 'cancelled', 'reversed'].includes(depositTracking.status.toLowerCase());
+      const depositNetAmount = depositTracking.merchantAmount ?? depositTracking.netAmount ?? depositTracking.amount;
+      const progress = `${Math.max(0, Math.min(100, (depositSecondsLeft / 60) * 100))}%`;
       return <main className="page-wrap deposit-page">
-        <PageIntro eyebrow="Suivi du dépôt" title={completed ? 'Dépôt confirmé' : failed ? 'Dépôt non confirmé' : 'Dépôt en attente'} subtitle={completed ? 'Le webhook du fournisseur a confirmé votre dépôt.' : failed ? 'Le fournisseur n’a pas confirmé ce dépôt.' : 'Ne fermez pas cette page : nous suivons la confirmation automatiquement.'} />
-        <div className="card card-pad deposit-status-card" data-testid="deposit-status-card">
-          <div className={`deposit-status-icon ${completed ? 'is-complete' : failed ? 'is-failed' : ''}`}>{completed ? <CheckCircle2 size={28} /> : failed ? <CircleAlert size={28} /> : <RefreshCw size={28} className="loading-spin" />}</div>
-          <span className={`pill ${completed ? 'pill-success' : failed ? 'pill-danger' : 'pill-pending'}`}>{statusLabel(depositTracking.status)}</span>
-          <h2>{completed ? 'Votre wallet est crédité' : failed ? 'La confirmation n’a pas abouti' : 'Confirmation en cours'}</h2>
-          <p className="deposit-status-copy">{completed ? `Le montant net après frais Mulapay de ${money(depositTracking.merchantAmount ?? depositTracking.amount, depositTracking.currency)} est maintenant disponible.` : failed ? 'Aucun crédit ne sera appliqué tant que le paiement n’est pas confirmé.' : `Confirmez la demande sur votre téléphone. Mulapay attend le webhook signé du fournisseur.`}</p>
-          <div className="summary-box deposit-status-summary">
-            <div className="summary-line"><span>Montant demandé</span><strong>{money(depositTracking.amount, depositTracking.currency)}</strong></div>
-            <div className="summary-line"><span>Opérateur</span><strong>{operator}</strong></div>
-            <div className="summary-line"><span>Wallet cible</span><strong>{selectedWallet?.country ?? country}</strong></div>
+        <div className={`card card-pad deposit-status-card ${completed ? 'is-complete' : failed ? 'is-failed' : ''}`} data-testid="deposit-status-card">
+          {selectedOperator && <div className="deposit-status-provider"><img src={`${import.meta.env.BASE_URL}mobile-money/${selectedOperator.src}`} alt="" /><span><small>Opération Mobile Money</small><strong>{operator}</strong></span></div>}
+          <div className="deposit-status-icon">{completed ? <CheckCircle2 size={26} /> : failed ? <CircleAlert size={26} /> : <RefreshCw size={26} className="loading-spin" />}</div>
+          <span className="deposit-status-kicker">{completed ? 'PAIEMENT CONFIRMÉ' : failed ? 'PAIEMENT NON CONFIRMÉ' : 'PAIEMENT EN COURS'}</span>
+          <h2>{completed ? 'Votre wallet est crédité' : failed ? 'La confirmation n’a pas abouti' : 'Validez sur votre téléphone'}</h2>
+          <p className="deposit-status-copy">{completed ? 'Le fournisseur a confirmé votre dépôt.' : failed ? 'Aucun crédit ne sera appliqué tant que le paiement n’est pas confirmé.' : 'Confirmez le paiement sur votre téléphone.'}</p>
+          <div className="deposit-status-amount">
+            <small>Net après frais Mulapay</small>
+            <strong>{money(depositNetAmount, depositTracking.currency)}</strong>
+            <span>Montant du paiement : {money(depositTracking.amount, depositTracking.currency)} · via {operator}</span>
           </div>
+          {!terminal && <div className="deposit-status-progress">
+            <div><span>Confirmation automatique</span><strong>{depositSecondsLeft}s</strong></div>
+            <span className="deposit-status-progress-track"><span style={{ width: progress }} /></span>
+          </div>}
           {depositTracking.paymentUrl && <a className="button button-primary button-wide" href={depositTracking.paymentUrl} target="_blank" rel="noreferrer">Ouvrir le paiement sécurisé <ChevronRight size={15} /></a>}
-          {!terminal && <div className="notice notice-dark deposit-status-waiting"><RefreshCw size={15} className="loading-spin" /><span>Vérification en cours… actualisation automatique toutes les 4 secondes. Le solde changera uniquement après confirmation.</span></div>}
+          {!terminal && <div className="deposit-status-waiting"><RefreshCw size={14} className="loading-spin" /><span>Statut vérifié automatiquement.</span></div>}
           {depositStatusError && <div className="notice notice-error"><CircleAlert size={15} /><span>{depositStatusError}</span></div>}
           {terminal && <button className="button button-ghost button-wide" type="button" onClick={() => { setDepositTracking(null); setPaymentUrl(''); setDepositStatusError(''); }}>Effectuer un autre dépôt</button>}
         </div>

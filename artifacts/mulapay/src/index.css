@@ -227,15 +227,31 @@ h1,h2,h3,p { margin:0; }
 .input-prefix input { padding-left:42px; }
 .deposit-page .section-head { margin-bottom:0; }
 .deposit-form { max-width:680px; margin:25px auto 0; }
-.deposit-status-card { max-width:680px; margin:25px auto 0; display:grid; justify-items:center; gap:11px; text-align:center; }
-.deposit-status-icon { width:64px; height:64px; display:grid; place-items:center; border-radius:20px; background:hsl(39 82% 57% / .18); color:hsl(34 68% 39%); }
-.deposit-status-icon.is-complete { background:hsl(var(--primary) / .12); color:hsl(var(--primary)); }
-.deposit-status-icon.is-failed { background:hsl(var(--destructive) / .1); color:hsl(var(--destructive)); }
+.deposit-status-card { width:min(100%, 680px); max-width:680px; margin:25px auto 0; display:grid; justify-items:center; gap:11px; text-align:center; }
+.deposit-status-provider { display:flex; align-items:center; gap:10px; width:min(100%, 330px); padding:10px 12px; border:1px solid hsl(var(--border)); border-radius:12px; background:hsl(var(--card)); text-align:left; }
+.deposit-status-provider img { width:29px; height:29px; object-fit:contain; }
+.deposit-status-provider span { display:grid; gap:3px; min-width:0; }
+.deposit-status-provider small { color:hsl(var(--muted-foreground)); font-size:9px; }
+.deposit-status-provider strong { color:hsl(var(--foreground)); font-size:11px; }
+.deposit-status-icon { width:58px; height:58px; display:grid; place-items:center; margin-top:1px; border-radius:18px; background:hsl(160 42% 38% / .12); color:hsl(160 42% 38%); }
+.deposit-status-card.is-complete .deposit-status-icon { background:hsl(var(--primary) / .12); color:hsl(var(--primary)); }
+.deposit-status-card.is-failed .deposit-status-icon { background:hsl(var(--destructive) / .1); color:hsl(var(--destructive)); }
+.deposit-status-kicker { color:hsl(160 42% 38%); font-family:var(--font-mono); font-size:10px; font-weight:700; letter-spacing:.18em; }
+.deposit-status-card.is-failed .deposit-status-kicker { color:hsl(var(--destructive)); }
 .deposit-status-card h2 { color:hsl(var(--foreground)); font-size:25px; letter-spacing:-.06em; }
 .deposit-status-copy { max-width:460px; color:hsl(var(--muted-foreground)); font-size:11px; line-height:1.55; }
+.deposit-status-amount { display:grid; gap:4px; width:100%; padding:14px 12px; border:1px solid hsl(42 74% 64% / .36); border-radius:12px; background:hsl(45 91% 89% / .46); }
+.deposit-status-amount small { color:hsl(34 47% 35%); font-size:9px; }
+.deposit-status-amount strong { color:hsl(42 83% 42%); font-family:var(--font-mono); font-size:20px; letter-spacing:-.04em; }
+.deposit-status-amount span { color:hsl(34 47% 35%); font-size:10px; }
+.deposit-status-progress { display:grid; gap:7px; width:100%; text-align:left; }
+.deposit-status-progress > div { display:flex; align-items:center; justify-content:space-between; gap:12px; color:hsl(var(--muted-foreground)); font-size:9px; }
+.deposit-status-progress strong { color:hsl(var(--foreground)); font-family:var(--font-mono); font-size:10px; }
+.deposit-status-progress-track { display:block; width:100%; height:5px; overflow:hidden; border-radius:99px; background:hsl(var(--border)); }
+.deposit-status-progress-track > span { display:block; height:100%; border-radius:inherit; background:hsl(43 86% 50%); transition:width .5s ease; }
 .deposit-status-summary { width:100%; margin:5px 0 3px; text-align:left; }
 .deposit-status-summary code { max-width:60%; overflow:hidden; color:hsl(var(--foreground)); font-family:var(--font-mono); font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
-.deposit-status-waiting { width:100%; text-align:left; }
+.deposit-status-waiting { display:flex; align-items:center; gap:7px; width:100%; margin-top:8px; padding:10px 12px; border-radius:9px; background:hsl(var(--accent) / .22); color:hsl(34 47% 29%); font-size:10px; text-align:left; }
 .configuration-loading { display:flex; align-items:center; gap:7px; }
 .loading-spin { animation: mulapay-spin 1s linear infinite; }
 .payment-reference-label { margin-top:2px; color:hsl(var(--muted-foreground)); font-size:10px; }
