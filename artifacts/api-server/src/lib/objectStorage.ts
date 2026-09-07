@@ -18,6 +18,8 @@ type PendingUpload = {
 export class ObjectStorageService {
   private readonly pendingUploads = new Map<string, PendingUpload>();
   private readonly bucketName = "kyc-documents";
+  private bucketReady = false;
+  private bucketSetup: Promise<void> | null = null;
 
   private getConfig() {
     const url = process.env.SUPABASE_URL?.trim().replace(/\/+$/, "");
@@ -44,6 +46,12 @@ export class ObjectStorageService {
   }
 
   private async ensureBucket() {
+    if (this.bucketReady) return;
+    if (this.bucketSetup) {
+      await this.bucketSetup;
+      return;
+    }
+    this.bucketSetup = (async () => {
     const { url } = this.getConfig();
     const response = await fetch(`${url}/storage/v1/bucket`, {
       method: "POST",
@@ -53,6 +61,14 @@ export class ObjectStorageService {
     });
     if (!response.ok && response.status !== 409) {
       throw new Error(`Unable to provision Supabase Storage bucket (HTTP ${response.status}).`);
+    }
+      this.bucketReady = true;
+    })();
+    try {
+      await this.bucketSetup;
+    } catch (error) {
+      this.bucketSetup = null;
+      throw error;
     }
   }
 
