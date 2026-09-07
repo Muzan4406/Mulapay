@@ -2,7 +2,7 @@ import { createContext, type ChangeEvent, type FormEvent, type ReactNode, useCon
 import {
   Activity, ArrowDown, ArrowDownLeft, ArrowLeft, ArrowRightLeft, ArrowRight, ArrowUpRight, Banknote, Bell, CalendarDays, Camera, Check, CheckCircle2,
   ChevronDown, ChevronRight, CircleAlert, Clock3, Copy, Download, Eye, FileCheck2, Globe2, Info, LayoutDashboard,
-  FileText, Link2, ListFilter, LockKeyhole, LogOut, MapPin, Menu, MoreHorizontal, Pencil, Plus, QrCode, RefreshCw, ScanFace, Search,
+  FileText, Link2, ListFilter, LockKeyhole, LogOut, Menu, MoreHorizontal, Pencil, Plus, QrCode, RefreshCw, ScanFace, Search,
   Send, Settings2, ShieldCheck, Trash2, UploadCloud, UserRound, WalletCards, X
 } from 'lucide-react';
 import { Link, Redirect, Route, Router as WouterRouter, Switch, useLocation } from 'wouter';
@@ -2236,6 +2236,7 @@ function RealKyc() {
   const [faceCaptured, setFaceCaptured] = useState(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [files, setFiles] = useState<{ front?: string; back?: string; passport?: string; face?: string }>({});
   const [documentType, setDocumentType] = useState('Carte nationale d’identité (CNI)');
   const [documentNumber, setDocumentNumber] = useState('');
   const [documentExpiry, setDocumentExpiry] = useState('');
@@ -2244,9 +2245,6 @@ function RealKyc() {
     lastName: profile.lastName,
     birthDate: '',
     nationality: profile.country,
-    residenceCountry: profile.country,
-    address: '',
-    city: '',
   });
   useEffect(() => {
     if (videoRef.current && cameraStream) videoRef.current.srcObject = cameraStream;
@@ -2258,7 +2256,10 @@ function RealKyc() {
   const updatePersonal = (field: keyof typeof personal, value: string) => setPersonal(current => ({ ...current, [field]: value }));
   const selectFile = (field: 'front' | 'back' | 'passport' | 'face') => (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) setFiles(current => ({ ...current, [field]: file.name }));
+    if (file) {
+      setFiles(current => ({ ...current, [field]: file.name }));
+      if (field === 'face') setFaceCaptured(true);
+    }
   };
   const documentReady = documentType === 'Passeport' ? Boolean(files.passport) : Boolean(files.front && files.back);
 
@@ -2303,10 +2304,6 @@ function RealKyc() {
       toast('Ajoutez les informations et les images du document.');
       return;
     }
-    if (step === 3 && !faceCaptured) {
-      toast('Capturez votre visage avant de continuer.');
-      return;
-    }
     setStep(current => Math.min(current + 1, 4));
   };
 
@@ -2329,56 +2326,64 @@ function RealKyc() {
       documentFront: files.front ?? '',
       documentBack: files.back ?? '',
       passportPage: files.passport ?? '',
-      faceCapture: files.face ? 'browser_capture_pending_provider_verification' : '',
+      faceCapture: files.face ? 'manual_review' : '',
       verificationMode: 'MANUAL_COMPLIANCE_REVIEW',
     }, status => {
       setSubmitted(true);
-      setStep(5);
+      setStep(4);
       toast(status === 'VERIFIE' || status === 'VERIFIED' ? 'Votre identité a été vérifiée.' : 'Votre dossier a été transmis à la conformité pour revue manuelle.');
     });
   };
 
   if (verified || pending || needsReview || submitted) {
     return <main className="page-wrap">
-      <PageIntro eyebrow="Vérification du compte" title={verified ? 'Identité vérifiée' : needsReview ? 'Informations supplémentaires requises' : 'Vérification en cours'} subtitle={verified ? 'Votre identité a été vérifiée avec succès. Votre compte Mulapay est maintenant vérifié.' : needsReview ? 'Notre équipe conformité a besoin d’informations supplémentaires pour terminer votre vérification.' : 'Votre dossier a été transmis. Les contrôles automatiques et la revue complémentaire suivent leur cours.'} action={<span className={`pill ${verified ? 'pill-success' : needsReview ? 'pill-pending' : 'pill-pending'}`} style={{ padding: '8px 12px' }}><ShieldCheck size={13} style={{ marginRight: 5 }} /> {verified ? 'Vérifié' : needsReview ? 'À compléter' : 'En cours d’examen'}</span>} />
+       <PageIntro eyebrow="Vérification du compte" title={verified ? 'Identité vérifiée' : needsReview ? 'Informations supplémentaires requises' : 'Vérification en cours'} subtitle={verified ? 'Votre identité a été vérifiée avec succès. Votre compte Mulapay est maintenant vérifié.' : needsReview ? 'Notre équipe conformité a besoin d’informations supplémentaires pour terminer votre vérification.' : 'Votre dossier a été transmis à l’équipe conformité pour une revue manuelle.'} action={<span className={`pill ${verified ? 'pill-success' : needsReview ? 'pill-pending' : 'pill-pending'}`} style={{ padding: '8px 12px' }}><ShieldCheck size={13} style={{ marginRight: 5 }} /> {verified ? 'Vérifié' : needsReview ? 'À compléter' : 'En cours d’examen'}</span>} />
       <div className="kyc-confirmation card card-pad">
         <div className="kyc-confirmation-icon">{needsReview ? <CircleAlert size={28} /> : <CheckCircle2 size={28} />}</div>
         <div><span className="eyebrow">{verified ? 'KYC VERIFIED' : needsReview ? 'REVIEW' : 'DOSSIER TRANSMIS'}</span><h2>{verified ? 'Votre identité est confirmée' : needsReview ? 'Votre dossier nécessite un complément' : 'Votre demande est en cours de traitement'}</h2><p>{verified ? 'Vous pouvez accéder aux fonctionnalités autorisées par votre niveau de vérification.' : needsReview ? 'Consultez la notification reçue et fournissez les éléments demandés pour reprendre la vérification.' : 'Si un contrôle complémentaire est nécessaire, vous recevrez une notification dans votre centre d’activité.'}</p></div>
-        <div className="kyc-confirmation-steps"><span className="is-done">✓</span><span>Informations</span><i /><span className="is-done">✓</span><span>Document</span><i /><span className={verified ? 'is-done' : 'is-active'}>{verified ? '✓' : '3'}</span><span>Visage</span><i /><span className={verified ? 'is-done' : 'is-active'}>{verified ? '✓' : '4'}</span><span>Vérification</span><i /><span className={verified ? 'is-done' : 'is-active'}>{verified ? '✓' : '5'}</span><span>Terminé</span></div>
+         <div className="kyc-confirmation-steps"><span className="is-done">✓</span><span>Informations</span><i /><span className="is-done">✓</span><span>Document</span><i /><span className={verified ? 'is-done' : 'is-active'}>{verified ? '✓' : '3'}</span><span>Photo facultative</span><i /><span className={verified ? 'is-done' : 'is-active'}>{verified ? '✓' : '4'}</span><span>Revue manuelle</span></div>
       </div>
     </main>;
   }
 
-  const steps = ['Informations', 'Document', 'Visage', 'Vérification', 'Terminé'];
+   const steps = ['Informations', 'Document', 'Photo facultative', 'Revue manuelle'];
   return <main className="page-wrap">
-    <PageIntro eyebrow="Confiance et sécurité" title="Vérifiez votre identité" subtitle="Une vérification normale est traitée automatiquement. Les dossiers ambigus sont transmis à l’équipe conformité." action={<span className={`pill ${refused ? 'pill-danger' : 'pill-neutral'}`} style={{ padding: '8px 12px' }}><ShieldCheck size={13} style={{ marginRight: 5 }} /> {label}</span>} />
+     <PageIntro eyebrow="Confiance et sécurité" title="Vérifiez votre identité" subtitle="Votre dossier sera examiné manuellement par l’équipe conformité Mulapay. Aucun liveness ni Face Match automatique n’est exécuté." action={<span className={`pill ${refused ? 'pill-danger' : 'pill-neutral'}`} style={{ padding: '8px 12px' }}><ShieldCheck size={13} style={{ marginRight: 5 }} /> {label}</span>} />
     <div className="kyc-progress card">
       {steps.map((item, index) => <div className={`kyc-progress-step ${step > index + 1 ? 'is-done' : step === index + 1 ? 'is-active' : ''}`} key={item}><span>{step > index + 1 ? <Check size={12} /> : index + 1}</span><small>{item}</small></div>)}
     </div>
     <div className="kyc-layout">
       <section className="card card-pad kyc-form-card">
-        <div className="kyc-form-heading"><div><span className="eyebrow">Étape {Math.min(step, 5)} sur 5</span><h2>{step === 1 ? 'Vos informations personnelles' : step === 2 ? 'Ajoutez votre pièce d’identité' : step === 3 ? 'Vérifiez votre visage' : 'Vérification automatique'}</h2><p>{step === 1 ? 'Ces informations doivent correspondre à votre document officiel.' : step === 2 ? 'Utilisez un document valide, lisible et non expiré.' : step === 3 ? 'Nous allons vérifier que vous êtes bien la personne présente sur votre pièce d’identité.' : 'Votre dossier est prêt pour les contrôles de document, de vivacité et de correspondance faciale.'}</p></div><span className="kyc-step-icon">{step === 1 ? <UserRound size={21} /> : step === 2 ? <FileText size={21} /> : step === 3 ? <ScanFace size={21} /> : <ShieldCheck size={21} />}</span></div>
+         <div className="kyc-form-heading"><div><span className="eyebrow">Étape {Math.min(step, 4)} sur 4</span><h2>{step === 1 ? 'Vos informations personnelles' : step === 2 ? 'Ajoutez votre pièce d’identité' : step === 3 ? 'Ajoutez une photo du visage (facultatif)' : 'Envoyer pour revue manuelle'}</h2><p>{step === 1 ? 'Ces informations doivent correspondre à votre document officiel.' : step === 2 ? 'Utilisez un document valide, lisible et non expiré.' : step === 3 ? 'Une photo peut aider l’équipe conformité, mais elle n’est pas obligatoire.' : 'Relisez votre dossier avant de le transmettre à l’équipe conformité Mulapay.'}</p></div><span className="kyc-step-icon">{step === 1 ? <UserRound size={21} /> : step === 2 ? <FileText size={21} /> : step === 3 ? <ScanFace size={21} /> : <ShieldCheck size={21} />}</span></div>
         {step === 1 && <div className="kyc-fields-grid">
           <div className="field"><label htmlFor="kyc-first-name">Prénom(s) <span className="required-mark">*</span></label><input id="kyc-first-name" value={personal.firstName} onChange={event => updatePersonal('firstName', event.target.value)} autoComplete="given-name" /></div>
           <div className="field"><label htmlFor="kyc-last-name">Nom <span className="required-mark">*</span></label><input id="kyc-last-name" value={personal.lastName} onChange={event => updatePersonal('lastName', event.target.value)} autoComplete="family-name" /></div>
           <div className="field"><label htmlFor="kyc-birth-date">Date de naissance <span className="required-mark">*</span></label><div className="input-prefix"><CalendarDays size={15} /><input id="kyc-birth-date" type="date" value={personal.birthDate} onChange={event => updatePersonal('birthDate', event.target.value)} /></div></div>
           <div className="field"><label htmlFor="kyc-nationality">Nationalité <span className="required-mark">*</span></label><input id="kyc-nationality" value={personal.nationality} onChange={event => updatePersonal('nationality', event.target.value)} /></div>
-          <div className="field"><label htmlFor="kyc-residence-country">Pays de résidence <span className="required-mark">*</span></label><input id="kyc-residence-country" value={personal.residenceCountry} onChange={event => updatePersonal('residenceCountry', event.target.value)} /></div>
-          <div className="field"><label htmlFor="kyc-city">Ville <span className="required-mark">*</span></label><div className="input-prefix"><MapPin size={15} /><input id="kyc-city" value={personal.city} onChange={event => updatePersonal('city', event.target.value)} /></div></div>
-          <div className="field kyc-field-wide"><label htmlFor="kyc-address">Adresse complète <span className="required-mark">*</span></label><input id="kyc-address" value={personal.address} onChange={event => updatePersonal('address', event.target.value)} autoComplete="street-address" /></div>
         </div>}
         {step === 2 && <div className="kyc-document-step">
           <div className="kyc-document-types" role="radiogroup" aria-label="Type de document">
             {['Carte nationale d’identité (CNI)', 'Carte d’identité (ID)', 'Carte d’électeur', 'Passeport', 'Permis de conduire'].map(type => <label className={`kyc-document-type ${documentType === type ? 'is-selected' : ''}`} key={type}><input type="radio" name="kyc-document-type" value={type} checked={documentType === type} onChange={event => setDocumentType(event.target.value)} /><FileText size={17} /><span>{type}</span></label>)}
           </div>
           <div className="kyc-fields-grid"><div className="field"><label htmlFor="kyc-document-number">Numéro du document <span className="required-mark">*</span></label><input id="kyc-document-number" value={documentNumber} onChange={event => setDocumentNumber(event.target.value)} placeholder="Ex. TG01234567" /></div><div className="field"><label htmlFor="kyc-document-expiry">Date d’expiration <span className="required-mark">*</span></label><input id="kyc-document-expiry" type="date" value={documentExpiry} onChange={event => setDocumentExpiry(event.target.value)} /></div></div>
-           <div className="notice" style={{ marginTop: 16 }}><ShieldCheck size={14} /><span>Les images du document seront capturées directement dans l’interface sécurisée Smile ID à l’étape suivante. Mulapay ne valide jamais un simple nom de fichier.</span></div>
+           <div className="kyc-upload-grid"><KycUploadCard label="Recto du document" description="Photo nette ou fichier PDF" value={files.front} onChange={selectFile('front')} /><KycUploadCard label="Verso du document" description="Photo nette ou fichier PDF" value={files.back} onChange={selectFile('back')} /><KycUploadCard label="Page d’identité du passeport" description="À utiliser uniquement pour un passeport" value={files.passport} onChange={selectFile('passport')} /></div>
+           <div className="notice" style={{ marginTop: 16 }}><ShieldCheck size={14} /><span>Les images seront examinées manuellement. Mulapay ne valide jamais un simple nom de fichier et aucun contrôle biométrique automatique n’est lancé.</span></div>
         </div>}
-          {step === 3 && <div className="kyc-face-step"><div className="kyc-camera-frame"><ScanFace size={36} /><span>La capture sécurisée sera ouverte par Smile ID</span></div><div className="kyc-instruction-list"><div><span>01</span><p>Smile ID collecte le document officiel dans son interface hébergée.</p></div><div><span>02</span><p>Le prestataire capture votre selfie et les images de liveness.</p></div><div><span>03</span><p>Le verdict repose sur l’OCR, l’authenticité, le liveness et le Face Match.</p></div></div><div className="notice"><LockKeyhole size={14} /><span>La clé Smile ID reste sur le serveur Mulapay. Le navigateur ne reçoit qu’un jeton temporaire.</span></div></div>}
-          {step === 4 && <div className="kyc-review-step"><div className="kyc-review-icon"><RefreshCw size={24} /></div><strong>Vérification automatique</strong><p>Après votre confirmation, Smile ID vérifie le document, l’OCR, le liveness et la correspondance entre le visage et la photo du document. Seul son webhook signé peut débloquer votre compte.</p><div className="kyc-review-checks"><span><Check size={13} /> Informations personnelles</span><span><Check size={13} /> Capture du document</span><span><Check size={13} /> Liveness automatique</span><span><Check size={13} /> Face Match</span></div></div>}
-         <div className="kyc-form-actions">{step > 1 && <button className="button button-ghost" type="button" onClick={() => setStep(current => current - 1)} disabled={providerSubmitting}><ArrowLeft size={15} /> Retour</button>}<span />{step < 4 ? <button className="button button-primary" type="button" onClick={nextStep}>Continuer <ChevronRight size={15} /></button> : <button className="button button-primary" type="button" onClick={() => void submit()} disabled={providerSubmitting}>{providerSubmitting ? <><RefreshCw size={15} className="loading-spin" /> Ouverture sécurisée…</> : <><UploadCloud size={15} /> Ouvrir la vérification Smile ID</>}</button>}</div>
+         {step === 3 && <div className="kyc-face-step">
+           <div className={`kyc-camera-frame ${faceCaptured ? 'is-captured' : ''}`}>
+             {cameraStream ? <video ref={videoRef} autoPlay playsInline muted aria-label="Aperçu de la caméra" /> : faceCaptured ? <><CheckCircle2 size={36} /><span>Photo du visage sélectionnée pour la revue manuelle.</span></> : <><ScanFace size={36} /><span>Aucune photo du visage n’a encore été ajoutée.</span></>}
+           </div>
+           <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap' }}>
+             {!cameraStream && !faceCaptured && <button className="button button-ghost" type="button" onClick={() => void requestCamera()}><Camera size={15} /> Activer la caméra</button>}
+             {cameraStream && <button className="button button-primary" type="button" onClick={captureFace}><Camera size={15} /> Capturer la photo</button>}
+           </div>
+           <KycUploadCard label="Importer une photo du visage" description="Image nette, de face, pour aider la revue" value={files.face} onChange={selectFile('face')} />
+           <div className="kyc-instruction-list"><div><span>01</span><p>Cette photo est facultative et sera seulement examinée par la conformité.</p></div><div><span>02</span><p>Aucun liveness ni Face Match automatique ne sera exécuté.</p></div><div><span>03</span><p>Vous pouvez continuer sans ajouter de photo.</p></div></div>
+         </div>}
+         {step === 4 && <div className="kyc-review-step"><div className="kyc-review-icon"><RefreshCw size={24} /></div><strong>Revue manuelle Mulapay</strong><p>Votre dossier sera transmis à l’équipe conformité. Une décision sera prise après examen des informations et des documents fournis.</p><div className="kyc-review-checks"><span><Check size={13} /> Informations personnelles</span><span><Check size={13} /> Images du document</span><span><Check size={13} /> Photo du visage facultative</span><span><ShieldCheck size={13} /> Examen humain uniquement</span></div></div>}
+         <div className="kyc-form-actions">{step > 1 && <button className="button button-ghost" type="button" onClick={() => setStep(current => current - 1)}><ArrowLeft size={15} /> Retour</button>}<span />{step < 4 ? <button className="button button-primary" type="button" onClick={nextStep}>{step === 3 && !faceCaptured ? 'Continuer sans photo' : 'Continuer'} <ChevronRight size={15} /></button> : <button className="button button-primary" type="button" onClick={submit}><UploadCloud size={15} /> Envoyer pour revue manuelle</button>}</div>
       </section>
-      <aside className="kyc-side-column"><div className="card card-pad"><div className="eyebrow">Protection renforcée</div><h3 className="kyc-side-title">Vos données restent confidentielles</h3><p className="section-note">Les documents d’identité et données biométriques sont chiffrés, accessibles uniquement aux personnes autorisées et conservés selon les obligations applicables.</p><div className="kyc-side-rule"><LockKeyhole size={15} /><span>Aucune validation ne repose sur une simple redirection navigateur.</span></div></div><div className="card card-pad"><div className="eyebrow">Besoin d’aide ?</div><p className="section-note">Utilisez un document officiel en cours de validité, avec des photos nettes et sans reflet.</p><div className="kyc-side-rule"><CircleAlert size={15} /><span>Les contrôles peuvent demander des informations complémentaires.</span></div></div></aside>
+       <aside className="kyc-side-column"><div className="card card-pad"><div className="eyebrow">Revue manuelle</div><h3 className="kyc-side-title">Aucune décision biométrique automatique</h3><p className="section-note">L’équipe conformité Mulapay examine les informations et les documents fournis. Aucun liveness ni Face Match n’est exécuté.</p><div className="kyc-side-rule"><LockKeyhole size={15} /><span>Ne fournissez que des images nettes d’un document encore valide.</span></div></div><div className="card card-pad"><div className="eyebrow">Besoin d’aide ?</div><p className="section-note">Utilisez un document officiel en cours de validité, avec des photos nettes et sans reflet.</p><div className="kyc-side-rule"><CircleAlert size={15} /><span>La conformité peut demander des informations complémentaires après examen.</span></div></div></aside>
     </div>
   </main>;
 }
