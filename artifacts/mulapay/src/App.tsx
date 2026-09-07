@@ -2222,6 +2222,55 @@ function PublicPaymentPage() {
    </main>;
 }
 
+type SmileIdentitySession = {
+  kycId: string;
+  token: string;
+  environment: 'production';
+  product: 'doc_verification';
+  callbackUrl: string;
+  partnerDetails: {
+    partner_id: string;
+    name: string;
+    logo_url: string;
+    policy_url: string;
+    theme_color: string;
+  };
+};
+
+type SmileIdentityWindow = Window & {
+  SmileIdentity?: (config: {
+    token: string;
+    product: 'doc_verification';
+    callback_url: string;
+    environment: 'production';
+    partner_details: SmileIdentitySession['partnerDetails'];
+    user_details?: { given_names: string; last_name: string; email?: string };
+    id_selection?: Record<string, string[]>;
+    onResult?: (result: { status?: string; error_code?: string; message?: string }) => void;
+  }) => void;
+};
+
+async function loadSmileIdentityScript() {
+  const existing = document.querySelector<HTMLScriptElement>('script[data-smile-id-sdk="v12"]');
+  if (existing) {
+    if ((window as SmileIdentityWindow).SmileIdentity) return;
+    await new Promise<void>((resolve, reject) => {
+      existing.addEventListener('load', () => resolve(), { once: true });
+      existing.addEventListener('error', () => reject(new Error('SMILE_ID_SDK_LOAD_FAILED')), { once: true });
+    });
+    return;
+  }
+  await new Promise<void>((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://cdn.usesmileid.com/inline/v12/js/script.min.js';
+    script.async = true;
+    script.dataset.smileIdSdk = 'v12';
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('SMILE_ID_SDK_LOAD_FAILED'));
+    document.head.appendChild(script);
+  });
+}
+
 function RealKyc() {
   const { profile, submitKyc, toast } = useStore();
   const status = profile.kycStatus;
@@ -2232,10 +2281,8 @@ function RealKyc() {
   const label = verified ? 'Vérifié' : needsReview ? 'Informations requises' : pending ? 'En cours d’examen' : refused ? 'À reprendre' : 'Non vérifié';
   const [step, setStep] = useState(1);
   const [submitted, setSubmitted] = useState(false);
-  const [faceReady, setFaceReady] = useState(false);
-  const [faceCaptured, setFaceCaptured] = useState(false);
-  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [providerSubmitting, setProviderSubmitting] = useState(false);
+  const [providerSubmitted, setProviderSubmitted] = useState(false);
   const [documentType, setDocumentType] = useState('Carte nationale d’identité (CNI)');
   const [documentNumber, setDocumentNumber] = useState('');
   const [documentExpiry, setDocumentExpiry] = useState('');
@@ -2248,53 +2295,16 @@ function RealKyc() {
     address: '',
     city: '',
   });
-  const [files, setFiles] = useState<Partial<Record<'front' | 'back' | 'passport' | 'face', string>>>({});
-
   useEffect(() => {
-    if (videoRef.current && cameraStream) videoRef.current.srcObject = cameraStream;
-    return () => {
-      cameraStream?.getTracks().forEach(track => track.stop());
-    };
-  }, [cameraStream]);
+    if (!providerSubmitted) return;
+    const refresh = window.setInterval(() => {
+      void queryClient.invalidateQueries({ queryKey: getGetBootstrapQueryKey() });
+    }, 4000);
+    return () => window.clearInterval(refresh);
+  }, [providerSubmitted]);
 
   const updatePersonal = (field: keyof typeof personal, value: string) => setPersonal(current => ({ ...current, [field]: value }));
-  const selectFile = (field: 'front' | 'back' | 'passport' | 'face') => (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) setFiles(current => ({ ...current, [field]: file.name }));
-  };
-  const documentReady = documentType === 'Passeport' ? Boolean(files.passport) : Boolean(files.front && files.back);
-
-  const requestCamera = async () => {
-    if (!navigator.mediaDevices?.getUserMedia) {
-      toast('La caméra n’est pas disponible sur cet appareil.');
-      return;
-    }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
-      setCameraStream(stream);
-      setFaceReady(true);
-      toast('Caméra activée. Placez votre visage dans le cadre.');
-    } catch {
-      toast('Autorisez l’accès à la caméra pour continuer.');
-    }
-  };
-
-  const captureFace = () => {
-    const video = videoRef.current;
-    if (!video || !video.videoWidth || !video.videoHeight) {
-      toast('Attendez que la caméra soit prête avant de capturer votre visage.');
-      return;
-    }
-    const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    canvas.getContext('2d')?.drawImage(video, 0, 0, canvas.width, canvas.height);
-    setFiles(current => ({ ...current, face: 'camera-capture.jpg' }));
-    setFaceCaptured(true);
-    cameraStream?.getTracks().forEach(track => track.stop());
-    setCameraStream(null);
-    toast('Capture du visage enregistrée. Le liveness et le Face Match seront vérifiés automatiquement.');
-  };
+  const documentReady = Boolean(documentNumber.trim() && documentExpiry);
 
   const nextStep = () => {
     if (step === 1 && Object.values(personal).some(value => !value.trim())) {
@@ -2302,42 +2312,54 @@ function RealKyc() {
       return;
     }
     if (step === 2 && (!documentNumber.trim() || !documentExpiry || !documentReady)) {
-      toast('Ajoutez les informations et les images du document.');
-      return;
-    }
-    if (step === 3 && !faceCaptured) {
-      toast('Capturez votre visage avant de continuer.');
+      toast('Ajoutez les informations du document.');
       return;
     }
     setStep(current => Math.min(current + 1, 4));
   };
 
-  const submit = () => {
-    const documents = [
-      `document_type:${documentType}`,
-      `document_number:${documentNumber}`,
-      `document_expiry:${documentExpiry}`,
-      `document_front:${files.front ?? ''}`,
-      `document_back:${files.back ?? ''}`,
-      `document_passport:${files.passport ?? ''}`,
-      `face_capture:${files.face ?? 'provider_capture_required'}`,
-      `personal:${JSON.stringify(personal)}`,
-    ];
-    submitKyc(documents, {
-      ...personal,
-      documentType,
-      documentNumber,
-      documentExpiry,
-      documentFront: files.front ?? '',
-      documentBack: files.back ?? '',
-      passportPage: files.passport ?? '',
-      faceCapture: files.face ? 'browser_capture_pending_provider_verification' : '',
-      verificationMode: 'PROVIDER_KYC_REQUIRED',
-    }, status => {
-      setSubmitted(true);
-      setStep(5);
-      toast(status === 'VERIFIE' || status === 'VERIFIED' ? 'Votre identité a été vérifiée.' : 'Votre dossier a été transmis pour vérification automatique.');
-    });
+  const submit = async () => {
+    setProviderSubmitting(true);
+    try {
+      const response = await fetch('/api/v1/kyc/session', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          country: profile.country,
+          details: { ...personal, documentType, documentNumber, documentExpiry },
+        }),
+      });
+      const body = await response.json() as SmileIdentitySession & { error?: string };
+      if (!response.ok) throw new Error(body.error ?? 'La session KYC n’a pas pu être créée.');
+      await loadSmileIdentityScript();
+      const SmileIdentity = (window as SmileIdentityWindow).SmileIdentity;
+      if (!SmileIdentity) throw new Error('Le module Smile ID n’est pas disponible.');
+      SmileIdentity({
+        token: body.token,
+        product: body.product,
+        callback_url: body.callbackUrl,
+        environment: body.environment,
+        partner_details: body.partnerDetails,
+        user_details: { given_names: personal.firstName, last_name: personal.lastName, email: profile.email },
+        onResult: result => {
+          if (result.status === 'success') {
+            setProviderSubmitted(true);
+            setSubmitted(true);
+            setStep(5);
+            toast('Votre dossier a été accepté par Smile ID. Le verdict final arrivera par webhook sécurisé.');
+          } else if (result.status === 'cancelled') {
+            toast('La vérification Smile ID a été interrompue. Aucun accès n’a été débloqué.');
+          } else {
+            toast(result.message ?? 'Smile ID n’a pas pu soumettre votre dossier.');
+          }
+        },
+      });
+    } catch (error) {
+      toast(error instanceof Error ? error.message : 'La vérification KYC n’a pas pu démarrer.');
+    } finally {
+      setProviderSubmitting(false);
+    }
   };
 
   if (verified || pending || needsReview || submitted) {
@@ -2374,12 +2396,11 @@ function RealKyc() {
             {['Carte nationale d’identité (CNI)', 'Carte d’identité (ID)', 'Carte d’électeur', 'Passeport', 'Permis de conduire'].map(type => <label className={`kyc-document-type ${documentType === type ? 'is-selected' : ''}`} key={type}><input type="radio" name="kyc-document-type" value={type} checked={documentType === type} onChange={event => setDocumentType(event.target.value)} /><FileText size={17} /><span>{type}</span></label>)}
           </div>
           <div className="kyc-fields-grid"><div className="field"><label htmlFor="kyc-document-number">Numéro du document <span className="required-mark">*</span></label><input id="kyc-document-number" value={documentNumber} onChange={event => setDocumentNumber(event.target.value)} placeholder="Ex. TG01234567" /></div><div className="field"><label htmlFor="kyc-document-expiry">Date d’expiration <span className="required-mark">*</span></label><input id="kyc-document-expiry" type="date" value={documentExpiry} onChange={event => setDocumentExpiry(event.target.value)} /></div></div>
-          <div className="kyc-upload-grid">{documentType === 'Passeport' ? <KycUploadCard label="Page d’identité" description="La page avec votre photo et vos informations" value={files.passport} onChange={selectFile('passport')} /> : <><KycUploadCard label="Recto du document" description="Photo nette et entièrement visible" value={files.front} onChange={selectFile('front')} /><KycUploadCard label="Verso du document" description="Photo nette et entièrement visible" value={files.back} onChange={selectFile('back')} /></>}</div>
-          <div className="notice" style={{ marginTop: 16 }}><ShieldCheck size={14} /><span>Contrôles automatiques : OCR, qualité, lisibilité, expiration, cohérence et authenticité lorsque le prestataire le permet.</span></div>
+           <div className="notice" style={{ marginTop: 16 }}><ShieldCheck size={14} /><span>Les images du document seront capturées directement dans l’interface sécurisée Smile ID à l’étape suivante. Mulapay ne valide jamais un simple nom de fichier.</span></div>
         </div>}
-         {step === 3 && <div className="kyc-face-step"><div className={`kyc-camera-frame ${faceCaptured ? 'is-captured' : ''}`}>{faceReady && !faceCaptured ? <video ref={videoRef} autoPlay muted playsInline aria-label="Aperçu de la caméra" /> : faceCaptured ? <><CheckCircle2 size={36} /><span>Capture du visage enregistrée</span></> : <><Camera size={36} /><span>Votre visage apparaîtra ici</span></>}</div><div className="kyc-instruction-list"><div><span>01</span><p>Autorisez l’accès à la caméra.</p></div><div><span>02</span><p>Placez votre visage dans le cadre et regardez la caméra.</p></div><div><span>03</span><p>Suivez les instructions de liveness, puis le système comparera votre visage à la photo du document.</p></div></div>{!faceReady && !faceCaptured && <button className="button button-primary button-wide" type="button" onClick={() => void requestCamera()}><Camera size={15} /> Commencer la vérification</button>}{faceReady && !faceCaptured && <button className="button button-primary button-wide" type="button" onClick={captureFace}><Camera size={15} /> Capturer mon visage</button>}{faceCaptured && <button className="button button-ghost button-wide" type="button" onClick={() => { setFaceCaptured(false); setFaceReady(false); }}><RefreshCw size={15} /> Refaire la capture</button>}</div>}
-         {step === 4 && <div className="kyc-review-step"><div className="kyc-review-icon"><RefreshCw size={24} /></div><strong>Vérification automatique</strong><p>Mulapay transmet les informations du document et la capture du visage au moteur KYC. Le système vérifie l’OCR, l’authenticité, le liveness et la correspondance entre le visage capturé et la photo du document.</p><div className="kyc-review-checks"><span><Check size={13} /> Informations personnelles</span><span><Check size={13} /> OCR et contrôle du document</span><span><Check size={13} /> Liveness automatique</span><span><Check size={13} /> Face Match avec la photo du document</span></div></div>}
-        <div className="kyc-form-actions">{step > 1 && <button className="button button-ghost" type="button" onClick={() => setStep(current => current - 1)}><ArrowLeft size={15} /> Retour</button>}<span />{step < 4 ? <button className="button button-primary" type="button" onClick={nextStep}>Continuer <ChevronRight size={15} /></button> : <button className="button button-primary" type="button" onClick={submit}><UploadCloud size={15} /> Envoyer pour vérification</button>}</div>
+          {step === 3 && <div className="kyc-face-step"><div className="kyc-camera-frame"><ScanFace size={36} /><span>La capture sécurisée sera ouverte par Smile ID</span></div><div className="kyc-instruction-list"><div><span>01</span><p>Smile ID collecte le document officiel dans son interface hébergée.</p></div><div><span>02</span><p>Le prestataire capture votre selfie et les images de liveness.</p></div><div><span>03</span><p>Le verdict repose sur l’OCR, l’authenticité, le liveness et le Face Match.</p></div></div><div className="notice"><LockKeyhole size={14} /><span>La clé Smile ID reste sur le serveur Mulapay. Le navigateur ne reçoit qu’un jeton temporaire.</span></div></div>}
+          {step === 4 && <div className="kyc-review-step"><div className="kyc-review-icon"><RefreshCw size={24} /></div><strong>Vérification automatique</strong><p>Après votre confirmation, Smile ID vérifie le document, l’OCR, le liveness et la correspondance entre le visage et la photo du document. Seul son webhook signé peut débloquer votre compte.</p><div className="kyc-review-checks"><span><Check size={13} /> Informations personnelles</span><span><Check size={13} /> Capture du document</span><span><Check size={13} /> Liveness automatique</span><span><Check size={13} /> Face Match</span></div></div>}
+         <div className="kyc-form-actions">{step > 1 && <button className="button button-ghost" type="button" onClick={() => setStep(current => current - 1)} disabled={providerSubmitting}><ArrowLeft size={15} /> Retour</button>}<span />{step < 4 ? <button className="button button-primary" type="button" onClick={nextStep}>Continuer <ChevronRight size={15} /></button> : <button className="button button-primary" type="button" onClick={() => void submit()} disabled={providerSubmitting}>{providerSubmitting ? <><RefreshCw size={15} className="loading-spin" /> Ouverture sécurisée…</> : <><UploadCloud size={15} /> Ouvrir la vérification Smile ID</>}</button>}</div>
       </section>
       <aside className="kyc-side-column"><div className="card card-pad"><div className="eyebrow">Protection renforcée</div><h3 className="kyc-side-title">Vos données restent confidentielles</h3><p className="section-note">Les documents d’identité et données biométriques sont chiffrés, accessibles uniquement aux personnes autorisées et conservés selon les obligations applicables.</p><div className="kyc-side-rule"><LockKeyhole size={15} /><span>Aucune validation ne repose sur une simple redirection navigateur.</span></div></div><div className="card card-pad"><div className="eyebrow">Besoin d’aide ?</div><p className="section-note">Utilisez un document officiel en cours de validité, avec des photos nettes et sans reflet.</p><div className="kyc-side-rule"><CircleAlert size={15} /><span>Les contrôles peuvent demander des informations complémentaires.</span></div></div></aside>
     </div>

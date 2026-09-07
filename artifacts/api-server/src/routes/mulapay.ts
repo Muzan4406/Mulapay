@@ -59,6 +59,15 @@ import {
   isAshtechPayOperatorSupported,
   isAshtechPayConfigured,
 } from "../services/ashtechpay";
+import {
+  createSmileIdSession,
+  isSmileIdConfigured,
+  smileIdJobId,
+  smileIdPartnerParams,
+  smileIdStatus,
+  smileIdUserId,
+  verifySmileIdWebhookSignature,
+} from "../services/smileid";
 
 const router: IRouter = Router();
 
@@ -83,6 +92,11 @@ function requestOrigin(req: Request) {
   const forwardedProtocol = firstHeaderValue(req.headers["x-forwarded-proto"]);
   const protocol = forwardedProtocol || (req.secure ? "https" : "http");
   return `${protocol}://${host}`;
+}
+
+function smileIdCallbackUrl(req: Request) {
+  return process.env.SMILE_IDENTITY_CALLBACK_URL?.trim()
+    || `${requestOrigin(req)}/api/v1/webhooks/smile-id`;
 }
 
 function presentPaymentLink(req: Request, link: typeof paymentLinks.$inferSelect) {
@@ -727,8 +741,91 @@ async function handleAshtechPayWebhook(req: Request, res: Response) {
   res.status(200).json({ received: true, duplicate: result.duplicate, event: payload.event ?? null });
 }
 
+async function handleSmileIdWebhook(req: Request, res: Response) {
+  const rawBody = (req as Request & { rawBody?: Buffer }).rawBody;
+  if (!rawBody || !verifySmileIdWebhookSignature(
+    req.header("Response-Signature") ?? undefined,
+    req.header("Response-Timestamp") ?? undefined,
+    rawBody,
+  )) {
+    res.status(401).json({ error: "Signature du webhook Smile ID invalide." });
+    return;
+  }
+
+  const payload = req.body as Record<string, unknown>;
+  const status = smileIdStatus(payload);
+  const jobId = smileIdJobId(payload, req.header("Job-ID") ?? undefined);
+  const providerUserId = smileIdUserId(payload, req.header("User-ID") ?? undefined);
+  const partnerParams = smileIdPartnerParams(payload);
+  const kycId = String(partnerParams.mulapay_kyc_id ?? "").trim();
+
+  if (!status || !jobId || (!kycId && !providerUserId)) {
+    res.status(400).json({ error: "Notification Smile ID incomplète ou verdict inconnu." });
+    return;
+  }
+
+  const eventId = `job:${jobId}:status:${status}`;
+  const result = await db.transaction(async (tx) => {
+    const [event] = await tx.insert(paymentProviderWebhookEvents).values({
+      id: crypto.randomUUID(),
+      provider: "SMILE_ID",
+      eventId,
+    }).onConflictDoNothing({
+      target: [paymentProviderWebhookEvents.provider, paymentProviderWebhookEvents.eventId],
+    }).returning();
+    if (!event) return { found: true, duplicate: true };
+
+    const kyc = kycId
+      ? await tx.query.kycVerifications.findFirst({ where: eq(kycVerifications.id, kycId) })
+      : await tx.query.kycVerifications.findFirst({
+        where: and(eq(kycVerifications.userId, providerUserId), eq(kycVerifications.status, "EN_ATTENTE")),
+        orderBy: desc(kycVerifications.submittedAt),
+      });
+    if (!kyc) return { found: false, duplicate: false };
+
+    const existingJobId = kyc.details?.smileJobId;
+    if (existingJobId && existingJobId !== jobId) return { found: true, duplicate: false, mismatch: true };
+
+    const localStatus = status === "VERIFIED" ? "VERIFIED" : status === "REVIEW" ? "A_REVOIR" : "REFUSED";
+    const details = {
+      ...(kyc.details ?? {}),
+      smileProvider: "SMILE_ID",
+      smileJobId: jobId,
+      smileStatus: String(payload.status ?? payload.Status ?? payload.result ?? payload.Result ?? ""),
+      smileResultCode: String(payload.result_code ?? payload.ResultCode ?? payload.resultCode ?? ""),
+      smileWebhookReceivedAt: nowLabel(),
+      smilePartnerParams: JSON.stringify(partnerParams),
+    };
+    await tx.update(kycVerifications).set({ status: localStatus, details }).where(eq(kycVerifications.id, kyc.id));
+    await tx.update(users).set({ kycStatus: localStatus }).where(eq(users.id, kyc.userId));
+    await tx.insert(notifications).values({
+      id: crypto.randomUUID(),
+      userId: kyc.userId,
+      title: status === "VERIFIED" ? "Identité vérifiée" : status === "REVIEW" ? "Complément KYC demandé" : "Vérification KYC échouée",
+      body: status === "VERIFIED"
+        ? "Smile ID a confirmé votre document, votre liveness et la correspondance faciale."
+        : status === "REVIEW"
+          ? "Votre dossier KYC nécessite une vérification complémentaire par l’équipe conformité."
+          : "Le contrôle automatique n’a pas pu confirmer votre identité. Vous pouvez recommencer la vérification.",
+      read: false,
+    });
+    return { found: true, duplicate: false, mismatch: false };
+  });
+
+  if (!result.found) {
+    res.status(404).json({ error: "Dossier KYC Smile ID introuvable." });
+    return;
+  }
+  if ("mismatch" in result && result.mismatch) {
+    res.status(422).json({ error: "Le webhook Smile ID ne correspond pas à la session KYC enregistrée." });
+    return;
+  }
+  res.status(200).json({ received: true, duplicate: result.duplicate });
+}
+
 router.post("/v1/webhooks/drimpay", handleDrimPayWebhook);
 router.post("/v1/webhooks/ashtechpay", handleAshtechPayWebhook);
+router.post("/v1/webhooks/smile-id", handleSmileIdWebhook);
 
 type MulapayRequest = Request & { mulapayUserId?: string; mulapayAuthMode?: "clerk" | "api_key"; mulapayScopes?: string[] };
 
@@ -2301,6 +2398,113 @@ router.patch("/v1/notifications/read-all", async (req, res) => {
   const user = await ensureUser(req);
   await db.update(notifications).set({ read: true }).where(eq(notifications.userId, user.id));
   res.json(MarkNotificationReadResponse.parse({ ok: true, message: "Toutes les notifications sont marquées comme lues.", reference: null }));
+});
+
+router.post("/v1/kyc/session", async (req, res) => {
+  const user = await ensureUser(req);
+  if (!isSmileIdConfigured()) {
+    res.status(503).json({
+      error: "Le prestataire KYC n’est pas encore configuré côté serveur.",
+      code: "KYC_PROVIDER_NOT_CONFIGURED",
+    });
+    return;
+  }
+
+  const body = req.body as { country?: unknown; details?: Record<string, unknown> };
+  const details = body.details ?? {};
+  const country = typeof body.country === "string" ? body.country.trim() : "";
+  const givenNames = typeof details.firstName === "string" ? details.firstName.trim() : "";
+  const lastName = typeof details.lastName === "string" ? details.lastName.trim() : "";
+  const birthDate = typeof details.birthDate === "string" ? details.birthDate.trim() : "";
+  const nationality = typeof details.nationality === "string" ? details.nationality.trim() : "";
+  const residenceCountry = typeof details.residenceCountry === "string" ? details.residenceCountry.trim() : "";
+  const address = typeof details.address === "string" ? details.address.trim() : "";
+  const city = typeof details.city === "string" ? details.city.trim() : "";
+  const documentType = typeof details.documentType === "string" ? details.documentType.trim() : "";
+  const documentNumber = typeof details.documentNumber === "string" ? details.documentNumber.trim() : "";
+  const documentExpiry = typeof details.documentExpiry === "string" ? details.documentExpiry.trim() : "";
+  const countryCode = countryCodeForName(country);
+  const idType = documentType === "Passeport"
+    ? "PASSPORT"
+    : documentType === "Permis de conduire"
+      ? "DRIVERS_LICENSE"
+      : documentType === "Carte d’électeur"
+        ? "VOTER_ID"
+        : "IDENTITY_CARD";
+
+  if (
+    !countryCode || !givenNames || !lastName || !birthDate || !nationality
+    || !residenceCountry || !address || !city || !documentType || !documentNumber || !documentExpiry
+  ) {
+    res.status(400).json({ error: "Les informations personnelles et documentaires sont obligatoires.", code: "INCOMPLETE_KYC" });
+    return;
+  }
+  const expiry = new Date(`${documentExpiry}T23:59:59.999Z`);
+  if (Number.isNaN(expiry.getTime()) || expiry <= new Date()) {
+    res.status(400).json({ error: "Le document d’identité est expiré ou sa date est invalide.", code: "INVALID_DOCUMENT_EXPIRY" });
+    return;
+  }
+
+  const kycId = crypto.randomUUID();
+  const callbackUrl = smileIdCallbackUrl(req);
+  const persistedDetails = {
+    firstName: givenNames,
+    lastName,
+    birthDate,
+    nationality,
+    residenceCountry,
+    address,
+    city,
+    documentType,
+    documentNumber,
+    documentExpiry,
+    verificationMode: "SMILE_ID_DOCUMENT_VERIFICATION",
+    provider: "SMILE_ID",
+    providerStatus: "SUBMITTED",
+  };
+  await db.insert(kycVerifications).values({
+    id: kycId,
+    userId: user.id,
+    name: `${givenNames} ${lastName}`,
+    country,
+    status: "EN_ATTENTE",
+    documents: ["SMILE_ID_DOCUMENT_CAPTURE", "SMILE_ID_SELFIE_LIVENESS"],
+    details: persistedDetails,
+  });
+  await db.update(users).set({ kycStatus: "EN_ATTENTE" }).where(eq(users.id, user.id));
+
+  try {
+    const session = await createSmileIdSession({
+      kycId,
+      userId: user.id,
+      country: countryCode,
+      idType,
+      idNumber: documentNumber,
+      givenNames,
+      lastName,
+      email: user.email,
+      callbackUrl,
+    });
+    await db.update(kycVerifications).set({
+      details: {
+        ...persistedDetails,
+        providerCallbackUrl: callbackUrl,
+        providerTokenIssuedAt: nowLabel(),
+      },
+    }).where(eq(kycVerifications.id, kycId));
+    res.status(201).json({ kycId, ...session });
+  } catch (error) {
+    await db.update(kycVerifications).set({
+      status: "A_REVOIR",
+      details: {
+        ...persistedDetails,
+        providerStatus: "SESSION_ERROR",
+        providerError: error instanceof Error ? error.message.slice(0, 240) : "UNKNOWN_PROVIDER_ERROR",
+      },
+    }).where(eq(kycVerifications.id, kycId));
+    await db.update(users).set({ kycStatus: "A_REVOIR" }).where(eq(users.id, user.id));
+    res.status(502).json({ error: "La session de vérification Smile ID n’a pas pu être créée.", code: "KYC_PROVIDER_ERROR" });
+  }
 });
 
 router.post("/v1/kyc", async (req, res) => {
