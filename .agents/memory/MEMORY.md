@@ -8,6 +8,6 @@
 - [Mulapay partner API boundary](mulapay-partner-api-boundary.md) — partner documentation and public responses present Mulapay as the only payment API; PSPs remain internal routing details.
 - [OpenAPI and generated Zod](openapi-generated-zod.md) — keep integer semantics in runtime validation; this Orval/Zod setup cannot emit zod.int().
 - [Manual KYC boundary](manual-kyc.md) — Mulapay keeps KYC human-reviewed; no Smile ID, liveness, Face Match, or automatic biometric approval.
-- [App Storage budget boundary](object-storage-budget.md) — private object storage setup can be blocked by exhausted workspace credits before runtime uploads are usable.
+- [KYC file storage boundary](object-storage-budget.md) — KYC files use a private Supabase Storage bucket because Replit App Storage provisioning was blocked by exhausted credits.
 - [Supabase Session Pooler](supabase-session-pooler.md) — use the Node PostgreSQL client for migration URLs with special password characters; libpq URL parsing may fail.
 - [Responsive shell layout](responsive-shell-layout.md) — keep mobile shell children and tables inside the viewport; hiding document overflow alone is not enough.
