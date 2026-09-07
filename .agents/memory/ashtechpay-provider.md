@@ -15,8 +15,8 @@ AshtechPay may return fractional fee amounts even though the Mulapay transaction
 
 **How to apply:** Keep the API credential server-side, convert phone format only at the AshtechPay adapter boundary, translate known provider validation errors into actionable French responses, and require the public HTTPS webhook URL before enabling AshtechPay routing. Never credit a wallet from an unsigned or unverifiable callback.
 
-Provider-tracked AshtechPay transactions must not be locally expired by the browser polling timeout; a provider success can arrive after the UI window, and a late signed success webhook must still be allowed to finalize a previously failed local state.
+Provider-tracked AshtechPay transactions must not be locally expired by the browser polling timeout; a provider success can arrive after the UI window. The authenticated provider status endpoint is a safe fallback when the signed webhook is delayed or undelivered.
 
-**Why:** The provider can report `success` after Mulapay’s 60-second polling window, so expiring first hides a real payment and prevents the signed callback from settling it.
+**Why:** AshtechPay can report `success` while its callback is delayed or absent, so relying only on the browser window leaves a genuinely paid transaction stuck in `Pending`.
 
-**How to apply:** Keep such transactions pending while a provider transaction ID exists, poll the provider for display only, and let only the signed webhook move funds into the ledger.
+**How to apply:** Keep such transactions pending while a provider transaction ID exists, query the authenticated provider status endpoint as a fallback, validate reference/amount/currency/net amount, and settle idempotently. Prefer the signed webhook when delivered.

@@ -61,6 +61,7 @@ import {
   ashtechPayCurrencyForCountry,
   ashtechPayPhoneForCountry,
   ashtechPayWebhookUrl,
+  getAshtechTransaction,
   initiateAshtechPayin,
   isAshtechPayOperatorSupported,
   isAshtechPayConfigured,
@@ -734,6 +735,85 @@ async function handleAshtechPayWebhook(req: Request, res: Response) {
 
 router.post("/v1/webhooks/drimpay", handleDrimPayWebhook);
 router.post("/v1/webhooks/ashtechpay", handleAshtechPayWebhook);
+
+async function reconcileAshtechTransaction(transaction: typeof transactions.$inferSelect) {
+  if (
+    transaction.paymentProvider !== "ASHTECHPAY" ||
+    !transaction.providerTransactionId ||
+    !["Pending", "Processing"].includes(transaction.status)
+  ) {
+    return transaction;
+  }
+
+  let provider: Awaited<ReturnType<typeof getAshtechTransaction>>;
+  try {
+    provider = await getAshtechTransaction(transaction.providerTransactionId);
+  } catch (error) {
+    console.warn("AshtechPay status check unavailable", {
+      reference: transaction.reference,
+      message: error instanceof Error ? error.message : "unknown error",
+    });
+    return transaction;
+  }
+
+  const nextStatus = ashtechStatusToTransactionStatus(provider.status);
+  if (nextStatus === "Pending" || provider.reference !== transaction.reference) return transaction;
+
+  try {
+    return await db.transaction(async (tx) => {
+      const current = await tx.query.transactions.findFirst({ where: eq(transactions.id, transaction.id) });
+      if (!current || !["Pending", "Processing"].includes(current.status)) return current ?? transaction;
+      const wallet = await tx.query.wallets.findFirst({ where: eq(wallets.id, current.walletId ?? "") });
+      if (!wallet) throw new Error("WALLET_NOT_FOUND");
+
+      if (nextStatus === "Completed") {
+        const merchantAmount = current.merchantAmount ?? provider.credited_amount;
+        if (
+          provider.amount !== current.amount ||
+          provider.currency !== ashtechPayCurrencyForCountry(wallet.code) ||
+          provider.credited_amount <= 0 ||
+          provider.credited_amount > provider.amount ||
+          merchantAmount <= 0 ||
+          merchantAmount > provider.credited_amount
+        ) {
+          throw new Error("INVALID_ASHTECH_STATUS_RESPONSE");
+        }
+        await tx.update(wallets).set({ balance: sql`${wallets.balance} + ${merchantAmount}` }).where(eq(wallets.id, wallet.id));
+        await tx.update(transactions).set({
+          status: "Completed",
+          netAmount: provider.credited_amount,
+        }).where(eq(transactions.id, current.id));
+        await tx.insert(ledgerEntries).values({
+          id: crypto.randomUUID(),
+          userId: current.userId,
+          walletId: wallet.id,
+          transactionId: current.id,
+          entryType: "CREDIT",
+          amount: merchantAmount,
+          currency: current.currency,
+          description: `${current.type === "Payment" ? "Paiement par lien" : "Dépôt AshtechPay"} confirmé par vérification sécurisée · ${current.reference}`,
+        });
+        await tx.insert(notifications).values({
+          id: crypto.randomUUID(),
+          userId: current.userId,
+          title: current.type === "Payment" ? "Paiement reçu" : "Dépôt confirmé",
+          body: `${merchantAmount.toLocaleString("fr-FR")} ${current.currency} ont été crédités sur le wallet ${wallet.country}.`,
+          read: false,
+        });
+        return { ...current, status: "Completed", netAmount: provider.credited_amount };
+      }
+
+      await tx.update(transactions).set({ status: "Failed" }).where(eq(transactions.id, current.id));
+      return { ...current, status: "Failed" };
+    });
+  } catch (error) {
+    console.error("AshtechPay status reconciliation rejected", {
+      reference: transaction.reference,
+      message: error instanceof Error ? error.message : "unknown error",
+    });
+    return transaction;
+  }
+}
 
 type MulapayRequest = Request & { mulapayUserId?: string; mulapayAuthMode?: "clerk" | "api_key"; mulapayScopes?: string[] };
 
@@ -1709,7 +1789,7 @@ router.post("/v1/public/payment-links/:token/payments", async (req, res) => {
         walletId: ownerWallet.id,
         type: "Payment",
         paymentProvider: providerSelection.provider,
-        // Le crédit du ledger intervient uniquement après le webhook signé.
+        // Le crédit du ledger intervient après confirmation fournisseur vérifiée.
         status: "Pending",
         amount: input.amount,
         netAmount: normalizedProvider.netAmount,
@@ -1771,19 +1851,20 @@ router.get("/v1/public/payment-links/:token/payments/:reference", async (req, re
     res.status(404).json({ error: "Paiement introuvable." });
     return;
   }
+  const reconciledTransaction = await reconcileAshtechTransaction(transaction);
   res.json({
     ok: true,
-    reference: transaction.reference,
-    status: transaction.status,
-    amount: transaction.amount,
-    currency: transaction.currency,
-    fee: transaction.fee,
-    netAmount: transaction.netAmount,
-    platformFee: transaction.platformFee,
-    merchantAmount: transaction.merchantAmount,
-    paymentUrl: transaction.paymentUrl,
-    expiresAt: transaction.expiresAt?.toISOString() ?? null,
-    createdAt: transaction.createdAt.toISOString(),
+    reference: reconciledTransaction.reference,
+    status: reconciledTransaction.status,
+    amount: reconciledTransaction.amount,
+    currency: reconciledTransaction.currency,
+    fee: reconciledTransaction.fee,
+    netAmount: reconciledTransaction.netAmount,
+    platformFee: reconciledTransaction.platformFee,
+    merchantAmount: reconciledTransaction.merchantAmount,
+    paymentUrl: reconciledTransaction.paymentUrl,
+    expiresAt: reconciledTransaction.expiresAt?.toISOString() ?? null,
+    createdAt: reconciledTransaction.createdAt.toISOString(),
   });
 });
 
@@ -2079,19 +2160,20 @@ router.get("/v1/deposits/:reference", async (req, res) => {
     res.status(404).json({ error: "Dépôt introuvable." });
     return;
   }
+  const reconciledTransaction = await reconcileAshtechTransaction(transaction);
   res.json({
     ok: true,
-    reference: transaction.reference,
-    status: transaction.status,
-    amount: transaction.amount,
-    currency: transaction.currency,
-    fee: transaction.fee,
-    netAmount: transaction.netAmount,
-    platformFee: transaction.platformFee,
-    merchantAmount: transaction.merchantAmount,
-    paymentUrl: transaction.paymentUrl,
-    expiresAt: transaction.expiresAt?.toISOString() ?? null,
-    createdAt: transaction.createdAt.toISOString(),
+    reference: reconciledTransaction.reference,
+    status: reconciledTransaction.status,
+    amount: reconciledTransaction.amount,
+    currency: reconciledTransaction.currency,
+    fee: reconciledTransaction.fee,
+    netAmount: reconciledTransaction.netAmount,
+    platformFee: reconciledTransaction.platformFee,
+    merchantAmount: reconciledTransaction.merchantAmount,
+    paymentUrl: reconciledTransaction.paymentUrl,
+    expiresAt: reconciledTransaction.expiresAt?.toISOString() ?? null,
+    createdAt: reconciledTransaction.createdAt.toISOString(),
   });
 });
 
@@ -2131,17 +2213,18 @@ router.get("/v1/payments/:reference", async (req, res) => {
     res.status(404).json({ error: "Paiement introuvable." });
     return;
   }
+  const reconciledTransaction = await reconcileAshtechTransaction(transaction);
   res.json({
     ok: true,
-    reference: transaction.reference,
-    status: transaction.status,
-    amount: transaction.amount,
-    currency: transaction.currency,
-    fee: transaction.fee,
-    netAmount: transaction.netAmount,
-    paymentUrl: transaction.paymentUrl,
-    expiresAt: transaction.expiresAt?.toISOString() ?? null,
-    createdAt: transaction.createdAt.toISOString(),
+    reference: reconciledTransaction.reference,
+    status: reconciledTransaction.status,
+    amount: reconciledTransaction.amount,
+    currency: reconciledTransaction.currency,
+    fee: reconciledTransaction.fee,
+    netAmount: reconciledTransaction.netAmount,
+    paymentUrl: reconciledTransaction.paymentUrl,
+    expiresAt: reconciledTransaction.expiresAt?.toISOString() ?? null,
+    createdAt: reconciledTransaction.createdAt.toISOString(),
   });
 });
 

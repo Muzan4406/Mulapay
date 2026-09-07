@@ -51,16 +51,16 @@ export class AshtechPayOtpRequiredError extends AshtechPayError {
 const ASHTECHPAY_BASE_URL = "https://ashtechpay.top";
 
 export const ASHTECHPAY_COUNTRY_CURRENCIES: Record<string, string> = {
-  BJ: "XOFB",
-  BF: "XOFF",
-  CI: "XOFC",
+  BJ: "XOF",
+  BF: "XOF",
+  CI: "XOF",
   CM: "XAF",
-  GA: "XAFG",
-  ML: "XOFM",
-  NE: "XOFN",
+  GA: "XAF",
+  ML: "XOF",
+  NE: "XOF",
   CD: "CDF",
-  SN: "XOFS",
-  TG: "XOFT",
+  SN: "XOF",
+  TG: "XOF",
 };
 
 const ASHTECHPAY_DIAL_CODES: Record<string, string> = {
