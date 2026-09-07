@@ -2338,8 +2338,14 @@ function RealKyc() {
   </main>;
 }
 
-function KycUploadCard({ label, description, value, onChange, capture }: { label: string; description: string; value?: string; onChange: (event: ChangeEvent<HTMLInputElement>) => void; capture?: 'user' | 'environment' }) {
-  return <label className={`kyc-upload-card ${value ? 'has-file' : ''}`}><input type="file" accept="image/*" capture={capture} onChange={onChange} /><span className="kyc-upload-icon">{value ? <CheckCircle2 size={20} /> : <UploadCloud size={20} />}</span><strong>{value ? value : label}</strong><small>{value ? 'Photo sélectionnée' : description}</small><span className="kyc-upload-action">{value ? 'Changer la photo' : 'Ajouter une photo'}</span></label>;
+function KycUploadCard({ label, description, value, onChange, capture }: { label: string; description: string; value?: { name: string; preview: string }; onChange: (event: ChangeEvent<HTMLInputElement>) => void; capture?: 'user' | 'environment' }) {
+  return <label className={`kyc-upload-card ${value ? 'has-file' : ''}`}>
+    <input type="file" accept="image/*" capture={capture} onChange={onChange} />
+    {value ? <img className="kyc-upload-preview" src={value.preview} alt={`Aperçu — ${label}`} /> : <span className="kyc-upload-icon"><UploadCloud size={20} /></span>}
+    <strong>{value ? value.name : label}</strong>
+    <small>{value ? 'Image prête à être envoyée' : description}</small>
+    <span className="kyc-upload-action">{value ? 'Changer l’image' : 'Prendre une photo ou importer une image'}</span>
+  </label>;
 }
 
 function Kyc() {
