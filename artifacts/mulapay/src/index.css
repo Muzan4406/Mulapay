@@ -372,7 +372,7 @@ h1,h2,h3,p { margin:0; }
 .kyc-progress-step.is-active > span { background:hsl(var(--primary)); color:hsl(var(--primary-foreground)); }
 .kyc-progress-step.is-done { color:hsl(var(--primary)); }
 .kyc-progress-step.is-done > span { background:hsl(var(--primary) / .13); color:hsl(var(--primary)); }
-.kyc-layout { display:grid; grid-template-columns:minmax(0,1.45fr) minmax(260px,.7fr); gap:17px; margin-top:17px; align-items:start; }
+.kyc-layout { display:grid; grid-template-columns:minmax(0,900px); justify-content:center; gap:17px; margin-top:17px; align-items:start; }
 .kyc-form-card { min-width:0; }
 .kyc-form-heading { display:flex; justify-content:space-between; align-items:flex-start; gap:15px; padding-bottom:19px; border-bottom:1px solid hsl(var(--border)); }
 .kyc-form-heading h2 { margin-top:6px; font-size:21px; letter-spacing:-.055em; }
