@@ -184,12 +184,21 @@ export const kycVerifications = pgTable(
     name: text("name").notNull(),
     country: text("country").notNull(),
     status: text("status").notNull().default("EN_ATTENTE"),
-    documents: jsonb("documents").$type<string[]>().notNull(),
+    documents: jsonb("documents").$type<KycDocument[]>().notNull(),
     details: jsonb("details").$type<Record<string, string>>().notNull().default({}),
     submittedAt: timestamp("submitted_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [index("mulapay_kyc_user_idx").on(table.userId)],
 );
+
+export type KycDocumentKind = "document_front" | "document_back" | "face_capture";
+export type KycDocument = {
+  kind: KycDocumentKind;
+  objectPath: string;
+  fileName: string;
+  contentType: string;
+  size: number;
+};
 
 export const ledgerEntries = pgTable(
   "mulapay_ledger_entries",

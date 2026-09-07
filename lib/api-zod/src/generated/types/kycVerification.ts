@@ -5,6 +5,7 @@
  * Mulapay wallet, ledger, KYC and operations API
  * OpenAPI spec version: 0.2.0
  */
+import type { KycDocument } from './kycDocument';
 import type { KycVerificationDetails } from './kycVerificationDetails';
 
 export interface KycVerification {
@@ -13,7 +14,7 @@ export interface KycVerification {
   name: string;
   country: string;
   status: string;
-  documents: string[];
+  documents: KycDocument[];
   details?: KycVerificationDetails;
   submittedAt: string;
 }

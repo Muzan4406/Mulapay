@@ -177,13 +177,49 @@ export interface Notification {
 
 export type KycVerificationDetails = {[key: string]: string};
 
+export type KycDocumentKind = typeof KycDocumentKind[keyof typeof KycDocumentKind];
+
+
+export const KycDocumentKind = {
+  document_front: 'document_front',
+  document_back: 'document_back',
+  face_capture: 'face_capture',
+} as const;
+
+export type KycDocumentContentType = typeof KycDocumentContentType[keyof typeof KycDocumentContentType];
+
+
+export const KycDocumentContentType = {
+  'image/jpeg': 'image/jpeg',
+  'image/png': 'image/png',
+  'image/webp': 'image/webp',
+} as const;
+
+export interface KycDocument {
+  kind: KycDocumentKind;
+  /** @pattern ^/objects/ */
+  objectPath: string;
+  /**
+     * @minLength 1
+     * @maxLength 255
+     */
+  fileName: string;
+  contentType: KycDocumentContentType;
+  /**
+     * Must be an integer.
+     * @minimum 1
+     * @maximum 10485760
+     */
+  size: number;
+}
+
 export interface KycVerification {
   id: string;
   userId: string;
   name: string;
   country: string;
   status: string;
-  documents: string[];
+  documents: KycDocument[];
   details?: KycVerificationDetails;
   submittedAt: string;
 }
@@ -442,8 +478,40 @@ export type KycInputDetails = {[key: string]: string};
 export interface KycInput {
   country: string;
   /** @minItems 1 */
-  documents: string[];
+  documents: KycDocument[];
   details?: KycInputDetails;
+}
+
+export type KycUploadInputContentType = typeof KycUploadInputContentType[keyof typeof KycUploadInputContentType];
+
+
+export const KycUploadInputContentType = {
+  'image/jpeg': 'image/jpeg',
+  'image/png': 'image/png',
+  'image/webp': 'image/webp',
+} as const;
+
+export interface KycUploadInput {
+  /**
+     * @minLength 1
+     * @maxLength 255
+     */
+  name: string;
+  /**
+     * Must be an integer.
+     * @minimum 1
+     * @maximum 10485760
+     */
+  size: number;
+  contentType: KycUploadInputContentType;
+}
+
+export interface KycUploadResponse {
+  /** Short-lived presigned upload URL. */
+  uploadURL: string;
+  /** @pattern ^/objects/ */
+  objectPath: string;
+  metadata: KycUploadInput;
 }
 
 export type DecisionInputDecision = typeof DecisionInputDecision[keyof typeof DecisionInputDecision];

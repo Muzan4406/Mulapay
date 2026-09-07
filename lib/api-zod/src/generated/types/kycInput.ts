@@ -5,11 +5,12 @@
  * Mulapay wallet, ledger, KYC and operations API
  * OpenAPI spec version: 0.2.0
  */
+import type { KycDocument } from './kycDocument';
 import type { KycInputDetails } from './kycInputDetails';
 
 export interface KycInput {
   country: string;
   /** @minItems 1 */
-  documents: string[];
+  documents: KycDocument[];
   details?: KycInputDetails;
 }

@@ -19,6 +19,11 @@ export const HealthCheckResponse = zod.object({
 /**
  * @summary Loads the authenticated Mulapay workspace
  */
+export const getBootstrapResponseKycDocumentsItemObjectPathRegExp = new RegExp('^/objects');
+export const getBootstrapResponseKycDocumentsItemFileNameMax = 255;
+
+export const getBootstrapResponseKycDocumentsItemSizeMax = 10485760;
+
 export const getBootstrapResponseFeePercentageMin = 0;
 export const getBootstrapResponseFeePercentageMax = 100;
 
@@ -103,7 +108,13 @@ export const GetBootstrapResponse = zod.object({
   "name": zod.string(),
   "country": zod.string(),
   "status": zod.string(),
-  "documents": zod.array(zod.string()),
+  "documents": zod.array(zod.object({
+  "kind": zod.enum(['document_front', 'document_back', 'face_capture']),
+  "objectPath": zod.string().regex(getBootstrapResponseKycDocumentsItemObjectPathRegExp),
+  "fileName": zod.string().min(1).max(getBootstrapResponseKycDocumentsItemFileNameMax),
+  "contentType": zod.enum(['image/jpeg', 'image/png', 'image/webp']),
+  "size": zod.number().min(1).max(getBootstrapResponseKycDocumentsItemSizeMax).describe('Must be an integer.')
+})),
   "details": zod.record(zod.string(), zod.string()).optional(),
   "submittedAt": zod.string()
 }),
@@ -714,14 +725,32 @@ export const GetPaymentResponse = zod.object({
 /**
  * @summary Submits KYC information for review
  */
+export const submitKycBodyDocumentsItemObjectPathRegExp = new RegExp('^/objects');
+export const submitKycBodyDocumentsItemFileNameMax = 255;
+
+export const submitKycBodyDocumentsItemSizeMax = 10485760;
+
 
 
 
 export const SubmitKycBody = zod.object({
   "country": zod.string(),
-  "documents": zod.array(zod.string()).min(1),
+  "documents": zod.array(zod.object({
+  "kind": zod.enum(['document_front', 'document_back', 'face_capture']),
+  "objectPath": zod.string().regex(submitKycBodyDocumentsItemObjectPathRegExp),
+  "fileName": zod.string().min(1).max(submitKycBodyDocumentsItemFileNameMax),
+  "contentType": zod.enum(['image/jpeg', 'image/png', 'image/webp']),
+  "size": zod.number().min(1).max(submitKycBodyDocumentsItemSizeMax).describe('Must be an integer.')
+})).min(1),
   "details": zod.record(zod.string(), zod.string()).optional()
 })
+
+export const submitKycResponseDocumentsItemObjectPathRegExp = new RegExp('^/objects');
+export const submitKycResponseDocumentsItemFileNameMax = 255;
+
+export const submitKycResponseDocumentsItemSizeMax = 10485760;
+
+
 
 export const SubmitKycResponse = zod.object({
   "id": zod.string(),
@@ -729,9 +758,48 @@ export const SubmitKycResponse = zod.object({
   "name": zod.string(),
   "country": zod.string(),
   "status": zod.string(),
-  "documents": zod.array(zod.string()),
+  "documents": zod.array(zod.object({
+  "kind": zod.enum(['document_front', 'document_back', 'face_capture']),
+  "objectPath": zod.string().regex(submitKycResponseDocumentsItemObjectPathRegExp),
+  "fileName": zod.string().min(1).max(submitKycResponseDocumentsItemFileNameMax),
+  "contentType": zod.enum(['image/jpeg', 'image/png', 'image/webp']),
+  "size": zod.number().min(1).max(submitKycResponseDocumentsItemSizeMax).describe('Must be an integer.')
+})),
   "details": zod.record(zod.string(), zod.string()).optional(),
   "submittedAt": zod.string()
+})
+
+
+/**
+ * @summary Creates a private upload URL for a KYC image
+ */
+export const requestKycUploadUrlBodyNameMax = 255;
+
+export const requestKycUploadUrlBodySizeMax = 10485760;
+
+
+
+export const RequestKycUploadUrlBody = zod.object({
+  "name": zod.string().min(1).max(requestKycUploadUrlBodyNameMax),
+  "size": zod.number().min(1).max(requestKycUploadUrlBodySizeMax).describe('Must be an integer.'),
+  "contentType": zod.enum(['image/jpeg', 'image/png', 'image/webp'])
+})
+
+export const requestKycUploadUrlResponseObjectPathRegExp = new RegExp('^/objects');
+export const requestKycUploadUrlResponseMetadataNameMax = 255;
+
+export const requestKycUploadUrlResponseMetadataSizeMax = 10485760;
+
+
+
+export const RequestKycUploadUrlResponse = zod.object({
+  "uploadURL": zod.string().describe('Short-lived presigned upload URL.'),
+  "objectPath": zod.string().regex(requestKycUploadUrlResponseObjectPathRegExp),
+  "metadata": zod.object({
+  "name": zod.string().min(1).max(requestKycUploadUrlResponseMetadataNameMax),
+  "size": zod.number().min(1).max(requestKycUploadUrlResponseMetadataSizeMax).describe('Must be an integer.'),
+  "contentType": zod.enum(['image/jpeg', 'image/png', 'image/webp'])
+})
 })
 
 
@@ -836,13 +904,26 @@ export const UpsertAdminPaymentProviderRouteResponse = zod.object({
 /**
  * @summary Lists KYC cases for operations
  */
+export const listAdminKycResponseDocumentsItemObjectPathRegExp = new RegExp('^/objects');
+export const listAdminKycResponseDocumentsItemFileNameMax = 255;
+
+export const listAdminKycResponseDocumentsItemSizeMax = 10485760;
+
+
+
 export const ListAdminKycResponseItem = zod.object({
   "id": zod.string(),
   "userId": zod.string(),
   "name": zod.string(),
   "country": zod.string(),
   "status": zod.string(),
-  "documents": zod.array(zod.string()),
+  "documents": zod.array(zod.object({
+  "kind": zod.enum(['document_front', 'document_back', 'face_capture']),
+  "objectPath": zod.string().regex(listAdminKycResponseDocumentsItemObjectPathRegExp),
+  "fileName": zod.string().min(1).max(listAdminKycResponseDocumentsItemFileNameMax),
+  "contentType": zod.enum(['image/jpeg', 'image/png', 'image/webp']),
+  "size": zod.number().min(1).max(listAdminKycResponseDocumentsItemSizeMax).describe('Must be an integer.')
+})),
   "details": zod.record(zod.string(), zod.string()).optional(),
   "submittedAt": zod.string()
 })
@@ -876,6 +957,17 @@ export const DecideKycResponse = zod.object({
   "merchantAmount": zod.number().optional(),
   "totalDebited": zod.number().optional()
 })
+
+
+/**
+ * @summary Streams a KYC image to an authenticated compliance reviewer
+ */
+export const GetAdminKycDocumentParams = zod.object({
+  "id": zod.coerce.string(),
+  "kind": zod.enum(['document_front', 'document_back', 'face_capture'])
+})
+
+export const GetAdminKycDocumentResponse = zod.unknown()
 
 
 /**

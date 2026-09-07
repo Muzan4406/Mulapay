@@ -30,6 +30,8 @@ import type {
   ExchangeInput,
   HealthStatus,
   KycInput,
+  KycUploadInput,
+  KycUploadResponse,
   KycVerification,
   MoneyOperationInput,
   NotFoundResponse,
@@ -1551,6 +1553,77 @@ export const useSubmitKyc = <TError = ErrorType<unknown>,
       return useMutation(getSubmitKycMutationOptions(options));
     }
 
+export const getRequestKycUploadUrlUrl = () => {
+
+
+
+
+  return `/api/v1/kyc/uploads/request-url`
+}
+
+/**
+ * @summary Creates a private upload URL for a KYC image
+ */
+export const requestKycUploadUrl = async (kycUploadInput: KycUploadInput, options?: Parameters<typeof customFetch>[1]): Promise<KycUploadResponse> => {
+
+  return customFetch<KycUploadResponse>(getRequestKycUploadUrlUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(kycUploadInput)
+  }
+);}
+
+
+
+
+
+export const getRequestKycUploadUrlMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestKycUploadUrl>>, TError,{data: BodyType<KycUploadInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof requestKycUploadUrl>>, TError,{data: BodyType<KycUploadInput>}, TContext> => {
+
+const mutationKey = ['requestKycUploadUrl'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof requestKycUploadUrl>>, {data: BodyType<KycUploadInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  requestKycUploadUrl(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RequestKycUploadUrlMutationResult = NonNullable<Awaited<ReturnType<typeof requestKycUploadUrl>>>
+    export type RequestKycUploadUrlMutationBody = BodyType<KycUploadInput>
+    export type RequestKycUploadUrlMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Creates a private upload URL for a KYC image
+ */
+export const useRequestKycUploadUrl = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestKycUploadUrl>>, TError,{data: BodyType<KycUploadInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof requestKycUploadUrl>>,
+        TError,
+        {data: BodyType<KycUploadInput>},
+        TContext
+      > => {
+      return useMutation(getRequestKycUploadUrlMutationOptions(options));
+    }
+
 export const getGetAdminSummaryUrl = () => {
 
 
@@ -2149,6 +2222,88 @@ export const useDecideKyc = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getDecideKycMutationOptions(options));
     }
+
+export const getGetAdminKycDocumentUrl = (id: string,
+    kind: 'document_front' | 'document_back' | 'face_capture',) => {
+
+
+
+
+  return `/api/v1/admin/kyc/${id}/documents/${kind}`
+}
+
+/**
+ * @summary Streams a KYC image to an authenticated compliance reviewer
+ */
+export const getAdminKycDocument = async (id: string,
+    kind: 'document_front' | 'document_back' | 'face_capture', options?: Parameters<typeof customFetch>[1]): Promise<Blob> => {
+
+  return customFetch<Blob>(getGetAdminKycDocumentUrl(id,kind),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminKycDocumentQueryKey = (id: string,
+    kind: 'document_front' | 'document_back' | 'face_capture',) => {
+    return [
+    `/api/v1/admin/kyc/${id}/documents/${kind}`
+    ] as const;
+    }
+
+
+export const getGetAdminKycDocumentQueryOptions = <TData = Awaited<ReturnType<typeof getAdminKycDocument>>, TError = ErrorType<unknown>>(id: string,
+    kind: 'document_front' | 'document_back' | 'face_capture', options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminKycDocument>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminKycDocumentQueryKey(id,kind);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminKycDocument>>> = ({ signal }) => getAdminKycDocument(id,kind, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined && kind !== null && kind !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminKycDocument>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminKycDocumentQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminKycDocument>>>
+export type GetAdminKycDocumentQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Streams a KYC image to an authenticated compliance reviewer
+ */
+
+export function useGetAdminKycDocument<TData = Awaited<ReturnType<typeof getAdminKycDocument>>, TError = ErrorType<unknown>>(
+ id: string,
+    kind: 'document_front' | 'document_back' | 'face_capture', options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminKycDocument>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminKycDocumentQueryOptions(id,kind,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getListAdminTransactionsUrl = () => {
 

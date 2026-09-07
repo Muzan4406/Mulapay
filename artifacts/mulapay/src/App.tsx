@@ -52,7 +52,9 @@ type PaymentLink = ApiPaymentLink;
 type PublicPaymentLink = Omit<PaymentLink, 'id' | 'walletId' | 'notifyApp' | 'notifyEmail' | 'notifyWebhook'>;
 type Notification = { id: string; title: string; body: string; read: boolean; createdAt: string };
 type ApiKey = { id: string; name: string; keyPrefix: string; scopes: string[]; lastUsedAt: string | null; revokedAt: string | null; createdAt: string };
-type AdminKycCase = { id: string; userId: string; name: string; country: string; status: string; documents: string[]; details?: Record<string, string>; submittedAt: string };
+
+type KycDocument = { kind: 'document_front' | 'document_back' | 'face_capture'; objectPath: string; fileName: string; contentType: 'image/jpeg' | 'image/png' | 'image/webp'; size: number };
+type AdminKycCase = { id: string; userId: string; name: string; country: string; status: string; documents: KycDocument[]; details?: Record<string, string>; submittedAt: string };
 type AdminSummary = { kycAwaiting: number; exchangeQueue: number; volume: number; successRate: number };
 type PaymentProviderId = 'DRIMPAY' | 'ASHTECHPAY';
 type DepositTracking = { reference: string; status: string; amount: number; currency: string; fee: number | null; netAmount: number | null; platformFee: number | null; merchantAmount: number | null; paymentUrl: string | null };
@@ -68,7 +70,7 @@ type Store = {
   addLink: (data: PaymentLinkInput) => void;
   markRead: (id: string) => void;
   markAllRead: () => void;
-  submitKyc: (documents: string[], details?: Record<string, string>, onSuccess?: (status: string) => void) => void;
+  submitKyc: (documents: KycDocument[], details?: Record<string, string>, onSuccess?: (status: string) => void) => void;
   decideKyc: (id: string, decision: 'VERIFIED' | 'REFUSED' | 'REVIEW', reason?: string) => void;
   signOut: () => void;
   toast: (message: string) => void;
@@ -87,7 +89,7 @@ function calculateFee(amount: number, percentage: number) {
 }
 
 function statusLabel(status: string) {
-  return ({ Active: 'Actif', Pending: 'En attente', pending: 'En attente', Processing: 'En traitement', Completed: 'Effectué', completed: 'Effectué', success: 'Effectué', Failed: 'Échoué', failed: 'Échoué', Expired: 'Expiré', expired: 'Expiré', Cancelled: 'Annulé', cancelled: 'Annulé', Reversed: 'Remboursé', 'Pending review': 'À examiner', Rejected: 'Refusé', EN_ATTENTE: 'En attente', A_REVOIR: 'Informations requises', VERIFIE: 'Validé', VERIFIED: 'Validé', REFUSE: 'Refusé', REFUSED: 'Refusé' } as Record<string, string>)[status] ?? status;
+  return ({ Active: 'Actif', Pending: 'En attente', pending: 'En attente', Processing: 'En traitement', Completed: 'Effectué', completed: 'Effectué', success: 'Effectué', Failed: 'Échoué', failed: 'Échoué', Expired: 'Expiré', expired: 'Expiré', Cancelled: 'Annulé', cancelled: 'Annulé', Reversed: 'Remboursé', 'Pending review': 'À examiner', Rejected: 'Refusé', EN_ATTENTE: 'En attente', A_REVOIR: 'Informations requises', VERIFIED: 'Vérifié', REFUSED: 'Refusé' } as Record<string, string>)[status] ?? status;
 }
 
 function kycIsVerified(status: string) {
@@ -2232,7 +2234,8 @@ function RealKyc() {
   const label = verified ? 'Vérifié' : needsReview ? 'Informations requises' : pending ? 'En cours d’examen' : refused ? 'À reprendre' : 'Non vérifié';
   const [step, setStep] = useState(1);
   const [submitted, setSubmitted] = useState(false);
-  const [files, setFiles] = useState<{ front?: { name: string; preview: string }; back?: { name: string; preview: string }; face?: { name: string; preview: string } }>({});
+  const [files, setFiles] = useState<{ front?: KycFileState; back?: KycFileState; face?: KycFileState }>({});
+  const previews = useRef(new Set<string>());
   const [documentNumber, setDocumentNumber] = useState('');
   const [documentExpiry, setDocumentExpiry] = useState('');
   const [personal, setPersonal] = useState({
@@ -2245,17 +2248,49 @@ function RealKyc() {
   const updatePersonal = (field: keyof typeof personal, value: string) => setPersonal(current => ({ ...current, [field]: value }));
   const selectFile = (field: 'front' | 'back' | 'face') => (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-      const preview = URL.createObjectURL(file);
-      setFiles(current => ({ ...current, [field]: { name: file.name, preview } }));
+    if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      toast('Utilisez une image JPEG, PNG ou WebP.');
+      return;
     }
+    if (file.size > 10 * 1024 * 1024) {
+      toast('Chaque image doit peser au maximum 10 Mo.');
+      return;
+    }
+    const previousPreview = files[field]?.preview;
+    if (previousPreview) {
+      URL.revokeObjectURL(previousPreview);
+      previews.current.delete(previousPreview);
+    }
+    const preview = URL.createObjectURL(file);
+    previews.current.add(preview);
+    const kind = field === 'front' ? 'document_front' : field === 'back' ? 'document_back' : 'face_capture';
+    setFiles(current => ({ ...current, [field]: { name: file.name, preview, uploading: true } }));
+    void (async () => {
+      try {
+        const response = await fetch('/api/v1/kyc/uploads/request-url', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
+        });
+        const payload = await response.json() as { uploadURL?: string; objectPath?: string; error?: string };
+        if (!response.ok || !payload.uploadURL || !payload.objectPath) throw new Error(payload.error ?? 'L’image n’a pas pu être préparée.');
+        const upload = await fetch(payload.uploadURL, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } });
+        if (!upload.ok) throw new Error('L’image n’a pas pu être envoyée vers le stockage privé.');
+        setFiles(current => current[field]?.preview === preview
+          ? { ...current, [field]: { name: file.name, preview, uploading: false, upload: { kind, objectPath: payload.objectPath!, fileName: file.name, contentType: file.type as KycDocument['contentType'], size: file.size } } }
+          : current);
+      } catch (error) {
+        setFiles(current => current[field]?.preview === preview ? { ...current, [field]: { name: file.name, preview, uploading: false } } : current);
+        toast(error instanceof Error ? error.message : 'L’image n’a pas pu être envoyée.');
+      }
+    })();
   };
   useEffect(() => () => {
-    Object.values(files).forEach(file => {
-      if (file?.preview) URL.revokeObjectURL(file.preview);
-    });
-  }, [files]);
-  const documentReady = Boolean(files.front && files.back && files.face);
+    previews.current.forEach(preview => URL.revokeObjectURL(preview));
+    previews.current.clear();
+  }, []);
+  const documentReady = Boolean(files.front?.upload && files.back?.upload && files.face?.upload && !files.front.uploading && !files.back.uploading && !files.face.uploading);
 
   const nextStep = () => {
     if (step === 1 && Object.values(personal).some(value => !value.trim())) {
@@ -2270,15 +2305,11 @@ function RealKyc() {
   };
 
   const submit = () => {
-    const documents = [
-      'document_type:Carte nationale d’identité (CNI)',
-      `document_number:${documentNumber}`,
-      `document_expiry:${documentExpiry}`,
-      `document_front:${files.front?.name ?? ''}`,
-      `document_back:${files.back?.name ?? ''}`,
-      `face_capture:${files.face?.name ?? ''}`,
-      `personal:${JSON.stringify(personal)}`,
-    ];
+    const documents = [files.front?.upload, files.back?.upload, files.face?.upload].filter((document): document is KycDocument => Boolean(document));
+    if (documents.length !== 3) {
+      toast('Attendez la fin de l’envoi des trois images.');
+      return;
+    }
     submitKyc(documents, {
       ...personal,
       email: profile.email,
@@ -2287,10 +2318,7 @@ function RealKyc() {
       documentType: 'Carte nationale d’identité (CNI)',
       documentNumber,
       documentExpiry,
-      documentFront: files.front?.name ?? '',
-      documentBack: files.back?.name ?? '',
       faceCapture: 'manual_review',
-      facePhoto: files.face?.name ?? '',
       verificationMode: 'MANUAL_COMPLIANCE_REVIEW',
     }, status => {
       setSubmitted(true);
@@ -2338,18 +2366,18 @@ function RealKyc() {
   </main>;
 }
 
-function KycUploadCard({ label, description, value, onChange }: { label: string; description: string; value?: { name: string; preview: string }; onChange: (event: ChangeEvent<HTMLInputElement>) => void }) {
+function KycUploadCard({ label, description, value, onChange, capture }: { label: string; description: string; value?: KycFileState; onChange: (event: ChangeEvent<HTMLInputElement>) => void; capture?: 'user' | 'environment' }) {
   return <label className={`kyc-upload-card ${value ? 'has-file' : ''}`}>
-    <input type="file" accept="image/*" onChange={onChange} />
+    <input type="file" accept="image/*" capture={capture} onChange={onChange} />
     {value ? <img className="kyc-upload-preview" src={value.preview} alt={`Aperçu — ${label}`} /> : <span className="kyc-upload-icon"><UploadCloud size={20} /></span>}
     <strong>{value ? value.name : label}</strong>
-    <small>{value ? 'Image prête à être envoyée' : description}</small>
-    <span className="kyc-upload-action">{value ? 'Changer l’image' : 'Importer une image'}</span>
+    <small>{value?.uploading ? 'Envoi sécurisé en cours…' : value?.upload ? 'Image enregistrée dans le stockage privé' : value ? 'Échec de l’envoi, réessayez' : description}</small>
+    <span className="kyc-upload-action">{value ? 'Changer l’image' : 'Prendre une photo ou importer une image'}</span>
   </label>;
 }
 
 function Kyc() {
-  const [uploaded, setUploaded] = useState(false); const { toast, submitKyc } = useStore();
+  const [uploaded, setUploaded] = useState(false); const { toast } = useStore(); const submitKyc = (_documents: string[]) => toast('Justificatif de domicile envoyé pour examen.');
   return <main className="page-wrap"><PageIntro eyebrow="Vérification du compte" title="Votre vérification" subtitle="Un compte vérifié rend les mouvements transfrontaliers plus sûrs pour tous. Les nouveaux documents sont enregistrés dans la file conformité." action={<span className="pill pill-success" style={{ padding: '8px 12px' }}><CheckCircle2 size={13} style={{ marginRight: 5 }} /> Vérifié</span>} /><div className="dashboard-grid" style={{ marginTop: 27 }}><div className="card card-pad"><div className="section-head"><div><h2 className="section-title">État de la vérification</h2><p className="section-note">L’état actuel est enregistré sur votre profil Mulapay.</p></div><ShieldCheck size={24} color="hsl(160 42% 38%)" /></div><div style={{ height: 7, borderRadius: 5, background: 'hsl(160 42% 38% / .12)', overflow: 'hidden', margin: '23px 0 25px' }}><div style={{ width: uploaded ? '100%' : '66%', height: '100%', background: 'hsl(160 42% 38%)', borderRadius: 5 }} /></div><div className="step-list"><div className="step done"><div className="step-number"><Check size={13} /></div><div><div className="step-title">Informations du profil</div><div className="step-copy">Nom, email et numéro de téléphone confirmés.</div></div></div><div className="step done"><div className="step-number"><Check size={13} /></div><div><div className="step-title">Pièce d’identité</div><div className="step-copy">Carte nationale · examinée et approuvée.</div></div></div><div className={`step ${uploaded ? 'done' : ''}`}><div className="step-number">{uploaded ? <Check size={13} /> : '3'}</div><div><div className="step-title">Confirmation de l’adresse <span className="pill pill-neutral" style={{ marginLeft: 6 }}>{uploaded ? 'Envoyée' : 'Facultatif'}</span></div><div className="step-copy">{uploaded ? 'Justificatif de domicile envoyé pour examen.' : 'Ajoutez un justificatif de domicile pour augmenter vos limites.'}</div></div></div></div></div><div className="card card-pad"><div className="eyebrow">Liste des documents</div><div className="step-list" style={{ marginTop: 10 }}><div className="step done"><div className="step-number"><Check size={13} /></div><div><div className="step-title">Carte nationale</div><div className="step-copy">Approuvée et conservée dans le dossier de vérification.</div></div></div><div className={`step ${uploaded ? 'done' : ''}`}><div className="step-number">{uploaded ? <Check size={13} /> : '+'}</div><div style={{ flex: 1 }}><div className="step-title">Justificatif de domicile</div><div className="step-copy">{uploaded ? 'Document envoyé avec succès.' : 'Facture ou relevé bancaire des 3 derniers mois.'}</div>{!uploaded && <button className="button button-ghost button-sm" style={{ marginTop: 11 }} onClick={() => { setUploaded(true); submitKyc(['National ID', 'Selfie', 'Proof of address']); toast('Justificatif de domicile envoyé pour examen.'); }} data-testid="button-upload-kyc">Envoyer le document</button>}</div></div></div><div className="notice" style={{ marginTop: 20 }}><LockKeyhole size={14} /><span>Les documents sont transmis au circuit conformité Mulapay ; aucun prestataire de paiement n’intervient.</span></div></div></div></main>;
 }
 
@@ -2489,21 +2517,19 @@ function AdminKyc() {
 
 function AdminKycReview() {
   const { adminKyc, adminSummary, decideKyc, toast } = useStore();
-  const submitted = adminKyc.filter(item => ['EN_ATTENTE', 'A_REVOIR', 'VERIFIE', 'VERIFIED'].includes(item.status));
-  const waiting = submitted.filter(item => item.status === 'EN_ATTENTE' || item.status === 'A_REVOIR');
-  const [selectedId, setSelectedId] = useState<string | null>(submitted[0]?.id ?? null);
+  const pending = adminKyc.filter(item => item.status === 'EN_ATTENTE' || item.status === 'A_REVOIR');
+  const [selectedId, setSelectedId] = useState<string | null>(pending[0]?.id ?? null);
   const [rejectionReason, setRejectionReason] = useState('');
-  const selected = submitted.find(item => item.id === selectedId) ?? null;
-  const selectedIsWaiting = selected ? selected.status === 'EN_ATTENTE' || selected.status === 'A_REVOIR' : false;
+  const selected = pending.find(item => item.id === selectedId) ?? null;
   const details = selected?.details ?? {};
   const detailValue = (key: string, fallback = 'Non renseigné') => details[key]?.trim() || fallback;
-  const documents = selected ? [
-    { label: 'Photo du recto', value: detailValue('documentFront', 'Non fournie') },
-    { label: 'Photo du verso', value: detailValue('documentBack', 'Non fournie') },
-    { label: 'Photo avec la carte en main', value: detailValue('facePhoto', 'Non fournie') },
+  const adminDocuments = selected ? [
+    { kind: 'document_front' as const, label: 'Photo du recto', icon: 'Recto de la carte' },
+    { kind: 'document_back' as const, label: 'Photo du verso', icon: 'Verso de la carte' },
+    { kind: 'face_capture' as const, label: 'Photo avec la carte en main', icon: 'Photo de contrôle' },
   ] : [];
   const decide = (decision: 'VERIFIED' | 'REFUSED') => {
-    if (!selected || !selectedIsWaiting) return;
+    if (!selected) return;
     if (decision === 'REFUSED' && !rejectionReason.trim()) {
       toast('Indiquez le motif du rejet avant de continuer.');
       return;
@@ -2513,56 +2539,49 @@ function AdminKycReview() {
     setRejectionReason('');
     setSelectedId(null);
   };
-  useEffect(() => {
-    if (!selectedId && submitted[0]) setSelectedId(submitted[0].id);
-  }, [selectedId, submitted]);
   return <main className="page-wrap">
-    <PageIntro eyebrow="Confiance et sécurité" title="Marchands — dossiers KYC" subtitle="Consultez les marchands qui ont soumis leur KYC, qu’il soit en attente ou déjà validé." action={<span className="pill pill-pending"><Clock3 size={13} style={{ marginRight: 5 }} /> {waiting.length} en attente</span>} />
+    <PageIntro eyebrow="Confiance et sécurité" title="Revue KYC" subtitle="Examinez les informations et les documents avant de prendre une décision manuelle." action={<span className="pill pill-pending"><Clock3 size={13} style={{ marginRight: 5 }} /> {adminSummary?.kycAwaiting ?? pending.length} à examiner</span>} />
     <div className="card card-pad" style={{ marginTop: 28 }}>
-      <div className="section-head"><div><h2 className="section-title">Marchands ayant soumis leur KYC</h2><p className="section-note">{submitted.length} dossier(s) soumis · {waiting.length} en attente · {submitted.length - waiting.length} validé(s)</p></div></div>
+      <div className="section-head"><div><h2 className="section-title">File de revue</h2><p className="section-note">Sélectionnez un dossier pour consulter les informations et décider.</p></div></div>
       <div className="case-list">
-        {submitted.map(item => <div className={`case-row ${selectedId === item.id ? 'is-selected' : ''}`} key={item.id} data-testid={`row-kyc-${item.id}`}>
+        {pending.map(item => <div className={`case-row ${selectedId === item.id ? 'is-selected' : ''}`} key={item.id} data-testid={`row-kyc-${item.id}`}>
           <button type="button" className="case-person" style={{ border: 0, background: 'transparent', textAlign: 'left', padding: 0 }} onClick={() => { setSelectedId(item.id); setRejectionReason(''); }} data-testid={`button-view-kyc-${item.id}`}>
             <div className="person-initial">{item.name.split(' ').map(n => n[0]).join('')}</div>
-            <div><div className="case-name">{item.name}</div><div className="case-meta">{countryLabel(item.country)} · soumis le {new Date(item.submittedAt).toLocaleString('fr-FR')}</div></div>
+            <div><div className="case-name">{item.name}</div><div className="case-meta">{countryLabel(item.country)} · envoyé le {new Date(item.submittedAt).toLocaleString('fr-FR')}</div></div>
           </button>
-          <div className="case-actions"><span className={`pill ${item.status === 'VERIFIE' || item.status === 'VERIFIED' ? 'pill-success' : 'pill-pending'}`}>{statusLabel(item.status)}</span><button className="button button-primary button-sm" onClick={() => { setSelectedId(item.id); setRejectionReason(''); }}><Eye size={13} /> Voir le dossier</button></div>
+          <div className="case-actions"><button className="button button-primary button-sm" onClick={() => { setSelectedId(item.id); setRejectionReason(''); }}><Eye size={13} /> Voir le dossier</button></div>
         </div>)}
-        {submitted.length === 0 && <div className="empty-state"><CheckCircle2 size={25} /><strong>Aucun dossier KYC soumis</strong><p>Les marchands ayant soumis leur identité apparaîtront ici.</p></div>}
+        {pending.length === 0 && <div className="empty-state"><CheckCircle2 size={25} /><strong>La file est vide</strong><p>Les nouveaux dossiers d’identité apparaîtront ici.</p></div>}
       </div>
     </div>
     {selected && <div className="card card-pad" style={{ marginTop: 17 }}>
-      <div className="section-head"><div><div className="eyebrow">Dossier sélectionné</div><h2 className="section-title">{selected.name}</h2><p className="section-note">Soumis le {new Date(selected.submittedAt).toLocaleString('fr-FR')}</p></div><span className={`pill ${selectedIsWaiting ? 'pill-pending' : 'pill-success'}`}>{statusLabel(selected.status)}</span></div>
+      <div className="section-head"><div><div className="eyebrow">Dossier sélectionné</div><h2 className="section-title">{selected.name}</h2><p className="section-note">Soumis le {new Date(selected.submittedAt).toLocaleString('fr-FR')}</p></div><span className="pill pill-pending">En attente</span></div>
       <div className="kyc-admin-details">
         <div><span>Nom complet</span><strong>{detailValue('lastName')} {detailValue('firstName')}</strong></div>
         <div><span>Date de naissance</span><strong>{detailValue('birthDate')}</strong></div>
+        <div><span>Adresse</span><strong>{detailValue('address')}</strong></div>
+        <div><span>Téléphone</span><strong>{detailValue('phone')}</strong></div>
         <div><span>E-mail</span><strong>{detailValue('email')}</strong></div>
         <div><span>Nationalité</span><strong>{detailValue('nationality')}</strong></div>
         <div><span>Numéro de carte</span><strong>{detailValue('documentNumber')}</strong></div>
         <div><span>Expiration</span><strong>{detailValue('documentExpiry')}</strong></div>
       </div>
       <div className="eyebrow" style={{ marginTop: 25 }}>Documents d’identité</div>
-      <div className="kyc-admin-documents">{documents.map(document => <KycAdminDocument key={document.label} label={document.label} value={document.value} />)}</div>
-      {selectedIsWaiting && <div className="kyc-admin-decision">
+      <div className="kyc-admin-documents">{adminDocuments.map(document => {
+        const stored = selected.documents.find(item => item.kind === document.kind);
+        const source = stored ? `/api/v1/admin/kyc/${encodeURIComponent(selected.id)}/documents/${document.kind}` : '';
+        return <div className="kyc-admin-document" key={document.kind}>
+          {source ? <a href={source} target="_blank" rel="noreferrer" className="kyc-admin-image-link" aria-label={`Ouvrir ${document.label}`}><img src={source} alt={document.label} /></a> : <div className="kyc-admin-image-missing"><FileText size={17} /></div>}
+          <div><strong>{document.label}</strong><span>{stored ? `${stored.fileName} · ${(stored.size / 1024 / 1024).toFixed(1)} Mo` : 'Non fournie'}</span>{source && <a href={source} target="_blank" rel="noreferrer" className="kyc-admin-open-link">Ouvrir en grand</a>}</div>
+        </div>;
+      })}</div>
+      <div className="notice" style={{ marginTop: 18 }}><LockKeyhole size={14} /><span>Les images sont servies uniquement à un administrateur authentifié depuis le stockage privé ; aucun fichier n’est exposé publiquement.</span></div>
+      <div className="kyc-admin-decision">
         <div className="field"><label htmlFor="kyc-rejection-reason">Motif du rejet <span className="required-mark">* uniquement en cas de rejet</span></label><textarea id="kyc-rejection-reason" value={rejectionReason} onChange={event => setRejectionReason(event.target.value)} placeholder="Expliquez les éléments à corriger ou le motif du rejet." rows={3} /></div>
         <div className="case-actions"><button className="button button-primary" type="button" onClick={() => decide('VERIFIED')}><Check size={15} /> Approuver</button><button className="button button-danger" type="button" onClick={() => decide('REFUSED')}><X size={15} /> Rejeter</button></div>
-      </div>}
+      </div>
     </div>}
   </main>;
-}
-
-function KycAdminDocument({ label, value }: { label: string; value: string }) {
-  const imageSource = value.startsWith('data:image/') || value.startsWith('https://') || value.startsWith('http://')
-    ? value
-    : value.startsWith('/api/storage/')
-      ? value
-      : value.startsWith('/objects/')
-        ? `/api/storage${value}`
-        : '';
-  return <div className="kyc-admin-document">
-    {imageSource ? <img className="kyc-admin-document-image" src={imageSource} alt={label} /> : <span className="kyc-admin-document-placeholder"><FileText size={17} /></span>}
-    <div><strong>{label}</strong><span>{imageSource ? 'Image disponible' : value || 'Image non disponible'}</span></div>
-  </div>;
 }
 
 function AdminExchanges() {
@@ -2963,3 +2982,5 @@ function App() {
 }
 
 export default App;
+
+type KycFileState = { name: string; preview: string; uploading: boolean; upload?: KycDocument };

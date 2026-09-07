@@ -1,6 +1,7 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { getAuth } from "@clerk/express";
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { Readable } from "node:stream";
 import { and, desc, eq, gte, inArray, isNull, like, lte, ne, or, sql } from "drizzle-orm";
 import { db } from "@workspace/db";
 import {
@@ -16,6 +17,8 @@ import {
   GetAdminSummaryResponse,
   MarkNotificationReadParams,
   SubmitKycBody,
+  RequestKycUploadUrlBody,
+  RequestKycUploadUrlResponse,
   CreateTransferResponse,
   CreateExchangeResponse,
   DecideExchangeResponse,
@@ -38,7 +41,10 @@ import {
   transactions,
   users,
   wallets,
+  type KycDocument,
+  type KycDocumentKind,
 } from "@workspace/db";
+import { ObjectNotFoundError, ObjectStorageService } from "../lib/objectStorage";
 import {
   countryCodeForName,
   DrimPayError,
@@ -61,6 +67,8 @@ import {
 } from "../services/ashtechpay";
 
 const router: IRouter = Router();
+const objectStorageService = new ObjectStorageService();
+const KYC_DOCUMENT_KINDS = ["document_front", "document_back", "face_capture"] as const;
 
 const ORANGE_OTP_COUNTRIES = new Set(["CI", "SN", "BF", "ML"]);
 const TERMINAL_PROVIDER_STATUSES = new Set(["success", "completed", "failed", "expired", "cancelled", "reversed"]);
@@ -883,7 +891,43 @@ function isPartnerApiPath(req: Request) {
     && !req.path.startsWith("/v1/notifications");
 }
 
-function validateKycSubmission(details: Record<string, string>, documents: string[]) {
+function normalizeKycDocuments(raw: unknown): KycDocument[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((item) => {
+    if (typeof item === "object" && item !== null) {
+      const value = item as Partial<KycDocument>;
+      if (
+        KYC_DOCUMENT_KINDS.includes(value.kind as KycDocumentKind)
+        && typeof value.objectPath === "string"
+        && /^\/objects\/uploads\/[a-zA-Z0-9-]+$/.test(value.objectPath)
+        && typeof value.fileName === "string"
+        && typeof value.contentType === "string"
+        && typeof value.size === "number"
+        && Number.isInteger(value.size)
+        && value.size > 0
+        && value.size <= 10 * 1024 * 1024
+      ) {
+        return [{ ...value, kind: value.kind as KycDocumentKind } as KycDocument];
+      }
+    }
+    return [];
+  });
+}
+
+function formatKyc(item: { id: string; userId: string; name: string; country: string; status: string; documents: unknown; details: Record<string, string>; submittedAt: Date }) {
+  return {
+    id: item.id,
+    userId: item.userId,
+    name: item.name,
+    country: item.country,
+    status: item.status,
+    documents: normalizeKycDocuments(item.documents),
+    details: item.details,
+    submittedAt: item.submittedAt.toISOString(),
+  };
+}
+
+function validateKycSubmission(details: Record<string, string>, documents: KycDocument[]) {
   const required = [
     "firstName",
     "lastName",
@@ -896,11 +940,9 @@ function validateKycSubmission(details: Record<string, string>, documents: strin
   if (required.some((field) => typeof details[field] !== "string" || !details[field].trim())) return false;
   const expiry = new Date(`${details.documentExpiry}T23:59:59.999Z`);
   if (Number.isNaN(expiry.getTime()) || expiry <= new Date()) return false;
-  const documentFilesComplete = Boolean(details.documentFront?.trim() && details.documentBack?.trim() && details.facePhoto?.trim());
-  const serializedFilesComplete = documents.some((item) => item.startsWith("document_front:") && item.length > "document_front:".length)
-    && documents.some((item) => item.startsWith("document_back:") && item.length > "document_back:".length)
-    && documents.some((item) => item.startsWith("face_capture:") && item.length > "face_capture:".length);
-  return documentFilesComplete && serializedFilesComplete && details.faceCapture?.trim() === "manual_review";
+  const uploadedKinds = new Set(documents.map((item) => item.kind));
+  const documentFilesComplete = KYC_DOCUMENT_KINDS.every((kind) => uploadedKinds.has(kind));
+  return documentFilesComplete && details.faceCapture?.trim() === "manual_review";
 }
 
 async function ensureClerkUser(req: Request) {
@@ -1086,7 +1128,7 @@ async function bootstrap(req: Request) {
     exchanges: userExchanges.map(formatExchange),
     links: userLinks.map((link) => presentPaymentLink(req, link)),
     notifications: userNotifications.map((notification) => ({ id: notification.id, title: notification.title, body: notification.body, read: notification.read, createdAt: notification.createdAt.toISOString() })),
-    kyc: userKyc ? { id: userKyc.id, userId: userKyc.userId, name: userKyc.name, country: userKyc.country, status: userKyc.status, documents: userKyc.documents, details: userKyc.details, submittedAt: userKyc.submittedAt.toISOString() } : { id: "none", userId: user.id, name: `${user.firstName} ${user.lastName}`, country: user.country, status: user.kycStatus, documents: [], details: {}, submittedAt: nowLabel() },
+    kyc: userKyc ? formatKyc(userKyc) : { id: "none", userId: user.id, name: `${user.firstName} ${user.lastName}`, country: user.country, status: user.kycStatus, documents: [], details: {}, submittedAt: nowLabel() },
     feePercentage: Number(settings.feePercentage),
   });
 }
@@ -2297,17 +2339,34 @@ router.patch("/v1/notifications/read-all", async (req, res) => {
   res.json(MarkNotificationReadResponse.parse({ ok: true, message: "Toutes les notifications sont marquées comme lues.", reference: null }));
 });
 
+router.post("/v1/kyc/uploads/request-url", async (req, res) => {
+  await ensureUser(req);
+  const input = RequestKycUploadUrlBody.parse(req.body);
+  if (!Number.isInteger(input.size)) {
+    res.status(400).json({ error: "La taille du fichier doit être un entier." });
+    return;
+  }
+  const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+  const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
+  res.json(RequestKycUploadUrlResponse.parse({
+    uploadURL,
+    objectPath,
+    metadata: input,
+  }));
+});
+
 router.post("/v1/kyc", async (req, res) => {
   const input = SubmitKycBody.parse(req.body);
   const user = await ensureUser(req);
-  if (!validateKycSubmission(input.details ?? {}, input.documents)) {
+  const documents = normalizeKycDocuments(input.documents);
+  if (documents.length !== 3 || !validateKycSubmission(input.details ?? {}, documents)) {
     res.status(400).json({
       error: "Le dossier KYC est incomplet ou contient un document expiré.",
       code: "INCOMPLETE_KYC",
     });
     return;
   }
-  const [kyc] = await db.insert(kycVerifications).values({ id: crypto.randomUUID(), userId: user.id, name: `${user.firstName} ${user.lastName}`, country: input.country, status: "EN_ATTENTE", documents: input.documents, details: input.details ?? {} }).returning();
+  const [kyc] = await db.insert(kycVerifications).values({ id: crypto.randomUUID(), userId: user.id, name: `${user.firstName} ${user.lastName}`, country: input.country, status: "EN_ATTENTE", documents, details: input.details ?? {} }).returning();
   await db.update(users).set({ kycStatus: "EN_ATTENTE" }).where(eq(users.id, user.id));
   await db.insert(notifications).values({
     id: crypto.randomUUID(),
@@ -2316,7 +2375,7 @@ router.post("/v1/kyc", async (req, res) => {
     body: "Votre dossier de vérification a été transmis à l’équipe conformité.",
     read: false,
   });
-  res.status(201).json({ id: kyc.id, userId: kyc.userId, name: kyc.name, country: kyc.country, status: kyc.status, documents: kyc.documents, details: kyc.details, submittedAt: kyc.submittedAt.toISOString() });
+  res.status(201).json(formatKyc(kyc));
 });
 
 router.get("/v1/admin/summary", requireAdmin, async (_req, res) => {
@@ -2414,7 +2473,37 @@ router.patch("/v1/admin/settings", requireAdmin, async (req, res) => {
 
 router.get("/v1/admin/kyc", requireAdmin, async (_req, res) => {
   const result = await db.select().from(kycVerifications).orderBy(desc(kycVerifications.submittedAt));
-  res.json(result.map((item) => ({ id: item.id, userId: item.userId, name: item.name, country: item.country, status: item.status, documents: item.documents, details: item.details, submittedAt: item.submittedAt.toISOString() })));
+  res.json(result.map(formatKyc));
+});
+
+router.get("/v1/admin/kyc/:id/documents/:kind", requireAdmin, async (req, res) => {
+  const kycId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const documentKind = Array.isArray(req.params.kind) ? req.params.kind[0] : req.params.kind;
+  if (!KYC_DOCUMENT_KINDS.includes(documentKind as KycDocumentKind)) {
+    res.status(404).json({ error: "Document KYC introuvable." });
+    return;
+  }
+  const kyc = await db.query.kycVerifications.findFirst({ where: eq(kycVerifications.id, kycId) });
+  const document = normalizeKycDocuments(kyc?.documents).find((item) => item.kind === documentKind);
+  if (!document) {
+    res.status(404).json({ error: "Document KYC introuvable." });
+    return;
+  }
+  try {
+    const file = await objectStorageService.getObjectEntityFile(document.objectPath);
+    const downloaded = await objectStorageService.downloadObject(file);
+    res.setHeader("Content-Type", downloaded.contentType);
+    if (downloaded.contentLength) res.setHeader("Content-Length", String(downloaded.contentLength));
+    res.setHeader("Cache-Control", "private, no-store");
+    res.setHeader("Content-Disposition", `inline; filename="${document.fileName.replace(/["\\\r\n]/g, "_")}"`);
+    Readable.fromWeb(downloaded.stream as ReadableStream<Uint8Array>).pipe(res);
+  } catch (error) {
+    if (error instanceof ObjectNotFoundError) {
+      res.status(404).json({ error: "Document KYC introuvable." });
+      return;
+    }
+    throw error;
+  }
 });
 
 router.patch("/v1/admin/kyc/:id/decision", requireAdmin, async (req, res) => {

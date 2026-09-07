@@ -403,6 +403,24 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/KycVerification"
+  /v1/kyc/uploads/request-url:
+    post:
+      operationId: requestKycUploadUrl
+      tags: [wallet]
+      summary: Creates a private upload URL for a KYC image
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/KycUploadInput"
+      responses:
+        "200":
+          description: Private upload URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KycUploadResponse"
   /v1/admin/summary:
     get:
       operationId: getAdminSummary
@@ -521,6 +539,24 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/OperationResult"
+  /v1/admin/kyc/{id}/documents/{kind}:
+    get:
+      operationId: getAdminKycDocument
+      tags: [admin]
+      summary: Streams a KYC image to an authenticated compliance reviewer
+      parameters:
+        - $ref: "#/components/parameters/Id"
+        - name: kind
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [document_front, document_back, face_capture]
+      responses:
+        "200":
+          description: Private KYC image
+          content:
+            image/*: {}
   /v1/admin/transactions:
     get:
       operationId: listAdminTransactions
@@ -720,7 +756,7 @@ components:
         status: { type: string }
         documents:
           type: array
-          items: { type: string }
+          items: { $ref: "#/components/schemas/KycDocument" }
         details:
           type: object
           additionalProperties: { type: string }
@@ -870,10 +906,34 @@ components:
         documents:
           type: array
           minItems: 1
-          items: { type: string }
+          items: { $ref: "#/components/schemas/KycDocument" }
         details:
           type: object
           additionalProperties: { type: string }
+    KycDocument:
+      type: object
+      required: [kind, objectPath, fileName, contentType, size]
+      properties:
+        kind: { type: string, enum: [document_front, document_back, face_capture] }
+        objectPath: { type: string, pattern: "^/objects/" }
+        fileName: { type: string, minLength: 1, maxLength: 255 }
+        contentType: { type: string, enum: [image/jpeg, image/png, image/webp] }
+        size: { type: number, minimum: 1, maximum: 10485760, description: "Must be an integer." }
+    KycUploadInput:
+      type: object
+      required: [name, size, contentType]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 255 }
+        size: { type: number, minimum: 1, maximum: 10485760, description: "Must be an integer." }
+        contentType: { type: string, enum: [image/jpeg, image/png, image/webp] }
+    KycUploadResponse:
+      type: object
+      required: [uploadURL, objectPath, metadata]
+      properties:
+        uploadURL: { type: string, description: "Short-lived presigned upload URL." }
+        objectPath: { type: string, pattern: "^/objects/" }
+        metadata:
+          $ref: "#/components/schemas/KycUploadInput"
     DecisionInput:
       type: object
       required: [decision]

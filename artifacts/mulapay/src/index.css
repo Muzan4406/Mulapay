@@ -431,6 +431,12 @@ h1,h2,h3,p { margin:0; }
 .kyc-admin-document-image { width:86px; height:68px; flex:0 0 auto; object-fit:cover; border-radius:8px; border:1px solid hsl(var(--border)); background:hsl(var(--muted)); }
 .kyc-admin-document-placeholder { width:86px; height:68px; display:grid; place-items:center; flex:0 0 auto; border-radius:8px; background:hsl(var(--muted)); color:hsl(var(--muted-foreground)); }
 .kyc-admin-document div { display:grid; gap:5px; min-width:0; }
+.kyc-admin-image-link { display:block; width:94px; height:112px; flex:0 0 auto; overflow:hidden; border-radius:8px; background:hsl(var(--muted)); }
+.kyc-admin-image-link img { width:100%; height:100%; display:block; object-fit:cover; }
+.kyc-admin-image-link:hover { outline:2px solid hsl(var(--primary)); outline-offset:2px; }
+.kyc-admin-image-missing { width:94px; height:112px; display:grid; place-items:center; flex:0 0 auto; border-radius:8px; background:hsl(var(--muted)); }
+.kyc-admin-open-link { color:hsl(var(--primary)); font-size:10px; font-weight:700; text-decoration:none; }
+.kyc-admin-open-link:hover { text-decoration:underline; }
 .kyc-admin-decision { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:end; gap:16px; margin-top:20px; padding-top:18px; border-top:1px solid hsl(var(--border)); }
 .kyc-admin-decision .field { margin:0; }
 .kyc-confirmation { display:grid; justify-items:center; gap:12px; max-width:680px; margin:28px auto 0; text-align:center; }
