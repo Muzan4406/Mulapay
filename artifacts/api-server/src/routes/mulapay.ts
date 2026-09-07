@@ -1652,10 +1652,20 @@ router.get("/v1/deposits/:reference", async (req, res) => {
     res.status(404).json({ error: "Dépôt introuvable." });
     return;
   }
+  let providerStatus: string | null = null;
+  if (transaction.paymentProvider === "ASHTECHPAY" && transaction.status !== "Completed" && transaction.providerTransactionId) {
+    try {
+      const provider = await getAshtechTransaction(transaction.providerTransactionId);
+      providerStatus = ashtechStatusToTransactionStatus(provider.status);
+    } catch {
+      providerStatus = null;
+    }
+  }
   res.json({
     ok: true,
     reference: transaction.reference,
     status: transaction.status,
+    providerStatus,
     amount: transaction.amount,
     currency: transaction.currency,
     fee: transaction.fee,
