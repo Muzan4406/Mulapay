@@ -87,7 +87,7 @@ function calculateFee(amount: number, percentage: number) {
 }
 
 function statusLabel(status: string) {
-  return ({ Active: 'Actif', Pending: 'En attente', pending: 'En attente', Processing: 'En traitement', Completed: 'Effectué', completed: 'Effectué', success: 'Effectué', Failed: 'Échoué', failed: 'Échoué', Expired: 'Expiré', expired: 'Expiré', Cancelled: 'Annulé', cancelled: 'Annulé', Reversed: 'Remboursé', 'Pending review': 'À examiner', Rejected: 'Refusé', EN_ATTENTE: 'En attente', A_REVOIR: 'Informations requises', VERIFIED: 'Vérifié', REFUSED: 'Refusé' } as Record<string, string>)[status] ?? status;
+  return ({ Active: 'Actif', Pending: 'En attente', pending: 'En attente', Processing: 'En traitement', Completed: 'Effectué', completed: 'Effectué', success: 'Effectué', Failed: 'Échoué', failed: 'Échoué', Expired: 'Expiré', expired: 'Expiré', Cancelled: 'Annulé', cancelled: 'Annulé', Reversed: 'Remboursé', 'Pending review': 'À examiner', Rejected: 'Refusé', EN_ATTENTE: 'En attente', A_REVOIR: 'Informations requises', VERIFIE: 'Validé', VERIFIED: 'Validé', REFUSE: 'Refusé', REFUSED: 'Refusé' } as Record<string, string>)[status] ?? status;
 }
 
 function kycIsVerified(status: string) {
@@ -2489,10 +2489,12 @@ function AdminKyc() {
 
 function AdminKycReview() {
   const { adminKyc, adminSummary, decideKyc, toast } = useStore();
-  const pending = adminKyc.filter(item => item.status === 'EN_ATTENTE' || item.status === 'A_REVOIR');
-  const [selectedId, setSelectedId] = useState<string | null>(pending[0]?.id ?? null);
+  const submitted = adminKyc.filter(item => ['EN_ATTENTE', 'A_REVOIR', 'VERIFIE', 'VERIFIED'].includes(item.status));
+  const waiting = submitted.filter(item => item.status === 'EN_ATTENTE' || item.status === 'A_REVOIR');
+  const [selectedId, setSelectedId] = useState<string | null>(submitted[0]?.id ?? null);
   const [rejectionReason, setRejectionReason] = useState('');
-  const selected = pending.find(item => item.id === selectedId) ?? null;
+  const selected = submitted.find(item => item.id === selectedId) ?? null;
+  const selectedIsWaiting = selected ? selected.status === 'EN_ATTENTE' || selected.status === 'A_REVOIR' : false;
   const details = selected?.details ?? {};
   const detailValue = (key: string, fallback = 'Non renseigné') => details[key]?.trim() || fallback;
   const documents = selected ? [
@@ -2501,7 +2503,7 @@ function AdminKycReview() {
     { label: 'Photo avec la carte en main', value: detailValue('facePhoto', 'Non fournie') },
   ] : [];
   const decide = (decision: 'VERIFIED' | 'REFUSED') => {
-    if (!selected) return;
+    if (!selected || !selectedIsWaiting) return;
     if (decision === 'REFUSED' && !rejectionReason.trim()) {
       toast('Indiquez le motif du rejet avant de continuer.');
       return;
@@ -2511,42 +2513,56 @@ function AdminKycReview() {
     setRejectionReason('');
     setSelectedId(null);
   };
+  useEffect(() => {
+    if (!selectedId && submitted[0]) setSelectedId(submitted[0].id);
+  }, [selectedId, submitted]);
   return <main className="page-wrap">
-    <PageIntro eyebrow="Confiance et sécurité" title="Revue KYC" subtitle="Examinez les informations et les documents avant de prendre une décision manuelle." action={<span className="pill pill-pending"><Clock3 size={13} style={{ marginRight: 5 }} /> {adminSummary?.kycAwaiting ?? pending.length} à examiner</span>} />
+    <PageIntro eyebrow="Confiance et sécurité" title="Marchands — dossiers KYC" subtitle="Consultez les marchands qui ont soumis leur KYC, qu’il soit en attente ou déjà validé." action={<span className="pill pill-pending"><Clock3 size={13} style={{ marginRight: 5 }} /> {waiting.length} en attente</span>} />
     <div className="card card-pad" style={{ marginTop: 28 }}>
-      <div className="section-head"><div><h2 className="section-title">File de revue</h2><p className="section-note">Sélectionnez un dossier pour consulter les informations et décider.</p></div></div>
+      <div className="section-head"><div><h2 className="section-title">Marchands ayant soumis leur KYC</h2><p className="section-note">{submitted.length} dossier(s) soumis · {waiting.length} en attente · {submitted.length - waiting.length} validé(s)</p></div></div>
       <div className="case-list">
-        {pending.map(item => <div className={`case-row ${selectedId === item.id ? 'is-selected' : ''}`} key={item.id} data-testid={`row-kyc-${item.id}`}>
+        {submitted.map(item => <div className={`case-row ${selectedId === item.id ? 'is-selected' : ''}`} key={item.id} data-testid={`row-kyc-${item.id}`}>
           <button type="button" className="case-person" style={{ border: 0, background: 'transparent', textAlign: 'left', padding: 0 }} onClick={() => { setSelectedId(item.id); setRejectionReason(''); }} data-testid={`button-view-kyc-${item.id}`}>
             <div className="person-initial">{item.name.split(' ').map(n => n[0]).join('')}</div>
-            <div><div className="case-name">{item.name}</div><div className="case-meta">{countryLabel(item.country)} · envoyé le {new Date(item.submittedAt).toLocaleString('fr-FR')}</div></div>
+            <div><div className="case-name">{item.name}</div><div className="case-meta">{countryLabel(item.country)} · soumis le {new Date(item.submittedAt).toLocaleString('fr-FR')}</div></div>
           </button>
-          <div className="case-actions"><button className="button button-primary button-sm" onClick={() => { setSelectedId(item.id); setRejectionReason(''); }}><Eye size={13} /> Voir le dossier</button></div>
+          <div className="case-actions"><span className={`pill ${item.status === 'VERIFIE' || item.status === 'VERIFIED' ? 'pill-success' : 'pill-pending'}`}>{statusLabel(item.status)}</span><button className="button button-primary button-sm" onClick={() => { setSelectedId(item.id); setRejectionReason(''); }}><Eye size={13} /> Voir le dossier</button></div>
         </div>)}
-        {pending.length === 0 && <div className="empty-state"><CheckCircle2 size={25} /><strong>La file est vide</strong><p>Les nouveaux dossiers d’identité apparaîtront ici.</p></div>}
+        {submitted.length === 0 && <div className="empty-state"><CheckCircle2 size={25} /><strong>Aucun dossier KYC soumis</strong><p>Les marchands ayant soumis leur identité apparaîtront ici.</p></div>}
       </div>
     </div>
     {selected && <div className="card card-pad" style={{ marginTop: 17 }}>
-      <div className="section-head"><div><div className="eyebrow">Dossier sélectionné</div><h2 className="section-title">{selected.name}</h2><p className="section-note">Soumis le {new Date(selected.submittedAt).toLocaleString('fr-FR')}</p></div><span className="pill pill-pending">En attente</span></div>
+      <div className="section-head"><div><div className="eyebrow">Dossier sélectionné</div><h2 className="section-title">{selected.name}</h2><p className="section-note">Soumis le {new Date(selected.submittedAt).toLocaleString('fr-FR')}</p></div><span className={`pill ${selectedIsWaiting ? 'pill-pending' : 'pill-success'}`}>{statusLabel(selected.status)}</span></div>
       <div className="kyc-admin-details">
         <div><span>Nom complet</span><strong>{detailValue('lastName')} {detailValue('firstName')}</strong></div>
         <div><span>Date de naissance</span><strong>{detailValue('birthDate')}</strong></div>
-        <div><span>Adresse</span><strong>{detailValue('address')}</strong></div>
-        <div><span>Téléphone</span><strong>{detailValue('phone')}</strong></div>
         <div><span>E-mail</span><strong>{detailValue('email')}</strong></div>
         <div><span>Nationalité</span><strong>{detailValue('nationality')}</strong></div>
         <div><span>Numéro de carte</span><strong>{detailValue('documentNumber')}</strong></div>
         <div><span>Expiration</span><strong>{detailValue('documentExpiry')}</strong></div>
       </div>
       <div className="eyebrow" style={{ marginTop: 25 }}>Documents d’identité</div>
-      <div className="kyc-admin-documents">{documents.map(document => <div className="kyc-admin-document" key={document.label}><FileText size={17} /><div><strong>{document.label}</strong><span>{document.value}</span></div></div>)}</div>
-      <div className="notice" style={{ marginTop: 18 }}><Info size={14} /><span>Les références sont affichées dans le dossier. L’accès aux octets des photos sera activé avec le stockage privé des documents.</span></div>
-      <div className="kyc-admin-decision">
+      <div className="kyc-admin-documents">{documents.map(document => <KycAdminDocument key={document.label} label={document.label} value={document.value} />)}</div>
+      {selectedIsWaiting && <div className="kyc-admin-decision">
         <div className="field"><label htmlFor="kyc-rejection-reason">Motif du rejet <span className="required-mark">* uniquement en cas de rejet</span></label><textarea id="kyc-rejection-reason" value={rejectionReason} onChange={event => setRejectionReason(event.target.value)} placeholder="Expliquez les éléments à corriger ou le motif du rejet." rows={3} /></div>
         <div className="case-actions"><button className="button button-primary" type="button" onClick={() => decide('VERIFIED')}><Check size={15} /> Approuver</button><button className="button button-danger" type="button" onClick={() => decide('REFUSED')}><X size={15} /> Rejeter</button></div>
-      </div>
+      </div>}
     </div>}
   </main>;
+}
+
+function KycAdminDocument({ label, value }: { label: string; value: string }) {
+  const imageSource = value.startsWith('data:image/') || value.startsWith('https://') || value.startsWith('http://')
+    ? value
+    : value.startsWith('/api/storage/')
+      ? value
+      : value.startsWith('/objects/')
+        ? `/api/storage${value}`
+        : '';
+  return <div className="kyc-admin-document">
+    {imageSource ? <img className="kyc-admin-document-image" src={imageSource} alt={label} /> : <span className="kyc-admin-document-placeholder"><FileText size={17} /></span>}
+    <div><strong>{label}</strong><span>{imageSource ? 'Image disponible' : value || 'Image non disponible'}</span></div>
+  </div>;
 }
 
 function AdminExchanges() {

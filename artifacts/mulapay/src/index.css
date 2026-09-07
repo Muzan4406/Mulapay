@@ -428,6 +428,8 @@ h1,h2,h3,p { margin:0; }
 .kyc-admin-documents { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-top:12px; }
 .kyc-admin-document { display:flex; align-items:flex-start; gap:9px; min-width:0; padding:13px; border:1px solid hsl(var(--border)); border-radius:10px; }
 .kyc-admin-document svg { flex:0 0 auto; color:hsl(var(--primary)); }
+.kyc-admin-document-image { width:86px; height:68px; flex:0 0 auto; object-fit:cover; border-radius:8px; border:1px solid hsl(var(--border)); background:hsl(var(--muted)); }
+.kyc-admin-document-placeholder { width:86px; height:68px; display:grid; place-items:center; flex:0 0 auto; border-radius:8px; background:hsl(var(--muted)); color:hsl(var(--muted-foreground)); }
 .kyc-admin-document div { display:grid; gap:5px; min-width:0; }
 .kyc-admin-decision { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:end; gap:16px; margin-top:20px; padding-top:18px; border-top:1px solid hsl(var(--border)); }
 .kyc-admin-decision .field { margin:0; }
