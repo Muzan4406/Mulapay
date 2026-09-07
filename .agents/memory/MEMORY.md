@@ -7,3 +7,4 @@
 - [Mulapay fee settlement](mulapay-fee-settlement.md) — capture the admin fee at transaction creation and credit the stored net amount; later rate changes affect future transactions only.
 - [Mulapay partner API boundary](mulapay-partner-api-boundary.md) — partner documentation and public responses present Mulapay as the only payment API; PSPs remain internal routing details.
 - [OpenAPI and generated Zod](openapi-generated-zod.md) — keep integer semantics in runtime validation; this Orval/Zod setup cannot emit zod.int().
+- [Manual KYC boundary](manual-kyc.md) — Mulapay keeps KYC human-reviewed; no Smile ID, liveness, Face Match, or automatic biometric approval.

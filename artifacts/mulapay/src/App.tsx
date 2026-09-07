@@ -2232,7 +2232,6 @@ function RealKyc() {
   const label = verified ? 'Vérifié' : needsReview ? 'Informations requises' : pending ? 'En cours d’examen' : refused ? 'À reprendre' : 'Non vérifié';
   const [step, setStep] = useState(1);
   const [submitted, setSubmitted] = useState(false);
-  const [faceReady, setFaceReady] = useState(false);
   const [faceCaptured, setFaceCaptured] = useState(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -2271,7 +2270,6 @@ function RealKyc() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
       setCameraStream(stream);
-      setFaceReady(true);
       toast('Caméra activée. Placez votre visage dans le cadre.');
     } catch {
       toast('Autorisez l’accès à la caméra pour continuer.');
@@ -2315,7 +2313,7 @@ function RealKyc() {
       `document_front:${files.front ?? ''}`,
       `document_back:${files.back ?? ''}`,
       `document_passport:${files.passport ?? ''}`,
-      `face_capture:${files.face ?? 'provider_capture_required'}`,
+      `face_capture:${files.face ?? ''}`,
       `personal:${JSON.stringify(personal)}`,
     ];
     submitKyc(documents, {
@@ -2632,7 +2630,7 @@ function RoutedApp() {
     ? <Switch><Route path="/admin" component={AdminOverview} /><Route path="/admin/kyc" component={AdminKyc} /><Route path="/admin/exchanges" component={AdminExchanges} /><Route path="/admin/transactions" component={AdminTransactions} /><Route component={NotFound} /></Switch>
     : gatedPath
       ? <KycRequiredPage feature={gatedPath} />
-      : <Switch><Route path="/app" component={Overview} /><Route path="/app/wallets" component={Wallets} /><Route path="/app/deposit" component={Deposit} /><Route path="/app/withdrawal" component={Withdrawal} /><Route path="/app/transactions" component={Transactions} /><Route path="/app/transfer" component={Transfer} /><Route path="/app/receive" component={Receive} /><Route path="/app/exchange" component={Exchange} /><Route path="/app/payments" component={Payments} /><Route path="/app/payment-links" component={PaymentLinks} /><Route path="/app/qr" component={QrPage} /><Route path="/app/api" component={ApiAccess} /><Route path="/app/api-docs" component={ApiPayinDocs} /><Route path="/app/documents" component={ApiPayinDocs} /><Route path="/app/notifications" component={NotificationsPage} /><Route path="/app/kyc" component={Kyc} /><Route path="/app/security" component={Security} /><Route path="/app/support" component={Support} /><Route path="/app/settings" component={Settings} /><Route component={NotFound} /></Switch>;
+      : <Switch><Route path="/app" component={Overview} /><Route path="/app/wallets" component={Wallets} /><Route path="/app/deposit" component={Deposit} /><Route path="/app/withdrawal" component={Withdrawal} /><Route path="/app/transactions" component={Transactions} /><Route path="/app/transfer" component={Transfer} /><Route path="/app/receive" component={Receive} /><Route path="/app/exchange" component={Exchange} /><Route path="/app/payments" component={Payments} /><Route path="/app/payment-links" component={PaymentLinks} /><Route path="/app/qr" component={QrPage} /><Route path="/app/api" component={ApiAccess} /><Route path="/app/api-docs" component={ApiPayinDocs} /><Route path="/app/documents" component={ApiPayinDocs} /><Route path="/app/notifications" component={NotificationsPage} /><Route path="/app/kyc" component={RealKyc} /><Route path="/app/security" component={Security} /><Route path="/app/support" component={Support} /><Route path="/app/settings" component={Settings} /><Route component={NotFound} /></Switch>;
   return <StoreContext.Provider value={store}><Shell admin={admin} onNotifications={() => setNotificationsOpen(v => !v)}>{content}</Shell>{notificationsOpen && <Notifications onClose={() => setNotificationsOpen(false)} />}{toastText && <div className="toast" data-testid="status-toast">{toastText}</div>}</StoreContext.Provider>;
 }
 
