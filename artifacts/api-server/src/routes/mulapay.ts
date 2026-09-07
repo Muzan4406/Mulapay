@@ -786,6 +786,14 @@ router.use(async (req, res, next) => {
   }
    const apiKey = await resolveApiKeyUserId(req);
    if (apiKey) {
+     const apiUser = await db.query.users.findFirst({ where: eq(users.id, apiKey.userId) });
+     if (isPartnerApiPath(req) && (!apiUser || !isKycVerified(apiUser))) {
+       res.status(403).json({
+         error: "La vérification KYC est requise pour utiliser l’API partenaire.",
+         code: "KYC_REQUIRED",
+       });
+       return;
+     }
      const requiredScope = requiredApiScope(req);
      if (requiredScope && !apiKey.scopes.includes(requiredScope)) {
        res.status(403).json({ error: `Cette clé API n’a pas le scope requis : ${requiredScope}.`, code: "INSUFFICIENT_SCOPE" });
@@ -855,6 +863,52 @@ async function ensureUser(req: Request) {
   return (await db.query.users.findFirst({ where: eq(users.id, id) }))!;
 }
 
+function isKycVerified(user: { kycStatus?: string | null }) {
+  return user.kycStatus === "VERIFIE" || user.kycStatus === "VERIFIED";
+}
+
+function requireVerifiedKyc(user: { kycStatus?: string | null }, res: Response, feature: string) {
+  if (isKycVerified(user)) return true;
+  res.status(403).json({
+    error: `La vérification KYC est requise pour accéder à ${feature}.`,
+    code: "KYC_REQUIRED",
+  });
+  return false;
+}
+
+function isPartnerApiPath(req: Request) {
+  return req.path.startsWith("/v1/")
+    && req.path !== "/v1/bootstrap"
+    && !req.path.startsWith("/v1/kyc")
+    && !req.path.startsWith("/v1/notifications");
+}
+
+function validateKycSubmission(details: Record<string, string>, documents: string[]) {
+  const required = [
+    "firstName",
+    "lastName",
+    "birthDate",
+    "nationality",
+    "residenceCountry",
+    "address",
+    "city",
+    "documentType",
+    "documentNumber",
+    "documentExpiry",
+  ];
+  if (required.some((field) => typeof details[field] !== "string" || !details[field].trim())) return false;
+  const expiry = new Date(`${details.documentExpiry}T23:59:59.999Z`);
+  if (Number.isNaN(expiry.getTime()) || expiry <= new Date()) return false;
+  const passport = details.documentType === "Passeport";
+  const documentFilesComplete = passport
+    ? Boolean(details.passportPage?.trim())
+    : Boolean(details.documentFront?.trim() && details.documentBack?.trim());
+  const serializedFilesComplete = documents.some((item) => item.startsWith("document_passport:") && item.length > "document_passport:".length)
+    || (documents.some((item) => item.startsWith("document_front:") && item.length > "document_front:".length)
+      && documents.some((item) => item.startsWith("document_back:") && item.length > "document_back:".length));
+  return documentFilesComplete && serializedFilesComplete && details.faceCapture?.trim() === "provider_capture_required";
+}
+
 async function ensureClerkUser(req: Request) {
   if (!getAuth(req).userId) throw new Error("AUTHENTICATION_REQUIRED");
   return ensureUser(req);
@@ -875,6 +929,7 @@ const DEFAULT_API_KEY_SCOPES = [
 
 router.get("/v1/api-keys", async (req, res) => {
   const user = await ensureClerkUser(req);
+  if (!requireVerifiedKyc(user, res, "l’API partenaire")) return;
   const keys = await db.select().from(apiKeys).where(and(eq(apiKeys.userId, user.id), isNull(apiKeys.revokedAt))).orderBy(desc(apiKeys.createdAt));
   res.json(keys.map((key) => ({
     id: key.id,
@@ -889,6 +944,7 @@ router.get("/v1/api-keys", async (req, res) => {
 
 router.post("/v1/api-keys", async (req, res) => {
   const user = await ensureClerkUser(req);
+  if (!requireVerifiedKyc(user, res, "l’API partenaire")) return;
   const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
   if (name.length < 2 || name.length > 80) {
     res.status(400).json({ error: "Le nom de la clé doit contenir entre 2 et 80 caractères." });
@@ -923,6 +979,7 @@ router.post("/v1/api-keys", async (req, res) => {
 
 router.delete("/v1/api-keys/:id", async (req, res) => {
   const user = await ensureClerkUser(req);
+  if (!requireVerifiedKyc(user, res, "l’API partenaire")) return;
   const [deleted] = await db.delete(apiKeys)
     .where(and(eq(apiKeys.id, req.params.id), eq(apiKeys.userId, user.id)))
     .returning({ id: apiKeys.id });
@@ -1999,6 +2056,7 @@ router.get("/v1/deposits/:reference", async (req, res) => {
 
 router.get("/v1/withdrawals/:reference", async (req, res) => {
   const user = await ensureUser(req);
+  if (!requireVerifiedKyc(user, res, "les retraits")) return;
   const transaction = await db.query.transactions.findFirst({
     where: and(
       eq(transactions.reference, req.params.reference),
@@ -2092,6 +2150,7 @@ router.post("/v1/withdrawals", async (req, res) => {
   const requestedWalletId = input.walletId;
 
   const user = await ensureUser(req);
+  if (!requireVerifiedKyc(user, res, "les retraits")) return;
   const wallet = await db.query.wallets.findFirst({
     where: and(eq(wallets.id, requestedWalletId), eq(wallets.userId, user.id), eq(wallets.code, countryCode)),
   });
@@ -2247,6 +2306,13 @@ router.patch("/v1/notifications/read-all", async (req, res) => {
 router.post("/v1/kyc", async (req, res) => {
   const input = SubmitKycBody.parse(req.body);
   const user = await ensureUser(req);
+  if (!validateKycSubmission(input.details ?? {}, input.documents)) {
+    res.status(400).json({
+      error: "Le dossier KYC est incomplet ou contient un document expiré.",
+      code: "INCOMPLETE_KYC",
+    });
+    return;
+  }
   const [kyc] = await db.insert(kycVerifications).values({ id: crypto.randomUUID(), userId: user.id, name: `${user.firstName} ${user.lastName}`, country: input.country, status: "EN_ATTENTE", documents: input.documents, details: input.details ?? {} }).returning();
   await db.update(users).set({ kycStatus: "EN_ATTENTE" }).where(eq(users.id, user.id));
   await db.insert(notifications).values({

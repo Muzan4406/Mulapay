@@ -68,7 +68,7 @@ type Store = {
   addLink: (data: PaymentLinkInput) => void;
   markRead: (id: string) => void;
   markAllRead: () => void;
-  submitKyc: (documents: string[], details?: Record<string, string>) => void;
+  submitKyc: (documents: string[], details?: Record<string, string>, onSuccess?: (status: string) => void) => void;
   decideKyc: (id: string, decision: 'VERIFIED' | 'REFUSED' | 'REVIEW') => void;
   signOut: () => void;
   toast: (message: string) => void;
@@ -88,6 +88,10 @@ function calculateFee(amount: number, percentage: number) {
 
 function statusLabel(status: string) {
   return ({ Active: 'Actif', Pending: 'En attente', pending: 'En attente', Processing: 'En traitement', Completed: 'Effectué', completed: 'Effectué', success: 'Effectué', Failed: 'Échoué', failed: 'Échoué', Expired: 'Expiré', expired: 'Expiré', Cancelled: 'Annulé', cancelled: 'Annulé', Reversed: 'Remboursé', 'Pending review': 'À examiner', Rejected: 'Refusé', EN_ATTENTE: 'En attente', A_REVOIR: 'Informations requises', VERIFIED: 'Vérifié', REFUSED: 'Refusé' } as Record<string, string>)[status] ?? status;
+}
+
+function kycIsVerified(status: string) {
+  return status === 'VERIFIE' || status === 'VERIFIED';
 }
 
 function depositStatusIsTerminal(status: string) {
@@ -238,7 +242,7 @@ const landingSecurityItems = [
 ];
 
 const dashboardIcon = (name: string) => `${import.meta.env.BASE_URL}dashboard-icons/${name}`;
-type NavItem = { href: string; label: string; icon: typeof LayoutDashboard; image?: string };
+type NavItem = { href: string; label: string; icon: typeof LayoutDashboard; image?: string; kycRequired?: boolean };
 
 const backgroundLogoPositions = [
   ['3%', '5%'], ['16%', '8%'], ['32%', '4%'], ['51%', '7%'], ['73%', '5%'], ['91%', '10%'],
@@ -338,7 +342,7 @@ const userNav: NavItem[] = [
   { href: '/app', label: 'Vue d’ensemble', icon: LayoutDashboard },
   { href: '/app/wallets', label: 'Wallets', icon: WalletCards, image: 'wallet.png' },
   { href: '/app/deposit', label: 'Dépôt', icon: ArrowDownLeft, image: 'deposit.png' },
-  { href: '/app/withdrawal', label: 'Retrait', icon: ArrowUpRight, image: 'wallet.png' },
+  { href: '/app/withdrawal', label: 'Retrait', icon: ArrowUpRight, image: 'wallet.png', kycRequired: true },
   { href: '/app/transactions', label: 'Transactions', icon: ListFilter, image: 'transactions.png' },
   { href: '/app/transfer', label: 'Envoyer de l’argent', icon: Send, image: 'transfer.png' },
   { href: '/app/exchange', label: 'Échanger', icon: RefreshCw, image: 'exchange.png' },
@@ -354,7 +358,9 @@ const adminNav: NavItem[] = [
 function Shell({ children, admin = false, onNotifications }: { children: ReactNode; admin?: boolean; onNotifications: () => void }) {
   const [location, setLocation] = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { profile } = useStore();
   const nav = admin ? adminNav : userNav;
+  const kycVerified = admin || kycIsVerified(profile.kycStatus);
   const unread = useStore().notifications.filter(n => !n.read).length;
   const current = nav.find(item => item.href === location)?.label || (location === '/app/kyc' ? 'Vérification KYC' : location === '/app/settings' ? 'Profil' : admin ? 'Opérations' : 'Vue d’ensemble');
   useEffect(() => {
@@ -373,8 +379,8 @@ function Shell({ children, admin = false, onNotifications }: { children: ReactNo
     }}>
       <Link href={admin ? '/admin' : '/app'}><Logo light /></Link>
       <div className="side-label">{admin ? 'Bureau des opérations' : 'Votre Mulapay'}</div>
-      <nav className="nav-list">{nav.map(item => { const Icon = item.icon; return <Link key={item.href} href={item.href} className={`nav-link ${location === item.href ? 'active' : ''}`} data-testid={`link-nav-${item.label.toLowerCase().replaceAll(' ', '-')}`}>{item.image ? <img className="nav-image" src={dashboardIcon(item.image)} alt="" /> : <Icon className="nav-icon" />}<span>{item.label}</span></Link>; })}</nav>
-      {!admin && <><div className="side-label" style={{ marginTop: 30 }}>Compte</div><nav className="nav-list"><Link href="/app/api" className={`nav-link ${location === '/app/api' ? 'active' : ''}`} data-testid="link-nav-api"><img className="nav-image" src={dashboardIcon('api.png')} alt="" /><span>API partenaire</span></Link><Link href="/app/api-docs" className={`nav-link ${location === '/app/api-docs' ? 'active' : ''}`} data-testid="link-nav-api-docs"><img className="nav-image" src={dashboardIcon('documents.png')} alt="" /><span>Documentation API Payin</span></Link><Link href="/app/notifications" className={`nav-link ${location === '/app/notifications' ? 'active' : ''}`} data-testid="link-nav-notifications"><img className="nav-image" src={dashboardIcon('notifications.png')} alt="" /><span>Notifications</span></Link><Link href="/app/kyc" className={`nav-link ${location === '/app/kyc' ? 'active' : ''}`} data-testid="link-nav-verification"><img className="nav-image" src={dashboardIcon('kyc.png')} alt="" /><span>Vérification KYC</span></Link><Link href="/app/security" className={`nav-link ${location === '/app/security' ? 'active' : ''}`} data-testid="link-nav-security"><img className="nav-image" src={dashboardIcon('security.png')} alt="" /><span>Sécurité</span></Link><Link href="/app/settings" className={`nav-link ${location === '/app/settings' ? 'active' : ''}`} data-testid="link-nav-settings"><img className="nav-image" src={dashboardIcon('profile.png')} alt="" /><span>Profil</span></Link><Link href="/app/support" className={`nav-link ${location === '/app/support' ? 'active' : ''}`} data-testid="link-nav-support"><img className="nav-image" src={dashboardIcon('support.png')} alt="" /><span>Support</span></Link></nav></>}
+      <nav className="nav-list">{nav.map(item => { const Icon = item.icon; const testId = `link-nav-${item.label.toLowerCase().replaceAll(' ', '-')}`; return item.kycRequired && !kycVerified ? <button key={item.href} type="button" className="nav-link nav-link-locked" onClick={() => setLocation('/app/kyc')} data-testid={testId} aria-label={`${item.label} — vérification KYC requise`}>{item.image ? <img className="nav-image" src={dashboardIcon(item.image)} alt="" /> : <Icon className="nav-icon" />}<span>{item.label}</span><LockKeyhole size={13} /></button> : <Link key={item.href} href={item.href} className={`nav-link ${location === item.href ? 'active' : ''}`} data-testid={testId}>{item.image ? <img className="nav-image" src={dashboardIcon(item.image)} alt="" /> : <Icon className="nav-icon" />}<span>{item.label}</span></Link>; })}</nav>
+      {!admin && <><div className="side-label" style={{ marginTop: 30 }}>Compte</div><nav className="nav-list">{!kycVerified ? <><button type="button" className="nav-link nav-link-locked" onClick={() => setLocation('/app/kyc')} data-testid="link-nav-api" aria-label="API partenaire — vérification KYC requise"><img className="nav-image" src={dashboardIcon('api.png')} alt="" /><span>API partenaire</span><LockKeyhole size={13} /></button><button type="button" className="nav-link nav-link-locked" onClick={() => setLocation('/app/kyc')} data-testid="link-nav-api-docs" aria-label="Documentation API Payin — vérification KYC requise"><img className="nav-image" src={dashboardIcon('documents.png')} alt="" /><span>Documentation API Payin</span><LockKeyhole size={13} /></button></> : <><Link href="/app/api" className={`nav-link ${location === '/app/api' ? 'active' : ''}`} data-testid="link-nav-api"><img className="nav-image" src={dashboardIcon('api.png')} alt="" /><span>API partenaire</span></Link><Link href="/app/api-docs" className={`nav-link ${location === '/app/api-docs' ? 'active' : ''}`} data-testid="link-nav-api-docs"><img className="nav-image" src={dashboardIcon('documents.png')} alt="" /><span>Documentation API Payin</span></Link></>}<Link href="/app/notifications" className={`nav-link ${location === '/app/notifications' ? 'active' : ''}`} data-testid="link-nav-notifications"><img className="nav-image" src={dashboardIcon('notifications.png')} alt="" /><span>Notifications</span></Link><Link href="/app/kyc" className={`nav-link ${location === '/app/kyc' ? 'active' : ''}`} data-testid="link-nav-verification"><img className="nav-image" src={dashboardIcon('kyc.png')} alt="" /><span>Vérification KYC</span></Link><Link href="/app/security" className={`nav-link ${location === '/app/security' ? 'active' : ''}`} data-testid="link-nav-security"><img className="nav-image" src={dashboardIcon('security.png')} alt="" /><span>Sécurité</span></Link><Link href="/app/settings" className={`nav-link ${location === '/app/settings' ? 'active' : ''}`} data-testid="link-nav-settings"><img className="nav-image" src={dashboardIcon('profile.png')} alt="" /><span>Profil</span></Link><Link href="/app/support" className={`nav-link ${location === '/app/support' ? 'active' : ''}`} data-testid="link-nav-support"><img className="nav-image" src={dashboardIcon('support.png')} alt="" /><span>Support</span></Link></nav></>}
       <div className="side-footer"><div className="demo-chip"><span className="demo-dot" /><span><strong style={{ color: 'hsl(160 42% 64%)' }}>Compte sécurisé</strong><br />Vos opérations sont persistées et auditées.</span></div></div>
     </aside>
     {mobileMenuOpen && <button className="mobile-menu-backdrop" aria-label="Fermer le menu" onClick={() => setMobileMenuOpen(false)} />}
@@ -2227,7 +2233,7 @@ function RealKyc() {
   const [step, setStep] = useState(1);
   const [submitted, setSubmitted] = useState(false);
   const [faceReady, setFaceReady] = useState(false);
-  const [documentType, setDocumentType] = useState('Carte nationale d’identité');
+  const [documentType, setDocumentType] = useState('Carte nationale d’identité (CNI)');
   const [documentNumber, setDocumentNumber] = useState('');
   const [documentExpiry, setDocumentExpiry] = useState('');
   const [personal, setPersonal] = useState({
@@ -2300,9 +2306,11 @@ function RealKyc() {
       passportPage: files.passport ?? '',
       faceCapture: files.face ?? 'provider_capture_required',
       verificationMode: 'PROVIDER_KYC_REQUIRED',
+    }, status => {
+      setSubmitted(true);
+      setStep(5);
+      toast(status === 'VERIFIE' || status === 'VERIFIED' ? 'Votre identité a été vérifiée.' : 'Votre dossier a été transmis pour vérification automatique.');
     });
-    setSubmitted(true);
-    setStep(5);
   };
 
   if (verified || pending || needsReview || submitted) {
@@ -2525,6 +2533,11 @@ function Notifications({ onClose }: { onClose: () => void }) {
   </div>;
 }
 
+function KycRequiredPage({ feature }: { feature: string }) {
+  const [, setLocation] = useLocation();
+  return <main className="page-wrap"><PageIntro eyebrow="Accès protégé" title={`${feature} réservé aux comptes vérifiés`} subtitle="La vérification KYC protège vos fonds et les partenaires qui utilisent Mulapay." /><div className="card card-pad kyc-access-card"><div className="kyc-access-icon"><LockKeyhole size={24} /></div><div><h2 className="section-title">Terminez votre vérification d’identité</h2><p className="section-note">Après validation de votre dossier, les retraits, l’API partenaire et sa documentation seront automatiquement disponibles.</p><button className="button button-primary" onClick={() => setLocation('/app/kyc')} data-testid="button-start-kyc-access"><FileCheck2 size={15} /> Ouvrir la vérification KYC</button></div></div></main>;
+}
+
 function RoutedApp() {
   const [location, setLocation] = useLocation();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -2568,7 +2581,7 @@ function RoutedApp() {
         onError: () => toast('Les notifications n’ont pas pu être mises à jour.'),
       });
     },
-    submitKyc: (documents, details) => { kycMutation.mutate({ data: { country: data?.profile.country ?? 'Togo', documents, details } }, { onSuccess: () => { invalidate(); toast('Documents KYC envoyés pour examen.'); }, onError: () => toast('Le dossier KYC n’a pas pu être enregistré.') }); },
+    submitKyc: (documents, details, onSuccess) => { kycMutation.mutate({ data: { country: data?.profile.country ?? 'Togo', documents, details } }, { onSuccess: response => { invalidate(); onSuccess?.(response.status); }, onError: error => { const message = error instanceof Error ? error.message : 'Le dossier KYC n’a pas pu être enregistré.'; toast(message); } }); },
     decideKyc: (id, decision) => { kycDecisionMutation.mutate({ id, data: { decision } }, { onSuccess: response => { invalidate(); toast(response.message); }, onError: () => toast('La décision KYC n’a pas pu être enregistrée.') }); },
     signOut: () => { void signOut({ redirectUrl: basePath || '/' }); },
     toast,
@@ -2579,7 +2592,19 @@ function RoutedApp() {
   if (location.startsWith('/admin') && !admin) return <Redirect to="/app" />;
   const Kyc = RealKyc;
   const Settings = RealSettings;
-  return <StoreContext.Provider value={store}><Shell admin={admin} onNotifications={() => setNotificationsOpen(v => !v)}>{admin ? <Switch><Route path="/admin" component={AdminOverview} /><Route path="/admin/kyc" component={AdminKyc} /><Route path="/admin/exchanges" component={AdminExchanges} /><Route path="/admin/transactions" component={AdminTransactions} /><Route component={NotFound} /></Switch> : <Switch><Route path="/app" component={Overview} /><Route path="/app/wallets" component={Wallets} /><Route path="/app/deposit" component={Deposit} /><Route path="/app/withdrawal" component={Withdrawal} /><Route path="/app/transactions" component={Transactions} /><Route path="/app/transfer" component={Transfer} /><Route path="/app/receive" component={Receive} /><Route path="/app/exchange" component={Exchange} /><Route path="/app/payments" component={Payments} /><Route path="/app/payment-links" component={PaymentLinks} /><Route path="/app/qr" component={QrPage} /><Route path="/app/api" component={ApiAccess} /><Route path="/app/api-docs" component={ApiPayinDocs} /><Route path="/app/documents" component={ApiPayinDocs} /><Route path="/app/notifications" component={NotificationsPage} /><Route path="/app/kyc" component={Kyc} /><Route path="/app/security" component={Security} /><Route path="/app/support" component={Support} /><Route path="/app/settings" component={Settings} /><Route component={NotFound} /></Switch>}</Shell>{notificationsOpen && <Notifications onClose={() => setNotificationsOpen(false)} />}{toastText && <div className="toast" data-testid="status-toast">{toastText}</div>}</StoreContext.Provider>;
+  const kycVerified = kycIsVerified(store.profile.kycStatus);
+  const gatedPath = !admin && !kycVerified && (
+    location === '/app/withdrawal' ? 'les retraits'
+      : location === '/app/api' ? "l’API partenaire"
+        : location === '/app/api-docs' || location === '/app/documents' ? 'la documentation API'
+          : null
+  );
+  const content = admin
+    ? <Switch><Route path="/admin" component={AdminOverview} /><Route path="/admin/kyc" component={AdminKyc} /><Route path="/admin/exchanges" component={AdminExchanges} /><Route path="/admin/transactions" component={AdminTransactions} /><Route component={NotFound} /></Switch>
+    : gatedPath
+      ? <KycRequiredPage feature={gatedPath} />
+      : <Switch><Route path="/app" component={Overview} /><Route path="/app/wallets" component={Wallets} /><Route path="/app/deposit" component={Deposit} /><Route path="/app/withdrawal" component={Withdrawal} /><Route path="/app/transactions" component={Transactions} /><Route path="/app/transfer" component={Transfer} /><Route path="/app/receive" component={Receive} /><Route path="/app/exchange" component={Exchange} /><Route path="/app/payments" component={Payments} /><Route path="/app/payment-links" component={PaymentLinks} /><Route path="/app/qr" component={QrPage} /><Route path="/app/api" component={ApiAccess} /><Route path="/app/api-docs" component={ApiPayinDocs} /><Route path="/app/documents" component={ApiPayinDocs} /><Route path="/app/notifications" component={NotificationsPage} /><Route path="/app/kyc" component={Kyc} /><Route path="/app/security" component={Security} /><Route path="/app/support" component={Support} /><Route path="/app/settings" component={Settings} /><Route component={NotFound} /></Switch>;
+  return <StoreContext.Provider value={store}><Shell admin={admin} onNotifications={() => setNotificationsOpen(v => !v)}>{content}</Shell>{notificationsOpen && <Notifications onClose={() => setNotificationsOpen(false)} />}{toastText && <div className="toast" data-testid="status-toast">{toastText}</div>}</StoreContext.Provider>;
 }
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');

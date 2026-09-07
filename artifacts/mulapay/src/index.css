@@ -84,6 +84,8 @@ a { color: inherit; text-decoration: none; }
 .side-label { color:hsl(var(--muted-foreground)); font-size:10px; font-weight:700; letter-spacing:.13em; text-transform:uppercase; padding:0 12px; margin:0 0 10px; }
 .nav-list { display:grid; gap:4px; }
 .nav-link { display:flex; align-items:center; gap:12px; color:hsl(var(--muted-foreground)); padding:11px 12px; border-radius:10px; font-size:13px; transition: background .2s, color .2s, transform .2s; }
+.nav-link-locked { width:100%; border:0; background:transparent; font:inherit; text-align:left; cursor:pointer; opacity:.72; }
+.nav-link-locked svg:last-child { margin-left:auto; opacity:.7; }
 .nav-link:hover { background:hsl(var(--secondary)); color:hsl(var(--foreground)); transform:translateX(2px); }
 .nav-link.active { background:hsl(160 42% 38% / .1); color:hsl(var(--primary)); font-weight:600; }
 .nav-icon { width:17px; height:17px; }
@@ -425,6 +427,9 @@ h1,h2,h3,p { margin:0; }
 .kyc-confirmation-steps span.is-done { background:hsl(var(--primary) / .13); color:hsl(var(--primary)); }
 .kyc-confirmation-steps span.is-active { background:hsl(var(--accent) / .28); color:hsl(34 68% 39%); }
 .kyc-confirmation-steps i { width:22px; height:1px; background:hsl(var(--border)); }
+.kyc-access-card { display:flex; align-items:flex-start; gap:16px; max-width:720px; margin-top:28px; }
+.kyc-access-icon { flex:0 0 auto; width:48px; height:48px; display:grid; place-items:center; border-radius:15px; background:hsl(var(--accent) / .25); color:hsl(34 68% 39%); }
+.kyc-access-card .button { margin-top:18px; }
 .api-key-create-form { display:flex; align-items:flex-end; gap:12px; }
 .api-key-create-form .field { flex:1; }
 .api-key-list { display:grid; gap:9px; margin-top:18px; }
