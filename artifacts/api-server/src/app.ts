@@ -31,6 +31,13 @@ app.use(
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 app.use(cors({ credentials: true, origin: true }));
 app.use(
+  "/api/v1/kyc/uploads",
+  express.raw({
+    type: ["image/jpeg", "image/png", "image/webp"],
+    limit: "10mb",
+  }),
+);
+app.use(
   express.json({
     verify: (req, _res, buffer) => {
       if (["/api/v1/webhooks/drimpay", "/api/v1/webhooks/ashtechpay"].includes((req as express.Request).path)) {

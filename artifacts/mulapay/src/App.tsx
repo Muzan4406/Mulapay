@@ -2295,7 +2295,7 @@ function RealKyc() {
         });
         const payload = await response.json() as { uploadURL?: string; objectPath?: string; error?: string; code?: string };
         if (!response.ok || !payload.uploadURL || !payload.objectPath) throw new Error(payload.error ?? 'Le stockage privé est indisponible. Réessayez plus tard.');
-        const upload = await fetch(payload.uploadURL, { method: 'PUT', body: file, credentials: 'omit', headers: { 'Content-Type': file.type } });
+        const upload = await fetch(payload.uploadURL, { method: 'PUT', body: file, credentials: 'include', headers: { 'Content-Type': file.type } });
         if (!upload.ok) throw new Error(`L’image n’a pas été enregistrée (HTTP ${upload.status}). Changez l’image et réessayez.`);
         setFiles(current => current[field]?.preview === preview
           ? { ...current, [field]: { name: file.name, preview, uploading: false, upload: { kind, objectPath: payload.objectPath!, fileName: file.name, contentType: file.type as KycDocument['contentType'], size: file.size } } }

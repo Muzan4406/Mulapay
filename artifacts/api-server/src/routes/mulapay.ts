@@ -2376,15 +2376,17 @@ router.patch("/v1/notifications/read-all", async (req, res) => {
 });
 
 router.post("/v1/kyc/uploads/request-url", async (req, res) => {
-  await ensureUser(req);
+  const user = await ensureUser(req);
   const input = RequestKycUploadUrlBody.parse(req.body);
   if (!Number.isInteger(input.size)) {
     res.status(400).json({ error: "La taille du fichier doit être un entier." });
     return;
   }
   try {
-    const uploadURL = await objectStorageService.getObjectEntityUploadURL();
-    const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
+    const { uploadURL, objectPath } = await objectStorageService.createUploadSession(user.id, {
+      contentType: input.contentType,
+      size: input.size,
+    });
     res.json(RequestKycUploadUrlResponse.parse({
       uploadURL,
       objectPath,
@@ -2395,6 +2397,26 @@ router.post("/v1/kyc/uploads/request-url", async (req, res) => {
       error: "Le stockage privé des documents est momentanément indisponible. Votre dossier n’a pas été envoyé.",
       code: "OBJECT_STORAGE_UNAVAILABLE",
     });
+  }
+});
+
+router.put("/v1/kyc/uploads/:token", async (req, res) => {
+  const user = await ensureUser(req);
+  const token = Array.isArray(req.params.token) ? req.params.token[0] : req.params.token;
+  const contentType = (req.headers["content-type"] ?? "").split(";")[0].trim();
+  if (!Buffer.isBuffer(req.body) || !["image/jpeg", "image/png", "image/webp"].includes(contentType)) {
+    res.status(400).json({ error: "Le fichier KYC doit être une image JPEG, PNG ou WebP." });
+    return;
+  }
+  try {
+    await objectStorageService.uploadPendingObject(token, user.id, req.body, contentType);
+    res.json({ ok: true });
+  } catch (error) {
+    if (error instanceof ObjectNotFoundError) {
+      res.status(404).json({ error: "Session d’upload KYC expirée ou invalide." });
+      return;
+    }
+    res.status(503).json({ error: error instanceof Error ? error.message : "Le document KYC n’a pas pu être enregistré." });
   }
 });
 
