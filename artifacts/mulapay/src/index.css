@@ -716,14 +716,17 @@ h1,h2,h3,p { margin:0; }
   .feature:first-child { grid-column:span 2; }
 }
 @media (max-width: 740px) {
+  html,
+  body,
+  #root { width:100% !important; min-width:100% !important; }
   #root,
   .app-shell,
   .main-pane,
   .mobile-top,
   .topbar,
   .admin-bar { width:100dvw !important; max-width:100dvw !important; min-width:0; }
-  .app-shell { display:block !important; }
-  .main-pane { display:block; flex:none; overflow-x:hidden; }
+  .app-shell { display:block !important; position:relative; width:100vw !important; min-width:100vw !important; max-width:none !important; }
+  .main-pane { display:block; flex:none; width:100vw !important; min-width:100vw !important; max-width:none !important; overflow-x:hidden; }
   .side-rail { display:none; }
   .side-rail.mobile-open { display:flex !important; position:fixed; z-index:30; inset:0 auto 0 0; width:min(84vw, 300px); flex-basis:auto; overflow-y:auto; box-shadow:18px 0 42px hsl(205 38% 16% / .28); animation:mobile-sidebar-in .2s ease-out both; }
   .mobile-menu-backdrop { display:block; position:fixed; z-index:25; inset:0; width:100%; height:100%; padding:0; border:0; background:hsl(205 38% 16% / .42); cursor:pointer; }
@@ -739,7 +742,7 @@ h1,h2,h3,p { margin:0; }
   .topbar { height:60px; min-width:0; padding:0 17px; }
   .topbar-leading { gap:10px; }
   .back-button { padding:7px 9px 7px 7px; }
-  .page-wrap { padding:23px 17px 42px; }
+  .page-wrap { width:100% !important; max-width:none !important; padding:23px 17px 42px; }
   .deposit-form,
   .deposit-status-card,
   .withdrawal-unavailable-card { width:100%; max-width:none; }
