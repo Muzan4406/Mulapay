@@ -34,6 +34,7 @@ import {
   useListAdminPaymentProviderRoutes,
   useListAdminPaymentProviders,
   useListAdminTransactions,
+  useMarkAllNotificationsRead,
   useMarkNotificationRead,
   useSubmitKyc,
   useUpdateAdminSettings,
@@ -49,7 +50,7 @@ type Transaction = { id: string; type: string; status: string; amount: number; c
 type Exchange = { id: string; sourceWalletId?: string | null; destinationWalletId?: string | null; source: string; destination: string; amount: number; rate: number; receivedAmount: number; fee: number; status: string; requestedAt: string };
 type PaymentLink = ApiPaymentLink;
 type PublicPaymentLink = Omit<PaymentLink, 'id' | 'walletId' | 'notifyApp' | 'notifyEmail' | 'notifyWebhook'>;
-type Notification = { id: string; title: string; body: string; read: boolean };
+type Notification = { id: string; title: string; body: string; read: boolean; createdAt: string };
 type ApiKey = { id: string; name: string; keyPrefix: string; scopes: string[]; lastUsedAt: string | null; revokedAt: string | null; createdAt: string };
 type AdminKycCase = { id: string; userId: string; name: string; country: string; status: string; documents: string[]; submittedAt: string };
 type AdminSummary = { kycAwaiting: number; exchangeQueue: number; volume: number; successRate: number };
@@ -66,6 +67,7 @@ type Store = {
   setExchangeStatus: (id: string, status: string) => void;
   addLink: (data: PaymentLinkInput) => void;
   markRead: (id: string) => void;
+  markAllRead: () => void;
   submitKyc: (documents: string[]) => void;
   decideKyc: (id: string, accepted: boolean) => void;
   signOut: () => void;
@@ -156,6 +158,20 @@ function notificationCopy(item: Notification) {
     'KYC approved': { title: 'KYC approuvé', body: 'Votre vérification d’identité est terminée. Votre compte est vérifié.' },
   };
   return copy[item.title] ?? item;
+}
+
+function notificationDateLabel(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value || 'Date inconnue';
+  const now = new Date();
+  const sameDay = date.toDateString() === now.toDateString();
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  const isYesterday = date.toDateString() === yesterday.toDateString();
+  const time = date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  if (sameDay) return `Aujourd’hui · ${time}`;
+  if (isYesterday) return `Hier · ${time}`;
+  return date.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) + ` · ${time}`;
 }
 
 function Logo({ light = false }: { light?: boolean }) {
@@ -365,7 +381,7 @@ function Shell({ children, admin = false, onNotifications }: { children: ReactNo
     <div className="main-pane">
       <div className={`mobile-top ${admin ? 'admin-mobile-top' : 'user-mobile-top'}`}><button className="icon-button mobile-menu-toggle" aria-label={mobileMenuOpen ? 'Fermer le menu' : 'Ouvrir le menu'} aria-expanded={mobileMenuOpen} aria-controls="mobile-navigation" onClick={() => setMobileMenuOpen(open => !open)} data-testid="button-mobile-menu"><Menu size={19} /></button><div className="mobile-menu-actions"><button className="icon-button" onClick={() => setLocation(admin ? '/app' : '/admin')} data-testid="button-switch-area"><ArrowRightLeft size={16} /></button></div></div>
        {admin && <div className="admin-bar"><span><CircleAlert size={13} style={{ verticalAlign: 'middle', marginRight: 6 }} />Vue opérations · chaque action sensible est journalisée.</span><Link href="/app">Retour à l’espace utilisateur</Link></div>}
-       <header className="topbar"><div className="topbar-leading"><button className="back-button" onClick={goBack} title="Retour à la page précédente" aria-label="Retour à la page précédente" data-testid="button-back"><ArrowLeft size={16} /><span>Retour</span></button><div className="crumb">{admin ? 'Opérations / ' : 'Espace / '}{current}</div></div><div className="top-actions"><button className="icon-button" title="Notifications" onClick={onNotifications} data-testid="button-notifications"><Bell size={16} />{unread > 0 && <span className="notification-dot" />}</button><div className="avatar" data-testid="text-user-avatar">{useStore().profile.firstName.slice(0, 1)}{useStore().profile.lastName.slice(0, 1)}</div></div></header>
+       <header className="topbar"><div className="topbar-leading"><button className="back-button" onClick={goBack} title="Retour à la page précédente" aria-label="Retour à la page précédente" data-testid="button-back"><ArrowLeft size={16} /><span>Retour</span></button><div className="crumb">{admin ? 'Opérations / ' : 'Espace / '}{current}</div></div><div className="top-actions"><button className="icon-button" title={unread > 0 ? `${unread} notification${unread > 1 ? 's' : ''} à lire` : 'Notifications'} aria-label={unread > 0 ? `${unread} notifications à lire` : 'Notifications'} onClick={onNotifications} data-testid="button-notifications"><Bell size={16} />{unread > 0 && <span className="notification-count">{unread > 9 ? '9+' : unread}</span>}</button><div className="avatar" data-testid="text-user-avatar">{useStore().profile.firstName.slice(0, 1)}{useStore().profile.lastName.slice(0, 1)}</div></div></header>
       {children}
     </div>
   </div>;
@@ -1453,7 +1469,7 @@ data = response.json()`}</pre></div></div></div>
   "ok": true,
   "message": "Notification marquée comme lue.",
   "reference": null
-}`}</pre></div>
+}`}</pre><div className="docs-endpoint-bar" style={{ marginTop: 18 }}><span className="api-method api-method-muted">PATCH</span><code>/api/v1/notifications/read-all</code><span>Marquer tout comme lu</span></div><p className="docs-inline-note" style={{ marginTop: 12 }}>Cette action est idempotente : elle marque toutes les notifications du compte comme lues et peut être rejouée sans créer de doublon.</p></div>
           </section>
 
            <section id="kyc" className="docs-section">
@@ -1498,7 +1514,7 @@ data = response.json()`}</pre></div></div></div>
 
         <section className="docs-resources card">
           <div><span className="docs-kicker">Référence API</span><h2>Endpoints disponibles</h2><p>Les routes publiques actuellement exposées par Mulapay.</p></div>
-            <div className="docs-resource-list"><div><span className="api-method">POST</span><code>/api/v1/deposits</code><span>Créer un dépôt</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/deposits/:reference</code><span>Suivre un dépôt</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/payments/:reference</code><span>Suivre un paiement par lien</span></div><div><span className="api-method">POST</span><code>/api/v1/withdrawals</code><span>Créer un retrait</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/withdrawals/:reference</code><span>Suivre un retrait</span></div><div><span className="api-method">POST</span><code>/api/v1/transfers</code><span>Créer un transfert</span></div><div><span className="api-method">POST</span><code>/api/v1/exchanges</code><span>Créer un échange entre wallets</span></div><div><span className="api-method">POST</span><code>/api/v1/payment-links</code><span>Créer un lien</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/payment-links</code><span>Lister ses liens</span></div><div><span className="api-method api-method-muted">PATCH</span><code>/api/v1/payment-links/:id</code><span>Modifier un lien</span></div><div><span className="api-method api-method-muted">DELETE</span><code>/api/v1/payment-links/:id</code><span>Supprimer un lien</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/bootstrap</code><span>Lire l’espace du compte et ses notifications</span></div><div><span className="api-method api-method-muted">PATCH</span><code>/api/v1/notifications/:id/read</code><span>Marquer une notification comme lue</span></div><div><span className="api-method">POST</span><code>/api/v1/kyc</code><span>Soumettre des informations KYC</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/public/payment-links/:token</code><span>Lire un lien public</span></div><div><span className="api-method api-method-muted">POST</span><code>/api/v1/public/payment-links/:token/payments</code><span>Créer un paiement public</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/public/payment-links/:token/payments/:reference</code><span>Suivre un paiement public</span></div></div>
+             <div className="docs-resource-list"><div><span className="api-method">POST</span><code>/api/v1/deposits</code><span>Créer un dépôt</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/deposits/:reference</code><span>Suivre un dépôt</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/payments/:reference</code><span>Suivre un paiement par lien</span></div><div><span className="api-method">POST</span><code>/api/v1/withdrawals</code><span>Créer un retrait</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/withdrawals/:reference</code><span>Suivre un retrait</span></div><div><span className="api-method">POST</span><code>/api/v1/transfers</code><span>Créer un transfert</span></div><div><span className="api-method">POST</span><code>/api/v1/exchanges</code><span>Créer un échange entre wallets</span></div><div><span className="api-method">POST</span><code>/api/v1/payment-links</code><span>Créer un lien</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/payment-links</code><span>Lister ses liens</span></div><div><span className="api-method api-method-muted">PATCH</span><code>/api/v1/payment-links/:id</code><span>Modifier un lien</span></div><div><span className="api-method api-method-muted">DELETE</span><code>/api/v1/payment-links/:id</code><span>Supprimer un lien</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/bootstrap</code><span>Lire l’espace du compte et ses notifications</span></div><div><span className="api-method api-method-muted">PATCH</span><code>/api/v1/notifications/:id/read</code><span>Marquer une notification comme lue</span></div><div><span className="api-method api-method-muted">PATCH</span><code>/api/v1/notifications/read-all</code><span>Marquer toutes les notifications comme lues</span></div><div><span className="api-method">POST</span><code>/api/v1/kyc</code><span>Soumettre des informations KYC</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/public/payment-links/:token</code><span>Lire un lien public</span></div><div><span className="api-method api-method-muted">POST</span><code>/api/v1/public/payment-links/:token/payments</code><span>Créer un paiement public</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/public/payment-links/:token/payments/:reference</code><span>Suivre un paiement public</span></div></div>
           <div className="docs-bottom-cta"><div><strong>Prêt à connecter votre backend ?</strong><span>Créez une clé serveur et commencez avec le quickstart.</span></div><Link href="/app/api" className="button button-primary">Créer une clé API <ArrowRight size={15} /></Link></div>
         </section>
       </div>
@@ -1507,8 +1523,63 @@ data = response.json()`}</pre></div></div></div>
 }
 
 function NotificationsPage() {
-  const { notifications, markRead } = useStore();
-  return <main className="page-wrap"><PageIntro eyebrow="Centre d’activité" title="Notifications" subtitle="Dépôts, retraits, paiements, sécurité et décisions KYC." /><div className="card card-pad">{notifications.length === 0 ? <div className="empty-state"><Bell size={25} /><strong>Aucune notification</strong><p>Les événements de votre compte apparaîtront ici.</p></div> : notifications.map(item => { const copy = notificationCopy(item); return <button key={item.id} onClick={() => markRead(item.id)} className="activity-row" style={{ width: '100%', border: 0, textAlign: 'left', background: item.read ? 'transparent' : 'hsl(39 78% 89% / .35)', cursor: 'pointer' }}><div><div className="activity-name">{copy.title}</div><div className="activity-meta">{copy.body}</div></div><span className={`pill ${item.read ? '' : 'pill-pending'}`}>{item.read ? 'Lue' : 'À lire'}</span></button>; })}</div></main>;
+  const { notifications, markRead, markAllRead } = useStore();
+  const [filter, setFilter] = useState<'all' | 'unread'>('all');
+  const unreadCount = notifications.filter(item => !item.read).length;
+  const visibleNotifications = [...notifications]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .filter(item => filter === 'all' || !item.read);
+
+  return <main className="page-wrap notifications-page">
+    <PageIntro
+      eyebrow="Centre d’activité"
+      title="Notifications"
+      subtitle="Les événements importants de votre compte, réunis au même endroit."
+      action={<button className="button button-ghost" onClick={markAllRead} disabled={unreadCount === 0} data-testid="button-mark-all-notifications-read"><CheckCircle2 size={15} /> Marquer tout comme lu</button>}
+    />
+    <section className="notification-summary-grid" aria-label="Résumé des notifications">
+      <div className="notification-summary-card notification-summary-card-primary">
+        <span className="notification-summary-icon"><Bell size={17} /></span>
+        <span><strong>{unreadCount}</strong><small>À lire maintenant</small></span>
+      </div>
+      <div className="notification-summary-card">
+        <span className="notification-summary-icon"><Check size={17} /></span>
+        <span><strong>{notifications.length - unreadCount}</strong><small>Déjà consultées</small></span>
+      </div>
+      <div className="notification-summary-card notification-summary-card-note">
+        <span className="notification-summary-icon"><ShieldCheck size={17} /></span>
+        <span><strong>Compte suivi</strong><small>Paiements, sécurité et KYC</small></span>
+      </div>
+    </section>
+    <section className="card notification-list-card">
+      <div className="notification-list-toolbar">
+        <div><h2 className="section-title">Votre activité</h2><p className="section-note">{notifications.length === 0 ? 'Aucun événement à afficher' : `${notifications.length} événement${notifications.length > 1 ? 's' : ''} enregistré${notifications.length > 1 ? 's' : ''}`}</p></div>
+        <div className="filter-set notification-filter-set" role="tablist" aria-label="Filtrer les notifications">
+          <button className={`filter-button ${filter === 'all' ? 'active' : ''}`} onClick={() => setFilter('all')} role="tab" aria-selected={filter === 'all'} data-testid="button-filter-all-notifications">Toutes <span>{notifications.length}</span></button>
+          <button className={`filter-button ${filter === 'unread' ? 'active' : ''}`} onClick={() => setFilter('unread')} role="tab" aria-selected={filter === 'unread'} data-testid="button-filter-unread-notifications">À lire <span>{unreadCount}</span></button>
+        </div>
+      </div>
+      <div className="notification-list">
+        {visibleNotifications.length === 0
+          ? <div className="notification-empty">
+            <span className="notification-empty-icon">{notifications.length === 0 ? <Bell size={23} /> : <CheckCircle2 size={23} />}</span>
+            <strong>{notifications.length === 0 ? 'Votre centre est calme' : 'Tout est consulté'}</strong>
+            <p>{notifications.length === 0 ? 'Les confirmations de paiement, transferts et contrôles de sécurité apparaîtront ici.' : 'Aucune notification non lue pour le moment.'}</p>
+            {filter === 'unread' && notifications.length > 0 && <button className="text-link" onClick={() => setFilter('all')} data-testid="button-show-all-notifications">Voir toutes les notifications <ChevronRight size={14} /></button>}
+          </div>
+          : visibleNotifications.map(item => {
+            const copy = notificationCopy(item);
+            const title = item.title.toLowerCase();
+            const Icon = title.includes('kyc') || title.includes('ident') ? FileCheck2 : title.includes('sécur') || title.includes('security') ? ShieldCheck : title.includes('échange') || title.includes('exchange') ? ArrowRightLeft : title.includes('transfert') || title.includes('transfer') ? Send : Banknote;
+            return <button key={item.id} className={`notification-row ${item.read ? 'is-read' : 'is-unread'}`} onClick={() => markRead(item.id)} data-testid={`button-notification-row-${item.id}`}>
+              <span className="notification-row-icon"><Icon size={17} /></span>
+              <span className="notification-row-content"><span className="notification-row-title">{copy.title}</span><span className="notification-row-body">{copy.body}</span><span className="notification-row-date">{notificationDateLabel(item.createdAt)}</span></span>
+              <span className={`notification-row-status ${item.read ? 'is-read' : ''}`}>{item.read ? <><Check size={12} /> Lue</> : <><span className="notification-unread-dot" /> À lire</>}</span>
+            </button>;
+          })}
+      </div>
+    </section>
+  </main>;
 }
 
 function Security() {
@@ -2306,8 +2377,22 @@ function AdminTransactions() {
 }
 
 function Notifications({ onClose }: { onClose: () => void }) {
-  const { notifications, markRead } = useStore();
-  return <div className="notification-popover card card-pad"><div className="notification-popover-header"><div><h2 className="section-title">Notifications</h2><p className="section-note">Gardez votre compte sous contrôle</p></div><button className="notification-close" onClick={onClose} aria-label="Fermer les notifications" data-testid="button-close-notifications"><X size={15} /></button></div>{notifications.map(item => { const copy = notificationCopy(item); return <button key={item.id} onClick={() => markRead(item.id)} style={{ display: 'block', width: '100%', border: 0, textAlign: 'left', background: item.read ? 'transparent' : 'hsl(39 78% 89% / .35)', borderRadius: 8, padding: 10, cursor: 'pointer', marginTop: 4 }} data-testid={`button-notification-${item.id}`}><div style={{ fontWeight: 700, fontSize: 11 }}>{copy.title}</div><div className="activity-meta">{copy.body}</div>{!item.read && <div className="eyebrow" style={{ marginTop: 6 }}>Marquer comme lue</div>}</button>; })}</div>;
+  const { notifications, markRead, markAllRead } = useStore();
+  const unreadCount = notifications.filter(item => !item.read).length;
+  const recent = [...notifications].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 4);
+  return <div className="notification-popover card" role="dialog" aria-label="Notifications">
+    <div className="notification-popover-header">
+      <div><div className="eyebrow">Centre d’activité</div><h2 className="section-title">Notifications</h2><p className="section-note">{unreadCount > 0 ? `${unreadCount} notification${unreadCount > 1 ? 's' : ''} à lire` : 'Tout est à jour'}</p></div>
+      <button className="notification-close" onClick={onClose} aria-label="Fermer les notifications" data-testid="button-close-notifications"><X size={15} /></button>
+    </div>
+    {recent.length === 0
+      ? <div className="notification-popover-empty"><span className="notification-empty-icon"><Bell size={19} /></span><strong>Aucune nouvelle activité</strong><p>Les événements de votre compte apparaîtront ici.</p></div>
+      : <div className="notification-popover-list">{recent.map(item => { const copy = notificationCopy(item); return <button key={item.id} className={`notification-popover-row ${item.read ? 'is-read' : 'is-unread'}`} onClick={() => markRead(item.id)} data-testid={`button-notification-${item.id}`}><span className="notification-popover-mark" /><span><strong>{copy.title}</strong><small>{copy.body}</small><time>{notificationDateLabel(item.createdAt)}</time></span></button>; })}</div>}
+    <div className="notification-popover-footer">
+      <Link href="/app/notifications" className="text-link" onClick={onClose} data-testid="link-view-all-notifications">Voir toutes <ChevronRight size={14} /></Link>
+      {unreadCount > 0 && <button className="notification-mark-all" onClick={markAllRead} data-testid="button-popover-mark-all"><Check size={13} /> Tout lire</button>}
+    </div>
+  </div>;
 }
 
 function RoutedApp() {
@@ -2335,6 +2420,7 @@ function RoutedApp() {
   const exchangeDecisionMutation = useDecideExchange();
   const paymentLinkMutation = useCreatePaymentLink();
   const notificationMutation = useMarkNotificationRead();
+  const markAllNotificationsMutation = useMarkAllNotificationsRead();
   const kycMutation = useSubmitKyc();
   const kycDecisionMutation = useDecideKyc();
   const store: Store = {
@@ -2345,7 +2431,13 @@ function RoutedApp() {
     exchange: ({ source, destination, amount }) => { exchangeMutation.mutate({ data: { source, destination, amount } }, { onSuccess: response => { invalidate(); toast(response.message); }, onError: () => toast('La demande d’échange n’a pas pu être créée.') }); },
     setExchangeStatus: (id, status) => { exchangeDecisionMutation.mutate({ id, data: { decision: status === 'Completed' ? 'APPROVED' : 'REJECTED' } }, { onSuccess: response => { invalidate(); toast(response.message); }, onError: () => toast('La décision d’échange n’a pas pu être enregistrée.') }); },
     addLink: data => { paymentLinkMutation.mutate({ data }, { onSuccess: response => { invalidate(); toast(`Lien de paiement ${response.slug} créé.`); }, onError: () => toast('Le lien de paiement n’a pas pu être créé.') }); },
-    markRead: id => { notificationMutation.mutate({ id }, { onSuccess: () => { invalidate(); } }); },
+    markRead: id => { notificationMutation.mutate({ id }, { onSuccess: () => { invalidate(); }, onError: () => toast('La notification n’a pas pu être marquée comme lue.') }); },
+    markAllRead: () => {
+      markAllNotificationsMutation.mutate(undefined, {
+        onSuccess: () => { invalidate(); toast('Toutes les notifications sont marquées comme lues.'); },
+        onError: () => toast('Les notifications n’ont pas pu être mises à jour.'),
+      });
+    },
     submitKyc: documents => { kycMutation.mutate({ data: { country: data?.profile.country ?? 'Togo', documents } }, { onSuccess: () => { invalidate(); toast('Documents KYC envoyés pour examen.'); }, onError: () => toast('Le dossier KYC n’a pas pu être enregistré.') }); },
     decideKyc: (id, accepted) => { kycDecisionMutation.mutate({ id, data: { decision: accepted ? 'VERIFIED' : 'REFUSED' } }, { onSuccess: response => { invalidate(); toast(response.message); }, onError: () => toast('La décision KYC n’a pas pu être enregistrée.') }); },
     signOut: () => { void signOut({ redirectUrl: basePath || '/' }); },
