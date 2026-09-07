@@ -1234,6 +1234,18 @@ data = response.json()`}</pre></div></div></div>
         <section id="coverage" className="docs-section">
           <div className="docs-section-heading"><div><span className="docs-kicker">08 · Disponibilité</span><h2>Pays & opérateurs</h2><p>La disponibilité effective dépend des pays et opérateurs activés sur votre compte Mulapay.</p></div></div>
           <div className="card card-pad docs-coverage-grid"><div><strong>Togo</strong><span>Mixx by Yas · Moov Money</span></div><div><strong>Bénin</strong><span>MTN MoMo · Moov Money</span></div><div><strong>Côte d’Ivoire</strong><span>Orange Money · MTN MoMo · Wave · Moov Money</span></div><div><strong>Burkina Faso</strong><span>Orange Money · Moov Money · Telecel</span></div><div><strong>Sénégal</strong><span>Orange Money · Wave · Wizall</span></div><div><strong>Mali</strong><span>Orange Money · Moov Money · MTN MoMo</span></div></div>
+          <div className="docs-two-column docs-align-start" style={{ marginTop: 18 }}>
+            <div className="card card-pad"><h3>Quand demander un OTP opérateur ?</h3><p className="section-note" style={{ marginTop: 8 }}>Le champ <code>operatorOtp</code> est requis pour les dépôts Orange Money dans les pays suivants :</p><div className="docs-coverage-grid" style={{ marginTop: 14 }}><div><strong>Côte d’Ivoire</strong><span>Orange Money · OTP requis</span></div><div><strong>Sénégal</strong><span>Orange Money · OTP requis</span></div><div><strong>Burkina Faso</strong><span>Orange Money · OTP requis</span></div><div><strong>Mali</strong><span>Orange Money · OTP requis</span></div></div><p className="docs-inline-note" style={{ marginTop: 14 }}><Info size={14} /> Le code est collecté auprès du client selon le parcours affiché par l’opérateur, puis envoyé dans la requête Mulapay.</p><pre className="api-code" style={{ marginTop: 14 }}>{`{
+  "operator": "Orange Money",
+  "country": "Côte d’Ivoire",
+  "operatorOtp": "123456"
+}`}</pre></div>
+            <div className="card card-pad"><h3>Wave : utiliser l’URL retournée</h3><p className="section-note" style={{ marginTop: 8 }}>Pour Wave en Côte d’Ivoire et au Sénégal, Mulapay peut retourner une URL de paiement dans <code>paymentUrl</code>.</p><div className="docs-status-list" style={{ marginTop: 14 }}><div><span className="docs-step-number">01</span><div><strong>Lire <code>paymentUrl</code></strong><p>La valeur est présente dans la réponse de création lorsque le client doit ouvrir un checkout Wave.</p></div></div><div><span className="docs-step-number">02</span><div><strong>Afficher un bouton ou un QR</strong><p>Ouvrez l’URL depuis votre interface sécurisée ou encodez-la en QR code pour un paiement sur mobile ou ordinateur.</p></div></div><div><span className="docs-step-number">03</span><div><strong>Suivre la référence</strong><p>Après la confirmation du client, interrogez <code>GET /api/v1/deposits/:reference</code> et attendez <code>Completed</code>.</p></div></div></div><pre className="api-code" style={{ marginTop: 14 }}>{`{
+  "status": "Pending",
+  "paymentUrl": "https://...",
+  "reference": "MP-XXXXXXXX"
+}`}</pre></div>
+          </div>
         </section>
 
          <section id="payment-links" className="docs-section">
