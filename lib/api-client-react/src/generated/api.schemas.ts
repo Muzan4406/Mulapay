@@ -224,11 +224,53 @@ export interface OperationResult {
   expiresAt?: string;
   fee?: number;
   netAmount?: number;
+  platformFee?: number;
+  merchantAmount?: number;
   /** @nullable */
   provider?: string | null;
+  /** @nullable */
+  providerStatus?: string | null;
   otpRequired?: boolean;
   /** @nullable */
   ussdCode?: string | null;
+}
+
+export type PaymentStatusStatus = typeof PaymentStatusStatus[keyof typeof PaymentStatusStatus];
+
+
+export const PaymentStatusStatus = {
+  Pending: 'Pending',
+  Processing: 'Processing',
+  Completed: 'Completed',
+  Failed: 'Failed',
+  Expired: 'Expired',
+  Cancelled: 'Cancelled',
+  Reversed: 'Reversed',
+} as const;
+
+export interface PaymentStatus {
+  ok: boolean;
+  reference: string;
+  status: PaymentStatusStatus;
+  /** @nullable */
+  providerStatus?: string | null;
+  amount: number;
+  currency: string;
+  /** @nullable */
+  fee?: number | null;
+  /** @nullable */
+  netAmount?: number | null;
+  /** @nullable */
+  platformFee?: number | null;
+  /** @nullable */
+  merchantAmount?: number | null;
+  /** @nullable */
+  totalDebited?: number | null;
+  /** @nullable */
+  paymentUrl?: string | null;
+  /** @nullable */
+  expiresAt?: string | null;
+  createdAt: string;
 }
 
 export type TransferInputFeePayer = typeof TransferInputFeePayer[keyof typeof TransferInputFeePayer];
@@ -366,6 +408,26 @@ export interface MoneyOperationInput {
   feePayer?: MoneyOperationInputFeePayer;
 }
 
+export type DepositInputMethod = typeof DepositInputMethod[keyof typeof DepositInputMethod];
+
+
+export const DepositInputMethod = {
+  mobile_money: 'mobile_money',
+} as const;
+
+export interface DepositInput {
+  walletId: string;
+  /** @exclusiveMinimum 0 */
+  amount: number;
+  method: DepositInputMethod;
+  country: string;
+  operator: string;
+  /** @pattern ^\+[1-9][0-9]{7,14}$ */
+  phone: string;
+  operatorOtp?: string;
+  providerReference?: string;
+}
+
 export interface KycInput {
   country: string;
   /** @minItems 1 */
@@ -457,4 +519,19 @@ export type UnauthorizedResponse = Error;
  * Invalid request
  */
 export type BadRequestResponse = Error;
+
+/**
+ * Resource not found
+ */
+export type NotFoundResponse = Error;
+
+/**
+ * Payment provider unavailable or not configured
+ */
+export type ProviderUnavailableResponse = Error;
+
+/**
+ * Stable unique key for one payment attempt. Reuse it only when safely retrying the same request.
+ */
+export type IdempotencyKeyParameter = string;
 

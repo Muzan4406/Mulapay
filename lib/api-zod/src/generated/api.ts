@@ -136,7 +136,10 @@ export const CreateTransferResponse = zod.object({
   "expiresAt": zod.coerce.date().optional(),
   "fee": zod.number().optional(),
   "netAmount": zod.number().optional(),
+  "platformFee": zod.number().optional(),
+  "merchantAmount": zod.number().optional(),
   "provider": zod.string().nullish(),
+  "providerStatus": zod.string().nullish(),
   "otpRequired": zod.boolean().optional(),
   "ussdCode": zod.string().nullish()
 })
@@ -164,7 +167,10 @@ export const CreateExchangeResponse = zod.object({
   "expiresAt": zod.coerce.date().optional(),
   "fee": zod.number().optional(),
   "netAmount": zod.number().optional(),
+  "platformFee": zod.number().optional(),
+  "merchantAmount": zod.number().optional(),
   "provider": zod.string().nullish(),
+  "providerStatus": zod.string().nullish(),
   "otpRequired": zod.boolean().optional(),
   "ussdCode": zod.string().nullish()
 })
@@ -191,7 +197,10 @@ export const DecideExchangeResponse = zod.object({
   "expiresAt": zod.coerce.date().optional(),
   "fee": zod.number().optional(),
   "netAmount": zod.number().optional(),
+  "platformFee": zod.number().optional(),
+  "merchantAmount": zod.number().optional(),
   "provider": zod.string().nullish(),
+  "providerStatus": zod.string().nullish(),
   "otpRequired": zod.boolean().optional(),
   "ussdCode": zod.string().nullish()
 })
@@ -320,6 +329,14 @@ export const CreatePublicPaymentParams = zod.object({
   "token": zod.coerce.string()
 })
 
+export const createPublicPaymentHeaderIdempotencyKeyMax = 128;
+
+
+
+export const CreatePublicPaymentHeader = zod.object({
+  "Idempotency-Key": zod.string().min(1).max(createPublicPaymentHeaderIdempotencyKeyMax).optional().describe('Stable unique key for one payment attempt. Reuse it only when safely retrying the same request.')
+})
+
 export const createPublicPaymentBodyAmountExclusiveMin = 0;
 
 export const createPublicPaymentBodyFullNameMin = 2;
@@ -353,9 +370,38 @@ export const CreatePublicPaymentResponse = zod.object({
   "expiresAt": zod.coerce.date().optional(),
   "fee": zod.number().optional(),
   "netAmount": zod.number().optional(),
+  "platformFee": zod.number().optional(),
+  "merchantAmount": zod.number().optional(),
   "provider": zod.string().nullish(),
+  "providerStatus": zod.string().nullish(),
   "otpRequired": zod.boolean().optional(),
   "ussdCode": zod.string().nullish()
+})
+
+
+/**
+ * @summary Gets the status of a public payment
+ */
+export const GetPublicPaymentParams = zod.object({
+  "token": zod.coerce.string(),
+  "reference": zod.coerce.string()
+})
+
+export const GetPublicPaymentResponse = zod.object({
+  "ok": zod.boolean(),
+  "reference": zod.string(),
+  "status": zod.enum(['Pending', 'Processing', 'Completed', 'Failed', 'Expired', 'Cancelled', 'Reversed']),
+  "providerStatus": zod.string().nullish(),
+  "amount": zod.number(),
+  "currency": zod.string(),
+  "fee": zod.number().nullish(),
+  "netAmount": zod.number().nullish(),
+  "platformFee": zod.number().nullish(),
+  "merchantAmount": zod.number().nullish(),
+  "totalDebited": zod.number().nullish(),
+  "paymentUrl": zod.string().nullish(),
+  "expiresAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
 })
 
 
@@ -439,29 +485,40 @@ export const DeletePaymentLinkResponse = zod.object({
   "expiresAt": zod.coerce.date().optional(),
   "fee": zod.number().optional(),
   "netAmount": zod.number().optional(),
+  "platformFee": zod.number().optional(),
+  "merchantAmount": zod.number().optional(),
   "provider": zod.string().nullish(),
+  "providerStatus": zod.string().nullish(),
   "otpRequired": zod.boolean().optional(),
   "ussdCode": zod.string().nullish()
 })
 
 
 /**
- * @summary Starts a provider-backed deposit
+ * @summary Starts a provider-backed Mobile Money payin
  */
+export const createDepositHeaderIdempotencyKeyMax = 128;
+
+
+
+export const CreateDepositHeader = zod.object({
+  "Idempotency-Key": zod.string().min(1).max(createDepositHeaderIdempotencyKeyMax).optional().describe('Stable unique key for one payment attempt. Reuse it only when safely retrying the same request.')
+})
+
 export const createDepositBodyAmountExclusiveMin = 0;
 
+export const createDepositBodyPhoneRegExp = new RegExp('^\\+[1-9][0-9]{7,14}$');
 
 
 export const CreateDepositBody = zod.object({
   "walletId": zod.string(),
   "amount": zod.number().gt(createDepositBodyAmountExclusiveMin),
-  "method": zod.enum(['mobile_money']).optional(),
-  "country": zod.string().optional(),
-  "operator": zod.string().optional(),
-  "phone": zod.string().optional(),
+  "method": zod.enum(['mobile_money']),
+  "country": zod.string(),
+  "operator": zod.string(),
+  "phone": zod.string().regex(createDepositBodyPhoneRegExp),
   "operatorOtp": zod.string().optional(),
-  "providerReference": zod.string().optional(),
-  "feePayer": zod.enum(['sender', 'recipient']).optional()
+  "providerReference": zod.string().optional()
 })
 
 export const CreateDepositResponse = zod.object({
@@ -473,9 +530,37 @@ export const CreateDepositResponse = zod.object({
   "expiresAt": zod.coerce.date().optional(),
   "fee": zod.number().optional(),
   "netAmount": zod.number().optional(),
+  "platformFee": zod.number().optional(),
+  "merchantAmount": zod.number().optional(),
   "provider": zod.string().nullish(),
+  "providerStatus": zod.string().nullish(),
   "otpRequired": zod.boolean().optional(),
   "ussdCode": zod.string().nullish()
+})
+
+
+/**
+ * @summary Gets the local status of a payin
+ */
+export const GetDepositParams = zod.object({
+  "reference": zod.coerce.string()
+})
+
+export const GetDepositResponse = zod.object({
+  "ok": zod.boolean(),
+  "reference": zod.string(),
+  "status": zod.enum(['Pending', 'Processing', 'Completed', 'Failed', 'Expired', 'Cancelled', 'Reversed']),
+  "providerStatus": zod.string().nullish(),
+  "amount": zod.number(),
+  "currency": zod.string(),
+  "fee": zod.number().nullish(),
+  "netAmount": zod.number().nullish(),
+  "platformFee": zod.number().nullish(),
+  "merchantAmount": zod.number().nullish(),
+  "totalDebited": zod.number().nullish(),
+  "paymentUrl": zod.string().nullish(),
+  "expiresAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
 })
 
 
@@ -507,7 +592,10 @@ export const CreateWithdrawalResponse = zod.object({
   "expiresAt": zod.coerce.date().optional(),
   "fee": zod.number().optional(),
   "netAmount": zod.number().optional(),
+  "platformFee": zod.number().optional(),
+  "merchantAmount": zod.number().optional(),
   "provider": zod.string().nullish(),
+  "providerStatus": zod.string().nullish(),
   "otpRequired": zod.boolean().optional(),
   "ussdCode": zod.string().nullish()
 })
@@ -529,9 +617,62 @@ export const MarkNotificationReadResponse = zod.object({
   "expiresAt": zod.coerce.date().optional(),
   "fee": zod.number().optional(),
   "netAmount": zod.number().optional(),
+  "platformFee": zod.number().optional(),
+  "merchantAmount": zod.number().optional(),
   "provider": zod.string().nullish(),
+  "providerStatus": zod.string().nullish(),
   "otpRequired": zod.boolean().optional(),
   "ussdCode": zod.string().nullish()
+})
+
+
+/**
+ * @summary Gets the local status of a withdrawal
+ */
+export const GetWithdrawalParams = zod.object({
+  "reference": zod.coerce.string()
+})
+
+export const GetWithdrawalResponse = zod.object({
+  "ok": zod.boolean(),
+  "reference": zod.string(),
+  "status": zod.enum(['Pending', 'Processing', 'Completed', 'Failed', 'Expired', 'Cancelled', 'Reversed']),
+  "providerStatus": zod.string().nullish(),
+  "amount": zod.number(),
+  "currency": zod.string(),
+  "fee": zod.number().nullish(),
+  "netAmount": zod.number().nullish(),
+  "platformFee": zod.number().nullish(),
+  "merchantAmount": zod.number().nullish(),
+  "totalDebited": zod.number().nullish(),
+  "paymentUrl": zod.string().nullish(),
+  "expiresAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Gets the status of a payment created from a payment link
+ */
+export const GetPaymentParams = zod.object({
+  "reference": zod.coerce.string()
+})
+
+export const GetPaymentResponse = zod.object({
+  "ok": zod.boolean(),
+  "reference": zod.string(),
+  "status": zod.enum(['Pending', 'Processing', 'Completed', 'Failed', 'Expired', 'Cancelled', 'Reversed']),
+  "providerStatus": zod.string().nullish(),
+  "amount": zod.number(),
+  "currency": zod.string(),
+  "fee": zod.number().nullish(),
+  "netAmount": zod.number().nullish(),
+  "platformFee": zod.number().nullish(),
+  "merchantAmount": zod.number().nullish(),
+  "totalDebited": zod.number().nullish(),
+  "paymentUrl": zod.string().nullish(),
+  "expiresAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
 })
 
 
@@ -691,7 +832,10 @@ export const DecideKycResponse = zod.object({
   "expiresAt": zod.coerce.date().optional(),
   "fee": zod.number().optional(),
   "netAmount": zod.number().optional(),
+  "platformFee": zod.number().optional(),
+  "merchantAmount": zod.number().optional(),
   "provider": zod.string().nullish(),
+  "providerStatus": zod.string().nullish(),
   "otpRequired": zod.boolean().optional(),
   "ussdCode": zod.string().nullish()
 })

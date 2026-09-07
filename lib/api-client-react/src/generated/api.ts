@@ -26,16 +26,20 @@ import type {
   BadRequestResponse,
   Bootstrap,
   DecisionInput,
+  DepositInput,
   ExchangeInput,
   HealthStatus,
   KycInput,
   KycVerification,
   MoneyOperationInput,
+  NotFoundResponse,
   OperationResult,
   PaymentLink,
   PaymentLinkInput,
   PaymentProviderRoute,
   PaymentProviderRouteInput,
+  PaymentStatus,
+  ProviderUnavailableResponse,
   PublicPaymentInput,
   PublicPaymentLink,
   Transaction,
@@ -736,6 +740,88 @@ export const useCreatePublicPayment = <TError = ErrorType<unknown>,
       return useMutation(getCreatePublicPaymentMutationOptions(options));
     }
 
+export const getGetPublicPaymentUrl = (token: string,
+    reference: string,) => {
+
+
+
+
+  return `/api/v1/public/payment-links/${token}/payments/${reference}`
+}
+
+/**
+ * @summary Gets the status of a public payment
+ */
+export const getPublicPayment = async (token: string,
+    reference: string, options?: Parameters<typeof customFetch>[1]): Promise<PaymentStatus> => {
+
+  return customFetch<PaymentStatus>(getGetPublicPaymentUrl(token,reference),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPublicPaymentQueryKey = (token: string,
+    reference: string,) => {
+    return [
+    `/api/v1/public/payment-links/${token}/payments/${reference}`
+    ] as const;
+    }
+
+
+export const getGetPublicPaymentQueryOptions = <TData = Awaited<ReturnType<typeof getPublicPayment>>, TError = ErrorType<NotFoundResponse>>(token: string,
+    reference: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPublicPayment>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPublicPaymentQueryKey(token,reference);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPublicPayment>>> = ({ signal }) => getPublicPayment(token,reference, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: token !== null && token !== undefined && reference !== null && reference !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPublicPayment>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPublicPaymentQueryResult = NonNullable<Awaited<ReturnType<typeof getPublicPayment>>>
+export type GetPublicPaymentQueryError = ErrorType<NotFoundResponse>
+
+
+/**
+ * @summary Gets the status of a public payment
+ */
+
+export function useGetPublicPayment<TData = Awaited<ReturnType<typeof getPublicPayment>>, TError = ErrorType<NotFoundResponse>>(
+ token: string,
+    reference: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPublicPayment>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPublicPaymentQueryOptions(token,reference,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getUpdatePaymentLinkUrl = (id: string,) => {
 
 
@@ -888,16 +974,16 @@ export const getCreateDepositUrl = () => {
 }
 
 /**
- * @summary Starts a provider-backed deposit
+ * @summary Starts a provider-backed Mobile Money payin
  */
-export const createDeposit = async (moneyOperationInput: MoneyOperationInput, options?: Parameters<typeof customFetch>[1]): Promise<OperationResult> => {
+export const createDeposit = async (depositInput: DepositInput, options?: Parameters<typeof customFetch>[1]): Promise<OperationResult> => {
 
   return customFetch<OperationResult>(getCreateDepositUrl(),
   {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(moneyOperationInput)
+    body: JSON.stringify(depositInput)
   }
 );}
 
@@ -905,9 +991,9 @@ export const createDeposit = async (moneyOperationInput: MoneyOperationInput, op
 
 
 
-export const getCreateDepositMutationOptions = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createDeposit>>, TError,{data: BodyType<MoneyOperationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof createDeposit>>, TError,{data: BodyType<MoneyOperationInput>}, TContext> => {
+export const getCreateDepositMutationOptions = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ProviderUnavailableResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createDeposit>>, TError,{data: BodyType<DepositInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createDeposit>>, TError,{data: BodyType<DepositInput>}, TContext> => {
 
 const mutationKey = ['createDeposit'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -919,7 +1005,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createDeposit>>, {data: BodyType<MoneyOperationInput>}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createDeposit>>, {data: BodyType<DepositInput>}> = (props) => {
           const {data} = props ?? {};
 
           return  createDeposit(data,requestOptions)
@@ -933,22 +1019,99 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type CreateDepositMutationResult = NonNullable<Awaited<ReturnType<typeof createDeposit>>>
-    export type CreateDepositMutationBody = BodyType<MoneyOperationInput>
-    export type CreateDepositMutationError = ErrorType<unknown>
+    export type CreateDepositMutationBody = BodyType<DepositInput>
+    export type CreateDepositMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ProviderUnavailableResponse>
 
     /**
- * @summary Starts a provider-backed deposit
+ * @summary Starts a provider-backed Mobile Money payin
  */
-export const useCreateDeposit = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createDeposit>>, TError,{data: BodyType<MoneyOperationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+export const useCreateDeposit = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ProviderUnavailableResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createDeposit>>, TError,{data: BodyType<DepositInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof createDeposit>>,
         TError,
-        {data: BodyType<MoneyOperationInput>},
+        {data: BodyType<DepositInput>},
         TContext
       > => {
       return useMutation(getCreateDepositMutationOptions(options));
     }
+
+export const getGetDepositUrl = (reference: string,) => {
+
+
+
+
+  return `/api/v1/deposits/${reference}`
+}
+
+/**
+ * @summary Gets the local status of a payin
+ */
+export const getDeposit = async (reference: string, options?: Parameters<typeof customFetch>[1]): Promise<PaymentStatus> => {
+
+  return customFetch<PaymentStatus>(getGetDepositUrl(reference),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDepositQueryKey = (reference: string,) => {
+    return [
+    `/api/v1/deposits/${reference}`
+    ] as const;
+    }
+
+
+export const getGetDepositQueryOptions = <TData = Awaited<ReturnType<typeof getDeposit>>, TError = ErrorType<NotFoundResponse>>(reference: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDeposit>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDepositQueryKey(reference);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDeposit>>> = ({ signal }) => getDeposit(reference, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: reference !== null && reference !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDeposit>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDepositQueryResult = NonNullable<Awaited<ReturnType<typeof getDeposit>>>
+export type GetDepositQueryError = ErrorType<NotFoundResponse>
+
+
+/**
+ * @summary Gets the local status of a payin
+ */
+
+export function useGetDeposit<TData = Awaited<ReturnType<typeof getDeposit>>, TError = ErrorType<NotFoundResponse>>(
+ reference: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDeposit>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDepositQueryOptions(reference,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getCreateWithdrawalUrl = () => {
 
@@ -1091,6 +1254,160 @@ export const useMarkNotificationRead = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getMarkNotificationReadMutationOptions(options));
     }
+
+export const getGetWithdrawalUrl = (reference: string,) => {
+
+
+
+
+  return `/api/v1/withdrawals/${reference}`
+}
+
+/**
+ * @summary Gets the local status of a withdrawal
+ */
+export const getWithdrawal = async (reference: string, options?: Parameters<typeof customFetch>[1]): Promise<PaymentStatus> => {
+
+  return customFetch<PaymentStatus>(getGetWithdrawalUrl(reference),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetWithdrawalQueryKey = (reference: string,) => {
+    return [
+    `/api/v1/withdrawals/${reference}`
+    ] as const;
+    }
+
+
+export const getGetWithdrawalQueryOptions = <TData = Awaited<ReturnType<typeof getWithdrawal>>, TError = ErrorType<NotFoundResponse>>(reference: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getWithdrawal>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetWithdrawalQueryKey(reference);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getWithdrawal>>> = ({ signal }) => getWithdrawal(reference, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: reference !== null && reference !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getWithdrawal>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetWithdrawalQueryResult = NonNullable<Awaited<ReturnType<typeof getWithdrawal>>>
+export type GetWithdrawalQueryError = ErrorType<NotFoundResponse>
+
+
+/**
+ * @summary Gets the local status of a withdrawal
+ */
+
+export function useGetWithdrawal<TData = Awaited<ReturnType<typeof getWithdrawal>>, TError = ErrorType<NotFoundResponse>>(
+ reference: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getWithdrawal>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetWithdrawalQueryOptions(reference,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetPaymentUrl = (reference: string,) => {
+
+
+
+
+  return `/api/v1/payments/${reference}`
+}
+
+/**
+ * @summary Gets the status of a payment created from a payment link
+ */
+export const getPayment = async (reference: string, options?: Parameters<typeof customFetch>[1]): Promise<PaymentStatus> => {
+
+  return customFetch<PaymentStatus>(getGetPaymentUrl(reference),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPaymentQueryKey = (reference: string,) => {
+    return [
+    `/api/v1/payments/${reference}`
+    ] as const;
+    }
+
+
+export const getGetPaymentQueryOptions = <TData = Awaited<ReturnType<typeof getPayment>>, TError = ErrorType<NotFoundResponse>>(reference: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPayment>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPaymentQueryKey(reference);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPayment>>> = ({ signal }) => getPayment(reference, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: reference !== null && reference !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPayment>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPaymentQueryResult = NonNullable<Awaited<ReturnType<typeof getPayment>>>
+export type GetPaymentQueryError = ErrorType<NotFoundResponse>
+
+
+/**
+ * @summary Gets the status of a payment created from a payment link
+ */
+
+export function useGetPayment<TData = Awaited<ReturnType<typeof getPayment>>, TError = ErrorType<NotFoundResponse>>(
+ reference: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPayment>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPaymentQueryOptions(reference,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getSubmitKycUrl = () => {
 

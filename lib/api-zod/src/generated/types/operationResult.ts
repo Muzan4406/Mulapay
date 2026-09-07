@@ -17,8 +17,12 @@ export interface OperationResult {
   expiresAt?: Date;
   fee?: number;
   netAmount?: number;
+  platformFee?: number;
+  merchantAmount?: number;
   /** @nullable */
   provider?: string | null;
+  /** @nullable */
+  providerStatus?: string | null;
   otpRequired?: boolean;
   /** @nullable */
   ussdCode?: string | null;
