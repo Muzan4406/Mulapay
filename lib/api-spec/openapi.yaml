@@ -721,6 +721,9 @@ components:
         documents:
           type: array
           items: { type: string }
+        details:
+          type: object
+          additionalProperties: { type: string }
         submittedAt: { type: string }
     Bootstrap:
       type: object
@@ -868,13 +871,16 @@ components:
           type: array
           minItems: 1
           items: { type: string }
+        details:
+          type: object
+          additionalProperties: { type: string }
     DecisionInput:
       type: object
       required: [decision]
       properties:
         decision:
           type: string
-          enum: [APPROVED, REJECTED, VERIFIED, REFUSED]
+          enum: [APPROVED, REJECTED, VERIFIED, REFUSED, REVIEW]
         reason: { type: string }
     AdminSummary:
       type: object

@@ -14,4 +14,5 @@ export const DecisionInputDecision = {
   REJECTED: 'REJECTED',
   VERIFIED: 'VERIFIED',
   REFUSED: 'REFUSED',
+  REVIEW: 'REVIEW',
 } as const;

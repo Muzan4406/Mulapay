@@ -185,6 +185,7 @@ export const kycVerifications = pgTable(
     country: text("country").notNull(),
     status: text("status").notNull().default("EN_ATTENTE"),
     documents: jsonb("documents").$type<string[]>().notNull(),
+    details: jsonb("details").$type<Record<string, string>>().notNull().default({}),
     submittedAt: timestamp("submitted_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [index("mulapay_kyc_user_idx").on(table.userId)],

@@ -104,6 +104,7 @@ export const GetBootstrapResponse = zod.object({
   "country": zod.string(),
   "status": zod.string(),
   "documents": zod.array(zod.string()),
+  "details": zod.record(zod.string(), zod.string()).optional(),
   "submittedAt": zod.string()
 }),
   "feePercentage": zod.number().min(getBootstrapResponseFeePercentageMin).max(getBootstrapResponseFeePercentageMax)
@@ -194,7 +195,7 @@ export const DecideExchangeParams = zod.object({
 })
 
 export const DecideExchangeBody = zod.object({
-  "decision": zod.enum(['APPROVED', 'REJECTED', 'VERIFIED', 'REFUSED']),
+  "decision": zod.enum(['APPROVED', 'REJECTED', 'VERIFIED', 'REFUSED', 'REVIEW']),
   "reason": zod.string().optional()
 })
 
@@ -718,7 +719,8 @@ export const GetPaymentResponse = zod.object({
 
 export const SubmitKycBody = zod.object({
   "country": zod.string(),
-  "documents": zod.array(zod.string()).min(1)
+  "documents": zod.array(zod.string()).min(1),
+  "details": zod.record(zod.string(), zod.string()).optional()
 })
 
 export const SubmitKycResponse = zod.object({
@@ -728,6 +730,7 @@ export const SubmitKycResponse = zod.object({
   "country": zod.string(),
   "status": zod.string(),
   "documents": zod.array(zod.string()),
+  "details": zod.record(zod.string(), zod.string()).optional(),
   "submittedAt": zod.string()
 })
 
@@ -840,6 +843,7 @@ export const ListAdminKycResponseItem = zod.object({
   "country": zod.string(),
   "status": zod.string(),
   "documents": zod.array(zod.string()),
+  "details": zod.record(zod.string(), zod.string()).optional(),
   "submittedAt": zod.string()
 })
 export const ListAdminKycResponse = zod.array(ListAdminKycResponseItem)
@@ -853,7 +857,7 @@ export const DecideKycParams = zod.object({
 })
 
 export const DecideKycBody = zod.object({
-  "decision": zod.enum(['APPROVED', 'REJECTED', 'VERIFIED', 'REFUSED']),
+  "decision": zod.enum(['APPROVED', 'REJECTED', 'VERIFIED', 'REFUSED', 'REVIEW']),
   "reason": zod.string().optional()
 })
 

@@ -1035,7 +1035,7 @@ async function bootstrap(req: Request) {
     exchanges: userExchanges.map(formatExchange),
     links: userLinks.map((link) => presentPaymentLink(req, link)),
     notifications: userNotifications.map((notification) => ({ id: notification.id, title: notification.title, body: notification.body, read: notification.read, createdAt: notification.createdAt.toISOString() })),
-    kyc: userKyc ? { id: userKyc.id, userId: userKyc.userId, name: userKyc.name, country: userKyc.country, status: userKyc.status, documents: userKyc.documents, submittedAt: userKyc.submittedAt.toISOString() } : { id: "none", userId: user.id, name: `${user.firstName} ${user.lastName}`, country: user.country, status: user.kycStatus, documents: [], submittedAt: nowLabel() },
+    kyc: userKyc ? { id: userKyc.id, userId: userKyc.userId, name: userKyc.name, country: userKyc.country, status: userKyc.status, documents: userKyc.documents, details: userKyc.details, submittedAt: userKyc.submittedAt.toISOString() } : { id: "none", userId: user.id, name: `${user.firstName} ${user.lastName}`, country: user.country, status: user.kycStatus, documents: [], details: {}, submittedAt: nowLabel() },
     feePercentage: Number(settings.feePercentage),
   });
 }
@@ -2247,7 +2247,7 @@ router.patch("/v1/notifications/read-all", async (req, res) => {
 router.post("/v1/kyc", async (req, res) => {
   const input = SubmitKycBody.parse(req.body);
   const user = await ensureUser(req);
-  const [kyc] = await db.insert(kycVerifications).values({ id: crypto.randomUUID(), userId: user.id, name: `${user.firstName} ${user.lastName}`, country: input.country, status: "EN_ATTENTE", documents: input.documents }).returning();
+  const [kyc] = await db.insert(kycVerifications).values({ id: crypto.randomUUID(), userId: user.id, name: `${user.firstName} ${user.lastName}`, country: input.country, status: "EN_ATTENTE", documents: input.documents, details: input.details ?? {} }).returning();
   await db.update(users).set({ kycStatus: "EN_ATTENTE" }).where(eq(users.id, user.id));
   await db.insert(notifications).values({
     id: crypto.randomUUID(),
@@ -2256,12 +2256,12 @@ router.post("/v1/kyc", async (req, res) => {
     body: "Votre dossier de vérification a été transmis à l’équipe conformité.",
     read: false,
   });
-  res.status(201).json({ id: kyc.id, userId: kyc.userId, name: kyc.name, country: kyc.country, status: kyc.status, documents: kyc.documents, submittedAt: kyc.submittedAt.toISOString() });
+  res.status(201).json({ id: kyc.id, userId: kyc.userId, name: kyc.name, country: kyc.country, status: kyc.status, documents: kyc.documents, details: kyc.details, submittedAt: kyc.submittedAt.toISOString() });
 });
 
 router.get("/v1/admin/summary", requireAdmin, async (_req, res) => {
   const [kyc, pendingExchanges, allTransactions] = await Promise.all([
-    db.select().from(kycVerifications).where(eq(kycVerifications.status, "EN_ATTENTE")),
+    db.select().from(kycVerifications).where(or(eq(kycVerifications.status, "EN_ATTENTE"), eq(kycVerifications.status, "A_REVOIR"))),
     db.select().from(exchanges).where(eq(exchanges.status, "PENDING_ADMIN")),
     db.select().from(transactions),
   ]);
@@ -2354,13 +2354,13 @@ router.patch("/v1/admin/settings", requireAdmin, async (req, res) => {
 
 router.get("/v1/admin/kyc", requireAdmin, async (_req, res) => {
   const result = await db.select().from(kycVerifications).orderBy(desc(kycVerifications.submittedAt));
-  res.json(result.map((item) => ({ id: item.id, userId: item.userId, name: item.name, country: item.country, status: item.status, documents: item.documents, submittedAt: item.submittedAt.toISOString() })));
+  res.json(result.map((item) => ({ id: item.id, userId: item.userId, name: item.name, country: item.country, status: item.status, documents: item.documents, details: item.details, submittedAt: item.submittedAt.toISOString() })));
 });
 
 router.patch("/v1/admin/kyc/:id/decision", requireAdmin, async (req, res) => {
   const params = DecideKycParams.parse(req.params);
   const input = DecideKycBody.parse(req.body);
-  const status = input.decision === "VERIFIED" || input.decision === "APPROVED" ? "VERIFIE" : "REFUSE";
+  const status = input.decision === "REVIEW" ? "A_REVOIR" : input.decision === "VERIFIED" || input.decision === "APPROVED" ? "VERIFIE" : "REFUSE";
   const existing = await db.query.kycVerifications.findFirst({ where: eq(kycVerifications.id, params.id) });
   if (!existing) {
     res.status(404).json({ error: "Dossier KYC introuvable." });
@@ -2368,7 +2368,13 @@ router.patch("/v1/admin/kyc/:id/decision", requireAdmin, async (req, res) => {
   }
   await db.update(kycVerifications).set({ status }).where(eq(kycVerifications.id, params.id));
   await db.update(users).set({ kycStatus: status }).where(eq(users.id, existing.userId));
-  await db.insert(notifications).values({ id: crypto.randomUUID(), userId: existing.userId, title: status === "VERIFIE" ? "KYC approuvé" : "KYC refusé", body: input.reason || "Votre dossier a été traité par l’équipe conformité.", read: false });
+  await db.insert(notifications).values({
+    id: crypto.randomUUID(),
+    userId: existing.userId,
+    title: status === "VERIFIE" ? "KYC approuvé" : status === "A_REVOIR" ? "Informations KYC requises" : "KYC refusé",
+    body: input.reason || (status === "A_REVOIR" ? "Des informations supplémentaires sont nécessaires pour terminer votre vérification." : "Votre dossier a été traité par l’équipe conformité."),
+    read: false,
+  });
   res.json(DecideKycResponse.parse({ ok: true, message: "Décision KYC enregistrée.", reference: null }));
 });
 

@@ -175,6 +175,8 @@ export interface Notification {
   createdAt: string;
 }
 
+export type KycVerificationDetails = {[key: string]: string};
+
 export interface KycVerification {
   id: string;
   userId: string;
@@ -182,6 +184,7 @@ export interface KycVerification {
   country: string;
   status: string;
   documents: string[];
+  details?: KycVerificationDetails;
   submittedAt: string;
 }
 
@@ -434,10 +437,13 @@ export interface DepositInput {
   operatorOtp?: string;
 }
 
+export type KycInputDetails = {[key: string]: string};
+
 export interface KycInput {
   country: string;
   /** @minItems 1 */
   documents: string[];
+  details?: KycInputDetails;
 }
 
 export type DecisionInputDecision = typeof DecisionInputDecision[keyof typeof DecisionInputDecision];
@@ -448,6 +454,7 @@ export const DecisionInputDecision = {
   REJECTED: 'REJECTED',
   VERIFIED: 'VERIFIED',
   REFUSED: 'REFUSED',
+  REVIEW: 'REVIEW',
 } as const;
 
 export interface DecisionInput {
