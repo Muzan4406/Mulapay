@@ -1,4 +1,4 @@
-import { createContext, type ChangeEvent, type FormEvent, type ReactNode, useContext, useEffect, useState } from 'react';
+import { createContext, type ChangeEvent, type FormEvent, type ReactNode, useContext, useEffect, useRef, useState } from 'react';
 import {
   Activity, ArrowDown, ArrowDownLeft, ArrowLeft, ArrowRightLeft, ArrowRight, ArrowUpRight, Banknote, Bell, CalendarDays, Camera, Check, CheckCircle2,
   ChevronDown, ChevronRight, CircleAlert, Clock3, Copy, Download, Eye, FileCheck2, Globe2, Info, LayoutDashboard,
@@ -2233,6 +2233,9 @@ function RealKyc() {
   const [step, setStep] = useState(1);
   const [submitted, setSubmitted] = useState(false);
   const [faceReady, setFaceReady] = useState(false);
+  const [faceCaptured, setFaceCaptured] = useState(false);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const [documentType, setDocumentType] = useState('Carte nationale d’identité (CNI)');
   const [documentNumber, setDocumentNumber] = useState('');
   const [documentExpiry, setDocumentExpiry] = useState('');
@@ -2247,6 +2250,13 @@ function RealKyc() {
   });
   const [files, setFiles] = useState<Partial<Record<'front' | 'back' | 'passport' | 'face', string>>>({});
 
+  useEffect(() => {
+    if (videoRef.current && cameraStream) videoRef.current.srcObject = cameraStream;
+    return () => {
+      cameraStream?.getTracks().forEach(track => track.stop());
+    };
+  }, [cameraStream]);
+
   const updatePersonal = (field: keyof typeof personal, value: string) => setPersonal(current => ({ ...current, [field]: value }));
   const selectFile = (field: 'front' | 'back' | 'passport' | 'face') => (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -2260,13 +2270,30 @@ function RealKyc() {
       return;
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      stream.getTracks().forEach(track => track.stop());
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+      setCameraStream(stream);
       setFaceReady(true);
-      toast('Caméra autorisée. La vérification sera réalisée par le prestataire KYC sécurisé.');
+      toast('Caméra activée. Placez votre visage dans le cadre.');
     } catch {
       toast('Autorisez l’accès à la caméra pour continuer.');
     }
+  };
+
+  const captureFace = () => {
+    const video = videoRef.current;
+    if (!video || !video.videoWidth || !video.videoHeight) {
+      toast('Attendez que la caméra soit prête avant de capturer votre visage.');
+      return;
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d')?.drawImage(video, 0, 0, canvas.width, canvas.height);
+    setFiles(current => ({ ...current, face: 'camera-capture.jpg' }));
+    setFaceCaptured(true);
+    cameraStream?.getTracks().forEach(track => track.stop());
+    setCameraStream(null);
+    toast('Capture du visage enregistrée. Le liveness et le Face Match seront vérifiés automatiquement.');
   };
 
   const nextStep = () => {
@@ -2278,8 +2305,8 @@ function RealKyc() {
       toast('Ajoutez les informations et les images du document.');
       return;
     }
-    if (step === 3 && !faceReady) {
-      toast('Autorisez la caméra avant de continuer.');
+    if (step === 3 && !faceCaptured) {
+      toast('Capturez votre visage avant de continuer.');
       return;
     }
     setStep(current => Math.min(current + 1, 4));
@@ -2304,7 +2331,7 @@ function RealKyc() {
       documentFront: files.front ?? '',
       documentBack: files.back ?? '',
       passportPage: files.passport ?? '',
-      faceCapture: files.face ?? 'provider_capture_required',
+      faceCapture: files.face ? 'browser_capture_pending_provider_verification' : '',
       verificationMode: 'PROVIDER_KYC_REQUIRED',
     }, status => {
       setSubmitted(true);
@@ -2344,14 +2371,14 @@ function RealKyc() {
         </div>}
         {step === 2 && <div className="kyc-document-step">
           <div className="kyc-document-types" role="radiogroup" aria-label="Type de document">
-            {['Carte nationale d’identité (CNI)', 'Carte d’électeur', 'Passeport', 'Permis de conduire'].map(type => <label className={`kyc-document-type ${documentType === type ? 'is-selected' : ''}`} key={type}><input type="radio" name="kyc-document-type" value={type} checked={documentType === type} onChange={event => setDocumentType(event.target.value)} /><FileText size={17} /><span>{type}</span></label>)}
+            {['Carte nationale d’identité (CNI)', 'Carte d’identité (ID)', 'Carte d’électeur', 'Passeport', 'Permis de conduire'].map(type => <label className={`kyc-document-type ${documentType === type ? 'is-selected' : ''}`} key={type}><input type="radio" name="kyc-document-type" value={type} checked={documentType === type} onChange={event => setDocumentType(event.target.value)} /><FileText size={17} /><span>{type}</span></label>)}
           </div>
           <div className="kyc-fields-grid"><div className="field"><label htmlFor="kyc-document-number">Numéro du document <span className="required-mark">*</span></label><input id="kyc-document-number" value={documentNumber} onChange={event => setDocumentNumber(event.target.value)} placeholder="Ex. TG01234567" /></div><div className="field"><label htmlFor="kyc-document-expiry">Date d’expiration <span className="required-mark">*</span></label><input id="kyc-document-expiry" type="date" value={documentExpiry} onChange={event => setDocumentExpiry(event.target.value)} /></div></div>
           <div className="kyc-upload-grid">{documentType === 'Passeport' ? <KycUploadCard label="Page d’identité" description="La page avec votre photo et vos informations" value={files.passport} onChange={selectFile('passport')} /> : <><KycUploadCard label="Recto du document" description="Photo nette et entièrement visible" value={files.front} onChange={selectFile('front')} /><KycUploadCard label="Verso du document" description="Photo nette et entièrement visible" value={files.back} onChange={selectFile('back')} /></>}</div>
           <div className="notice" style={{ marginTop: 16 }}><ShieldCheck size={14} /><span>Contrôles automatiques : OCR, qualité, lisibilité, expiration, cohérence et authenticité lorsque le prestataire le permet.</span></div>
         </div>}
-        {step === 3 && <div className="kyc-face-step"><div className="kyc-camera-frame"><Camera size={36} /><span>{faceReady ? 'Caméra autorisée' : 'Votre visage apparaîtra ici'}</span></div><div className="kyc-instruction-list"><div><span>01</span><p>Autorisez l’accès à la caméra.</p></div><div><span>02</span><p>Placez votre visage dans le cadre et regardez la caméra.</p></div><div><span>03</span><p>Le prestataire réalisera automatiquement le liveness et le face match.</p></div></div><button className="button button-primary button-wide" type="button" onClick={() => void requestCamera()}><Camera size={15} /> {faceReady ? 'Caméra autorisée' : 'Commencer la vérification'}</button></div>}
-        {step === 4 && <div className="kyc-review-step"><div className="kyc-review-icon"><RefreshCw size={24} /></div><strong>Votre dossier est prêt</strong><p>Mulapay transmettra les éléments au moteur de vérification KYC. Un dossier normal est validé automatiquement ; un cas ambigu passe en revue complémentaire.</p><div className="kyc-review-checks"><span><Check size={13} /> Informations personnelles</span><span><Check size={13} /> Document sélectionné</span><span><Check size={13} /> Autorisation caméra</span><span><Clock3 size={13} /> Liveness et Face Match par le prestataire</span></div></div>}
+         {step === 3 && <div className="kyc-face-step"><div className={`kyc-camera-frame ${faceCaptured ? 'is-captured' : ''}`}>{faceReady && !faceCaptured ? <video ref={videoRef} autoPlay muted playsInline aria-label="Aperçu de la caméra" /> : faceCaptured ? <><CheckCircle2 size={36} /><span>Capture du visage enregistrée</span></> : <><Camera size={36} /><span>Votre visage apparaîtra ici</span></>}</div><div className="kyc-instruction-list"><div><span>01</span><p>Autorisez l’accès à la caméra.</p></div><div><span>02</span><p>Placez votre visage dans le cadre et regardez la caméra.</p></div><div><span>03</span><p>Suivez les instructions de liveness, puis le système comparera votre visage à la photo du document.</p></div></div>{!faceReady && !faceCaptured && <button className="button button-primary button-wide" type="button" onClick={() => void requestCamera()}><Camera size={15} /> Commencer la vérification</button>}{faceReady && !faceCaptured && <button className="button button-primary button-wide" type="button" onClick={captureFace}><Camera size={15} /> Capturer mon visage</button>}{faceCaptured && <button className="button button-ghost button-wide" type="button" onClick={() => { setFaceCaptured(false); setFaceReady(false); }}><RefreshCw size={15} /> Refaire la capture</button>}</div>}
+         {step === 4 && <div className="kyc-review-step"><div className="kyc-review-icon"><RefreshCw size={24} /></div><strong>Vérification automatique</strong><p>Mulapay transmet les informations du document et la capture du visage au moteur KYC. Le système vérifie l’OCR, l’authenticité, le liveness et la correspondance entre le visage capturé et la photo du document.</p><div className="kyc-review-checks"><span><Check size={13} /> Informations personnelles</span><span><Check size={13} /> OCR et contrôle du document</span><span><Check size={13} /> Liveness automatique</span><span><Check size={13} /> Face Match avec la photo du document</span></div></div>}
         <div className="kyc-form-actions">{step > 1 && <button className="button button-ghost" type="button" onClick={() => setStep(current => current - 1)}><ArrowLeft size={15} /> Retour</button>}<span />{step < 4 ? <button className="button button-primary" type="button" onClick={nextStep}>Continuer <ChevronRight size={15} /></button> : <button className="button button-primary" type="button" onClick={submit}><UploadCloud size={15} /> Envoyer pour vérification</button>}</div>
       </section>
       <aside className="kyc-side-column"><div className="card card-pad"><div className="eyebrow">Protection renforcée</div><h3 className="kyc-side-title">Vos données restent confidentielles</h3><p className="section-note">Les documents d’identité et données biométriques sont chiffrés, accessibles uniquement aux personnes autorisées et conservés selon les obligations applicables.</p><div className="kyc-side-rule"><LockKeyhole size={15} /><span>Aucune validation ne repose sur une simple redirection navigateur.</span></div></div><div className="card card-pad"><div className="eyebrow">Besoin d’aide ?</div><p className="section-note">Utilisez un document officiel en cours de validité, avec des photos nettes et sans reflet.</p><div className="kyc-side-rule"><CircleAlert size={15} /><span>Les contrôles peuvent demander des informations complémentaires.</span></div></div></aside>

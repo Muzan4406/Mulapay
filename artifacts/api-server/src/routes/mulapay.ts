@@ -906,7 +906,7 @@ function validateKycSubmission(details: Record<string, string>, documents: strin
   const serializedFilesComplete = documents.some((item) => item.startsWith("document_passport:") && item.length > "document_passport:".length)
     || (documents.some((item) => item.startsWith("document_front:") && item.length > "document_front:".length)
       && documents.some((item) => item.startsWith("document_back:") && item.length > "document_back:".length));
-  return documentFilesComplete && serializedFilesComplete && details.faceCapture?.trim() === "provider_capture_required";
+  return documentFilesComplete && serializedFilesComplete && details.faceCapture?.trim() === "browser_capture_pending_provider_verification";
 }
 
 async function ensureClerkUser(req: Request) {

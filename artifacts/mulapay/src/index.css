@@ -399,6 +399,8 @@ h1,h2,h3,p { margin:0; }
 .kyc-upload-action { margin-top:auto; color:hsl(var(--primary)); font-size:10px; font-weight:700; }
 .kyc-face-step { display:grid; gap:17px; max-width:450px; margin:22px auto 0; }
 .kyc-camera-frame { display:grid; justify-items:center; align-content:center; gap:10px; min-height:225px; border:1px dashed hsl(var(--primary) / .45); border-radius:16px; background:radial-gradient(circle at 50% 42%,hsl(var(--primary) / .16),transparent 29%),hsl(var(--muted) / .45); color:hsl(var(--primary)); }
+.kyc-camera-frame video { display:block; width:100%; min-height:225px; max-height:320px; object-fit:cover; border-radius:15px; background:#101a1b; transform:scaleX(-1); }
+.kyc-camera-frame.is-captured { background:hsl(var(--primary) / .08); }
 .kyc-camera-frame span { color:hsl(var(--muted-foreground)); font-size:10px; }
 .kyc-instruction-list { display:grid; gap:8px; }
 .kyc-instruction-list > div { display:flex; align-items:center; gap:10px; padding:9px 11px; border-radius:9px; background:hsl(var(--muted) / .5); }
