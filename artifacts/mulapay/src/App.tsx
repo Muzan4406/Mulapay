@@ -2327,7 +2327,7 @@ function RealKyc() {
         </div>}
         {step === 2 && <div className="kyc-document-step">
            <div className="kyc-fields-grid"><div className="field"><label htmlFor="kyc-document-number">Numéro de la carte d’identité <span className="required-mark">*</span></label><input id="kyc-document-number" value={documentNumber} onChange={event => setDocumentNumber(event.target.value)} placeholder="Entrez le numéro de votre carte" /></div><div className="field"><label htmlFor="kyc-document-expiry">Date d’expiration de la carte <span className="required-mark">*</span></label><input id="kyc-document-expiry" type="date" value={documentExpiry} onChange={event => setDocumentExpiry(event.target.value)} /><small className="field-hint">Format : JJ/MM/AAAA</small></div></div>
-           <div className="kyc-upload-grid"><KycUploadCard label="Recto de la carte" description="Ajouter une photo lisible" value={files.front} onChange={selectFile('front')} capture="environment" /><KycUploadCard label="Verso de la carte" description="Ajouter une photo lisible" value={files.back} onChange={selectFile('back')} capture="environment" /><KycUploadCard label="Photo avec la carte en main" description="Votre visage et la carte doivent être visibles" value={files.face} onChange={selectFile('face')} capture="user" /></div>
+           <div className="kyc-upload-grid"><KycUploadCard label="Recto de la carte" description="Importer une image lisible" value={files.front} onChange={selectFile('front')} /><KycUploadCard label="Verso de la carte" description="Importer une image lisible" value={files.back} onChange={selectFile('back')} /><KycUploadCard label="Photo avec la carte en main" description="Importer une image où votre visage et la carte sont visibles" value={files.face} onChange={selectFile('face')} /></div>
            <div className="notice" style={{ marginTop: 16 }}><ShieldCheck size={14} /><span>Assurez-vous que les documents sont lisibles et que votre visage est clairement visible sur la photo avec la carte. La décision reste humaine.</span></div>
         </div>}
           {step === 3 && <div className="kyc-review-step"><div className="kyc-review-icon"><RefreshCw size={24} /></div><strong>Revue manuelle Mulapay</strong><p>Votre dossier comprend vos informations, les deux faces de la carte et votre photo avec la carte en main.</p><div className="kyc-review-checks"><span><Check size={13} /> Informations personnelles</span><span><Check size={13} /> Photo du recto</span><span><Check size={13} /> Photo du verso</span><span><Check size={13} /> Photo avec la carte en main</span></div></div>}
@@ -2338,13 +2338,13 @@ function RealKyc() {
   </main>;
 }
 
-function KycUploadCard({ label, description, value, onChange, capture }: { label: string; description: string; value?: { name: string; preview: string }; onChange: (event: ChangeEvent<HTMLInputElement>) => void; capture?: 'user' | 'environment' }) {
+function KycUploadCard({ label, description, value, onChange }: { label: string; description: string; value?: { name: string; preview: string }; onChange: (event: ChangeEvent<HTMLInputElement>) => void }) {
   return <label className={`kyc-upload-card ${value ? 'has-file' : ''}`}>
-    <input type="file" accept="image/*" capture={capture} onChange={onChange} />
+    <input type="file" accept="image/*" onChange={onChange} />
     {value ? <img className="kyc-upload-preview" src={value.preview} alt={`Aperçu — ${label}`} /> : <span className="kyc-upload-icon"><UploadCloud size={20} /></span>}
     <strong>{value ? value.name : label}</strong>
     <small>{value ? 'Image prête à être envoyée' : description}</small>
-    <span className="kyc-upload-action">{value ? 'Changer l’image' : 'Prendre une photo ou importer une image'}</span>
+    <span className="kyc-upload-action">{value ? 'Changer l’image' : 'Importer une image'}</span>
   </label>;
 }
 
