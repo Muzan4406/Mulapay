@@ -20,3 +20,9 @@ Provider-tracked AshtechPay transactions must not be locally expired by the brow
 **Why:** AshtechPay can report `success` while its callback is delayed or absent, so relying only on the browser window leaves a genuinely paid transaction stuck in `Pending`.
 
 **How to apply:** Keep such transactions pending while a provider transaction ID exists, query the authenticated provider status endpoint as a fallback, validate reference/amount/currency/net amount, and settle idempotently. Prefer the signed webhook when delivered.
+
+The authenticated Mulapay bootstrap must also run that reconciliation before returning pending deposits, then refetch wallets so a delayed provider success is reflected in both the transaction list and balance on the next app poll.
+
+**Why:** A status endpoint can confirm settlement correctly while the UI remains stale if reconciliation is only wired into detail routes.
+
+**How to apply:** Reconcile pending incoming transactions during authenticated bootstrap, preserve the stored Mulapay fee/net amount, and read wallets after reconciliation before serializing the response.

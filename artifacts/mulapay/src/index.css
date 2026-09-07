@@ -794,6 +794,72 @@ h1,h2,h3,p { margin:0; }
   .data-table td { padding:10px 6px; overflow-wrap:anywhere; word-break:break-word; white-space:normal; }
   .transaction-party { min-width:0; }
 }
+@media (max-width: 640px) {
+  .table-card { overflow:hidden; }
+  .table-scroll { overflow:visible; }
+  .data-table,
+  .data-table tbody { display:block; }
+  .data-table thead { display:none; }
+  .data-table tbody { padding:12px; }
+  .data-table tr {
+    display:grid;
+    grid-template-columns:minmax(0, 1fr) auto;
+    gap:12px 16px;
+    padding:14px;
+    border:1px solid hsl(var(--border));
+    border-radius:13px;
+    background:hsl(var(--card));
+  }
+  .data-table tr + tr { margin-top:10px; }
+  .data-table td {
+    display:flex;
+    min-width:0;
+    align-items:flex-start;
+    gap:4px;
+    padding:0;
+    border:0;
+    font-size:12px;
+    overflow:visible;
+    overflow-wrap:normal;
+    word-break:normal;
+    white-space:normal;
+  }
+  .data-table td::before {
+    display:block;
+    color:hsl(var(--muted-foreground));
+    font-family:var(--font-mono);
+    font-size:8px;
+    letter-spacing:.08em;
+    line-height:1.2;
+    text-transform:uppercase;
+  }
+  .data-table td:nth-child(1) { grid-column:1 / -1; }
+  .data-table td:nth-child(1)::before { content:'Mouvement'; }
+  .data-table td:nth-child(2)::before { content:'Wallet'; }
+  .data-table td:nth-child(3)::before { content:'Référence'; }
+  .data-table td:nth-child(4)::before { content:'Date'; }
+  .data-table td:nth-child(5),
+  .data-table td:nth-child(6) { justify-content:flex-end; text-align:right; }
+  .data-table td:nth-child(5)::before { content:'Montant'; }
+  .data-table td:nth-child(6)::before { content:'Statut'; }
+  .data-table td:nth-child(2),
+  .data-table td:nth-child(3),
+  .data-table td:nth-child(4) { flex-direction:column; }
+  .data-table td:nth-child(1) { flex-direction:column; }
+  .data-table td:nth-child(5),
+  .data-table td:nth-child(6) { flex-direction:column; align-items:flex-end; }
+  .transaction-party {
+    width:100%;
+    gap:10px;
+    align-items:center;
+  }
+  .transaction-party-name,
+  .transaction-operator { overflow-wrap:normal; word-break:normal; }
+  .transaction-operator { display:block; margin:3px 0 0; }
+  .transaction-wallet { white-space:nowrap; }
+  .transaction-reference code { overflow-wrap:anywhere; }
+  .data-table td:nth-child(5) .transaction-amount { white-space:nowrap; }
+}
 @keyframes mobile-sidebar-in { from { opacity:0; transform:translateX(-18px); } to { opacity:1; transform:translateX(0); } }
 @media (max-width: 460px) {
   .wallet-grid { grid-template-columns:1fr; }

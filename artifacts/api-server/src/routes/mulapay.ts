@@ -1279,8 +1279,7 @@ async function expireAndReconcilePending(userId: string) {
 async function bootstrap(req: Request) {
   const user = await ensureUser(req);
   await expireAndReconcilePending(user.id);
-  const [userWallets, userTransactions, userExchanges, userLinks, userNotifications, userKyc, settings] = await Promise.all([
-    db.select().from(wallets).where(eq(wallets.userId, user.id)),
+  const [userTransactions, userExchanges, userLinks, userNotifications, userKyc, settings] = await Promise.all([
     db.select().from(transactions).where(eq(transactions.userId, user.id)).orderBy(desc(transactions.createdAt)),
     user.role === "ADMIN"
       ? db.select().from(exchanges).orderBy(desc(exchanges.requestedAt))
@@ -1290,10 +1289,12 @@ async function bootstrap(req: Request) {
     db.query.kycVerifications.findFirst({ where: eq(kycVerifications.userId, user.id), orderBy: desc(kycVerifications.submittedAt) }),
     getPlatformSettings(),
   ]);
+  const reconciledTransactions = await Promise.all(userTransactions.map((transaction) => reconcileIncomingTransaction(transaction)));
+  const userWallets = await db.select().from(wallets).where(eq(wallets.userId, user.id));
   return GetBootstrapResponse.parse({
     profile: { id: user.id, firstName: user.firstName, lastName: user.lastName, email: user.email, role: user.role, country: user.country, kycStatus: user.kycStatus },
     wallets: userWallets.map(formatWallet),
-    transactions: userTransactions.map(formatTransaction),
+    transactions: reconciledTransactions.map(formatTransaction),
     exchanges: userExchanges.map(formatExchange),
     links: userLinks.map((link) => presentPaymentLink(req, link)),
     notifications: userNotifications.map((notification) => ({ id: notification.id, title: notification.title, body: notification.body, read: notification.read, createdAt: notification.createdAt.toISOString() })),
