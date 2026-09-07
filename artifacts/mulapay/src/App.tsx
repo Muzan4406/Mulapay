@@ -2232,7 +2232,7 @@ function RealKyc() {
   const label = verified ? 'Vérifié' : needsReview ? 'Informations requises' : pending ? 'En cours d’examen' : refused ? 'À reprendre' : 'Non vérifié';
   const [step, setStep] = useState(1);
   const [submitted, setSubmitted] = useState(false);
-  const [files, setFiles] = useState<{ front?: string; back?: string; face?: string }>({});
+  const [files, setFiles] = useState<{ front?: { name: string; preview: string }; back?: { name: string; preview: string }; face?: { name: string; preview: string } }>({});
   const [documentNumber, setDocumentNumber] = useState('');
   const [documentExpiry, setDocumentExpiry] = useState('');
   const [personal, setPersonal] = useState({
@@ -2245,8 +2245,16 @@ function RealKyc() {
   const updatePersonal = (field: keyof typeof personal, value: string) => setPersonal(current => ({ ...current, [field]: value }));
   const selectFile = (field: 'front' | 'back' | 'face') => (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) setFiles(current => ({ ...current, [field]: file.name }));
+    if (file) {
+      const preview = URL.createObjectURL(file);
+      setFiles(current => ({ ...current, [field]: { name: file.name, preview } }));
+    }
   };
+  useEffect(() => () => {
+    Object.values(files).forEach(file => {
+      if (file?.preview) URL.revokeObjectURL(file.preview);
+    });
+  }, [files]);
   const documentReady = Boolean(files.front && files.back && files.face);
 
   const nextStep = () => {
@@ -2266,9 +2274,9 @@ function RealKyc() {
       'document_type:Carte nationale d’identité (CNI)',
       `document_number:${documentNumber}`,
       `document_expiry:${documentExpiry}`,
-      `document_front:${files.front ?? ''}`,
-      `document_back:${files.back ?? ''}`,
-      `face_capture:${files.face ?? ''}`,
+      `document_front:${files.front?.name ?? ''}`,
+      `document_back:${files.back?.name ?? ''}`,
+      `face_capture:${files.face?.name ?? ''}`,
       `personal:${JSON.stringify(personal)}`,
     ];
     submitKyc(documents, {
@@ -2279,10 +2287,10 @@ function RealKyc() {
       documentType: 'Carte nationale d’identité (CNI)',
       documentNumber,
       documentExpiry,
-      documentFront: files.front ?? '',
-      documentBack: files.back ?? '',
+      documentFront: files.front?.name ?? '',
+      documentBack: files.back?.name ?? '',
       faceCapture: 'manual_review',
-      facePhoto: files.face ?? '',
+      facePhoto: files.face?.name ?? '',
       verificationMode: 'MANUAL_COMPLIANCE_REVIEW',
     }, status => {
       setSubmitted(true);
