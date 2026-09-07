@@ -3,7 +3,7 @@ name: Manual KYC boundary
 description: Durable KYC product boundary after removing the external biometric provider
 ---
 
-Mulapay's current KYC flow is manual: the user submits identity fields and document references, with an optional face photo for human review. Smile ID and automatic liveness, Face Match, OCR, or biometric approval are not part of the product.
+Mulapay's current KYC flow is manual: the user submits identity fields, front/back identity-card references, and a required photo holding the card for human review. Smile ID and automatic liveness, Face Match, OCR, or biometric approval are not part of the product.
 
 **Why:** The provider account was not available, and a local imitation would create a false security boundary. Only compliance staff should decide whether a dossier is verified.
 

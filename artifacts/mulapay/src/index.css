@@ -420,6 +420,16 @@ h1,h2,h3,p { margin:0; }
 .kyc-side-column .section-note { line-height:1.55; }
 .kyc-side-rule { display:flex; align-items:flex-start; gap:8px; margin-top:16px; padding-top:14px; border-top:1px solid hsl(var(--border)); color:hsl(var(--muted-foreground)); font-size:10px; line-height:1.45; }
 .kyc-side-rule svg { flex:0 0 auto; color:hsl(var(--primary)); }
+.kyc-admin-details { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-top:22px; }
+.kyc-admin-details > div { display:grid; gap:5px; padding:12px; border:1px solid hsl(var(--border)); border-radius:10px; background:hsl(var(--muted) / .25); }
+.kyc-admin-details span, .kyc-admin-document span { color:hsl(var(--muted-foreground)); font-size:10px; }
+.kyc-admin-details strong, .kyc-admin-document strong { overflow-wrap:anywhere; font-size:11px; }
+.kyc-admin-documents { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-top:12px; }
+.kyc-admin-document { display:flex; align-items:flex-start; gap:9px; min-width:0; padding:13px; border:1px solid hsl(var(--border)); border-radius:10px; }
+.kyc-admin-document svg { flex:0 0 auto; color:hsl(var(--primary)); }
+.kyc-admin-document div { display:grid; gap:5px; min-width:0; }
+.kyc-admin-decision { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:end; gap:16px; margin-top:20px; padding-top:18px; border-top:1px solid hsl(var(--border)); }
+.kyc-admin-decision .field { margin:0; }
 .kyc-confirmation { display:grid; justify-items:center; gap:12px; max-width:680px; margin:28px auto 0; text-align:center; }
 .kyc-confirmation-icon { width:62px; height:62px; display:grid; place-items:center; border-radius:20px; background:hsl(var(--primary) / .12); color:hsl(var(--primary)); }
 .kyc-confirmation h2 { margin-top:7px; font-size:24px; letter-spacing:-.06em; }
@@ -716,6 +726,8 @@ h1,h2,h3,p { margin:0; }
   .kyc-layout { grid-template-columns:1fr; }
   .kyc-document-types,.kyc-upload-grid { grid-template-columns:1fr; }
   .kyc-fields-grid { grid-template-columns:1fr; }
+  .kyc-admin-details,.kyc-admin-documents { grid-template-columns:1fr; }
+  .kyc-admin-decision { grid-template-columns:1fr; }
   .kyc-field-wide { grid-column:auto; }
   .kyc-form-heading h2 { font-size:19px; }
   .exchange-route { grid-template-columns:1fr; gap:8px; }

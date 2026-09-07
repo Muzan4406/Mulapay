@@ -896,15 +896,11 @@ function validateKycSubmission(details: Record<string, string>, documents: strin
   if (required.some((field) => typeof details[field] !== "string" || !details[field].trim())) return false;
   const expiry = new Date(`${details.documentExpiry}T23:59:59.999Z`);
   if (Number.isNaN(expiry.getTime()) || expiry <= new Date()) return false;
-  const passport = details.documentType === "Passeport";
-  const documentFilesComplete = passport
-    ? Boolean(details.passportPage?.trim())
-    : Boolean(details.documentFront?.trim() && details.documentBack?.trim());
-  const serializedFilesComplete = documents.some((item) => item.startsWith("document_passport:") && item.length > "document_passport:".length)
-    || (documents.some((item) => item.startsWith("document_front:") && item.length > "document_front:".length)
-      && documents.some((item) => item.startsWith("document_back:") && item.length > "document_back:".length));
-  const faceCapture = details.faceCapture?.trim() ?? "";
-  return documentFilesComplete && serializedFilesComplete && (!faceCapture || faceCapture === "manual_review");
+  const documentFilesComplete = Boolean(details.documentFront?.trim() && details.documentBack?.trim() && details.facePhoto?.trim());
+  const serializedFilesComplete = documents.some((item) => item.startsWith("document_front:") && item.length > "document_front:".length)
+    && documents.some((item) => item.startsWith("document_back:") && item.length > "document_back:".length)
+    && documents.some((item) => item.startsWith("face_capture:") && item.length > "face_capture:".length);
+  return documentFilesComplete && serializedFilesComplete && details.faceCapture?.trim() === "manual_review";
 }
 
 async function ensureClerkUser(req: Request) {

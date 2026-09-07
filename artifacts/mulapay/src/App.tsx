@@ -1,8 +1,8 @@
 import { createContext, type ChangeEvent, type FormEvent, type ReactNode, useContext, useEffect, useRef, useState } from 'react';
 import {
-  Activity, ArrowDown, ArrowDownLeft, ArrowLeft, ArrowRightLeft, ArrowRight, ArrowUpRight, Banknote, Bell, CalendarDays, Camera, Check, CheckCircle2,
+  Activity, ArrowDown, ArrowDownLeft, ArrowLeft, ArrowRightLeft, ArrowRight, ArrowUpRight, Banknote, Bell, CalendarDays, Check, CheckCircle2,
   ChevronDown, ChevronRight, CircleAlert, Clock3, Copy, Download, Eye, FileCheck2, Globe2, Info, LayoutDashboard,
-  FileText, Link2, ListFilter, LockKeyhole, LogOut, Menu, MoreHorizontal, Pencil, Plus, QrCode, RefreshCw, ScanFace, Search,
+  FileText, Link2, ListFilter, LockKeyhole, LogOut, Menu, MoreHorizontal, Pencil, Plus, QrCode, RefreshCw, Search,
   Send, Settings2, ShieldCheck, Trash2, UploadCloud, UserRound, WalletCards, X
 } from 'lucide-react';
 import { Link, Redirect, Route, Router as WouterRouter, Switch, useLocation } from 'wouter';
@@ -59,7 +59,7 @@ type DepositTracking = { reference: string; status: string; amount: number; curr
 type WithdrawalTracking = { reference: string; status: string; amount: number; currency: string; fee: number | null; totalDebited: number | null };
 type PublicPaymentResult = { reference: string; status: string; operator?: string; message?: string; amount?: number; currency?: string; fee?: number | null; netAmount?: number | null; platformFee?: number | null; merchantAmount?: number | null; paymentUrl?: string | null; expiresAt?: string | null };
 type Store = {
-  profile: { id: string; firstName: string; lastName: string; email: string; role: string; country: string; kycStatus: string };
+  profile: { id: string; firstName: string; lastName: string; email: string; phone?: string; address?: string; role: string; country: string; kycStatus: string };
   wallets: Wallet[]; transactions: Transaction[]; exchanges: Exchange[]; links: PaymentLink[]; notifications: Notification[];
   adminKyc: AdminKycCase[]; adminTransactions: Transaction[]; adminSummary?: AdminSummary; feePercentage: number;
   transfer: (data: { amount: number; currency: string; country: string; counterparty: string; note: string; feePayer: 'sender' }) => void;
@@ -69,7 +69,7 @@ type Store = {
   markRead: (id: string) => void;
   markAllRead: () => void;
   submitKyc: (documents: string[], details?: Record<string, string>, onSuccess?: (status: string) => void) => void;
-  decideKyc: (id: string, decision: 'VERIFIED' | 'REFUSED' | 'REVIEW') => void;
+  decideKyc: (id: string, decision: 'VERIFIED' | 'REFUSED' | 'REVIEW', reason?: string) => void;
   signOut: () => void;
   toast: (message: string) => void;
 };
@@ -2232,11 +2232,7 @@ function RealKyc() {
   const label = verified ? 'Vérifié' : needsReview ? 'Informations requises' : pending ? 'En cours d’examen' : refused ? 'À reprendre' : 'Non vérifié';
   const [step, setStep] = useState(1);
   const [submitted, setSubmitted] = useState(false);
-  const [faceCaptured, setFaceCaptured] = useState(false);
-  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const [files, setFiles] = useState<{ front?: string; back?: string; passport?: string; face?: string }>({});
-  const [documentType, setDocumentType] = useState('Carte nationale d’identité (CNI)');
+  const [files, setFiles] = useState<{ front?: string; back?: string; face?: string }>({});
   const [documentNumber, setDocumentNumber] = useState('');
   const [documentExpiry, setDocumentExpiry] = useState('');
   const [personal, setPersonal] = useState({
@@ -2245,53 +2241,13 @@ function RealKyc() {
     birthDate: '',
     nationality: profile.country,
   });
-  useEffect(() => {
-    if (videoRef.current && cameraStream) videoRef.current.srcObject = cameraStream;
-    return () => {
-      cameraStream?.getTracks().forEach(track => track.stop());
-    };
-  }, [cameraStream]);
 
   const updatePersonal = (field: keyof typeof personal, value: string) => setPersonal(current => ({ ...current, [field]: value }));
-  const selectFile = (field: 'front' | 'back' | 'passport' | 'face') => (event: ChangeEvent<HTMLInputElement>) => {
+  const selectFile = (field: 'front' | 'back' | 'face') => (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-      setFiles(current => ({ ...current, [field]: file.name }));
-      if (field === 'face') setFaceCaptured(true);
-    }
+    if (file) setFiles(current => ({ ...current, [field]: file.name }));
   };
-  const documentReady = documentType === 'Passeport' ? Boolean(files.passport) : Boolean(files.front && files.back);
-
-  const requestCamera = async () => {
-    if (!navigator.mediaDevices?.getUserMedia) {
-      toast('La caméra n’est pas disponible sur cet appareil.');
-      return;
-    }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
-      setCameraStream(stream);
-      toast('Caméra activée. Placez votre visage dans le cadre.');
-    } catch {
-      toast('Autorisez l’accès à la caméra pour continuer.');
-    }
-  };
-
-  const captureFace = () => {
-    const video = videoRef.current;
-    if (!video || !video.videoWidth || !video.videoHeight) {
-      toast('Attendez que la caméra soit prête avant de capturer votre visage.');
-      return;
-    }
-    const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    canvas.getContext('2d')?.drawImage(video, 0, 0, canvas.width, canvas.height);
-    setFiles(current => ({ ...current, face: 'camera-capture.jpg' }));
-    setFaceCaptured(true);
-    cameraStream?.getTracks().forEach(track => track.stop());
-    setCameraStream(null);
-    toast('Capture du visage enregistrée. Elle sera revue manuellement par la conformité.');
-  };
+  const documentReady = Boolean(files.front && files.back && files.face);
 
   const nextStep = () => {
     if (step === 1 && Object.values(personal).some(value => !value.trim())) {
@@ -2299,36 +2255,38 @@ function RealKyc() {
       return;
     }
     if (step === 2 && (!documentNumber.trim() || !documentExpiry || !documentReady)) {
-      toast('Ajoutez les informations et les images du document.');
+      toast('Ajoutez le numéro, la date d’expiration et les trois photos demandées.');
       return;
     }
-    setStep(current => Math.min(current + 1, 4));
+    setStep(current => Math.min(current + 1, 3));
   };
 
   const submit = () => {
     const documents = [
-      `document_type:${documentType}`,
+      'document_type:Carte nationale d’identité (CNI)',
       `document_number:${documentNumber}`,
       `document_expiry:${documentExpiry}`,
       `document_front:${files.front ?? ''}`,
       `document_back:${files.back ?? ''}`,
-      `document_passport:${files.passport ?? ''}`,
       `face_capture:${files.face ?? ''}`,
       `personal:${JSON.stringify(personal)}`,
     ];
     submitKyc(documents, {
       ...personal,
-      documentType,
+      email: profile.email,
+      phone: profile.phone ?? '',
+      address: profile.address ?? '',
+      documentType: 'Carte nationale d’identité (CNI)',
       documentNumber,
       documentExpiry,
       documentFront: files.front ?? '',
       documentBack: files.back ?? '',
-      passportPage: files.passport ?? '',
-      faceCapture: files.face ? 'manual_review' : '',
+      faceCapture: 'manual_review',
+      facePhoto: files.face ?? '',
       verificationMode: 'MANUAL_COMPLIANCE_REVIEW',
     }, status => {
       setSubmitted(true);
-      setStep(4);
+      setStep(3);
       toast(status === 'VERIFIE' || status === 'VERIFIED' ? 'Votre identité a été vérifiée.' : 'Votre dossier a été transmis à la conformité pour revue manuelle.');
     });
   };
@@ -2339,55 +2297,41 @@ function RealKyc() {
       <div className="kyc-confirmation card card-pad">
         <div className="kyc-confirmation-icon">{needsReview ? <CircleAlert size={28} /> : <CheckCircle2 size={28} />}</div>
         <div><span className="eyebrow">{verified ? 'KYC VERIFIED' : needsReview ? 'REVIEW' : 'DOSSIER TRANSMIS'}</span><h2>{verified ? 'Votre identité est confirmée' : needsReview ? 'Votre dossier nécessite un complément' : 'Votre demande est en cours de traitement'}</h2><p>{verified ? 'Vous pouvez accéder aux fonctionnalités autorisées par votre niveau de vérification.' : needsReview ? 'Consultez la notification reçue et fournissez les éléments demandés pour reprendre la vérification.' : 'Si un contrôle complémentaire est nécessaire, vous recevrez une notification dans votre centre d’activité.'}</p></div>
-         <div className="kyc-confirmation-steps"><span className="is-done">✓</span><span>Informations</span><i /><span className="is-done">✓</span><span>Document</span><i /><span className={verified ? 'is-done' : 'is-active'}>{verified ? '✓' : '3'}</span><span>Photo facultative</span><i /><span className={verified ? 'is-done' : 'is-active'}>{verified ? '✓' : '4'}</span><span>Revue manuelle</span></div>
+         <div className="kyc-confirmation-steps"><span className="is-done">✓</span><span>Informations</span><i /><span className="is-done">✓</span><span>Documents</span><i /><span className={verified ? 'is-done' : 'is-active'}>{verified ? '✓' : '3'}</span><span>Revue manuelle</span></div>
       </div>
     </main>;
   }
 
-   const steps = ['Informations', 'Document', 'Photo facultative', 'Revue manuelle'];
+   const steps = ['Informations', 'Documents', 'Revue manuelle'];
   return <main className="page-wrap">
-     <PageIntro eyebrow="Confiance et sécurité" title="Vérifiez votre identité" subtitle="Votre dossier sera examiné manuellement par l’équipe conformité Mulapay. Aucun liveness ni Face Match automatique n’est exécuté." action={<span className={`pill ${refused ? 'pill-danger' : 'pill-neutral'}`} style={{ padding: '8px 12px' }}><ShieldCheck size={13} style={{ marginRight: 5 }} /> {label}</span>} />
+      <PageIntro eyebrow="Confiance et sécurité" title="Vérifiez votre identité" subtitle="Ajoutez vos informations et vos trois photos d’identité. Votre dossier sera examiné manuellement par l’équipe conformité Mulapay." action={<span className={`pill ${refused ? 'pill-danger' : 'pill-neutral'}`} style={{ padding: '8px 12px' }}><ShieldCheck size={13} style={{ marginRight: 5 }} /> {label}</span>} />
     <div className="kyc-progress card">
       {steps.map((item, index) => <div className={`kyc-progress-step ${step > index + 1 ? 'is-done' : step === index + 1 ? 'is-active' : ''}`} key={item}><span>{step > index + 1 ? <Check size={12} /> : index + 1}</span><small>{item}</small></div>)}
     </div>
     <div className="kyc-layout">
       <section className="card card-pad kyc-form-card">
-         <div className="kyc-form-heading"><div><span className="eyebrow">Étape {Math.min(step, 4)} sur 4</span><h2>{step === 1 ? 'Vos informations personnelles' : step === 2 ? 'Ajoutez votre pièce d’identité' : step === 3 ? 'Ajoutez une photo du visage (facultatif)' : 'Envoyer pour revue manuelle'}</h2><p>{step === 1 ? 'Ces informations doivent correspondre à votre document officiel.' : step === 2 ? 'Utilisez un document valide, lisible et non expiré.' : step === 3 ? 'Une photo peut aider l’équipe conformité, mais elle n’est pas obligatoire.' : 'Relisez votre dossier avant de le transmettre à l’équipe conformité Mulapay.'}</p></div><span className="kyc-step-icon">{step === 1 ? <UserRound size={21} /> : step === 2 ? <FileText size={21} /> : step === 3 ? <ScanFace size={21} /> : <ShieldCheck size={21} />}</span></div>
+         <div className="kyc-form-heading"><div><span className="eyebrow">Étape {Math.min(step, 3)} sur 3</span><h2>{step === 1 ? 'Informations personnelles' : step === 2 ? 'Documents d’identité' : 'Envoyer pour revue manuelle'}</h2><p>{step === 1 ? 'Saisissez les informations exactement comme elles apparaissent sur votre carte.' : step === 2 ? 'Ajoutez le recto, le verso et une photo avec la carte en main.' : 'Relisez votre dossier avant de le transmettre à l’équipe conformité Mulapay.'}</p></div><span className="kyc-step-icon">{step === 1 ? <UserRound size={21} /> : step === 2 ? <FileText size={21} /> : <ShieldCheck size={21} />}</span></div>
         {step === 1 && <div className="kyc-fields-grid">
-          <div className="field"><label htmlFor="kyc-first-name">Prénom(s) <span className="required-mark">*</span></label><input id="kyc-first-name" value={personal.firstName} onChange={event => updatePersonal('firstName', event.target.value)} autoComplete="given-name" /></div>
-          <div className="field"><label htmlFor="kyc-last-name">Nom <span className="required-mark">*</span></label><input id="kyc-last-name" value={personal.lastName} onChange={event => updatePersonal('lastName', event.target.value)} autoComplete="family-name" /></div>
-          <div className="field"><label htmlFor="kyc-birth-date">Date de naissance <span className="required-mark">*</span></label><div className="input-prefix"><CalendarDays size={15} /><input id="kyc-birth-date" type="date" value={personal.birthDate} onChange={event => updatePersonal('birthDate', event.target.value)} /></div></div>
+           <div className="field"><label htmlFor="kyc-last-name">Nom <span className="required-mark">*</span></label><input id="kyc-last-name" value={personal.lastName} onChange={event => updatePersonal('lastName', event.target.value)} autoComplete="family-name" placeholder="Entrez votre nom" /></div>
+           <div className="field"><label htmlFor="kyc-first-name">Prénom <span className="required-mark">*</span></label><input id="kyc-first-name" value={personal.firstName} onChange={event => updatePersonal('firstName', event.target.value)} autoComplete="given-name" placeholder="Entrez votre prénom" /></div>
+           <div className="field"><label htmlFor="kyc-birth-date">Date de naissance <span className="required-mark">*</span></label><div className="input-prefix"><CalendarDays size={15} /><input id="kyc-birth-date" type="date" value={personal.birthDate} onChange={event => updatePersonal('birthDate', event.target.value)} /></div><small className="field-hint">Format : JJ/MM/AAAA</small></div>
           <div className="field"><label htmlFor="kyc-nationality">Nationalité <span className="required-mark">*</span></label><input id="kyc-nationality" value={personal.nationality} onChange={event => updatePersonal('nationality', event.target.value)} /></div>
         </div>}
         {step === 2 && <div className="kyc-document-step">
-          <div className="kyc-document-types" role="radiogroup" aria-label="Type de document">
-            {['Carte nationale d’identité (CNI)', 'Carte d’identité (ID)', 'Carte d’électeur', 'Passeport', 'Permis de conduire'].map(type => <label className={`kyc-document-type ${documentType === type ? 'is-selected' : ''}`} key={type}><input type="radio" name="kyc-document-type" value={type} checked={documentType === type} onChange={event => setDocumentType(event.target.value)} /><FileText size={17} /><span>{type}</span></label>)}
-          </div>
-          <div className="kyc-fields-grid"><div className="field"><label htmlFor="kyc-document-number">Numéro du document <span className="required-mark">*</span></label><input id="kyc-document-number" value={documentNumber} onChange={event => setDocumentNumber(event.target.value)} placeholder="Ex. TG01234567" /></div><div className="field"><label htmlFor="kyc-document-expiry">Date d’expiration <span className="required-mark">*</span></label><input id="kyc-document-expiry" type="date" value={documentExpiry} onChange={event => setDocumentExpiry(event.target.value)} /></div></div>
-           <div className="kyc-upload-grid"><KycUploadCard label="Recto du document" description="Photo nette ou fichier PDF" value={files.front} onChange={selectFile('front')} /><KycUploadCard label="Verso du document" description="Photo nette ou fichier PDF" value={files.back} onChange={selectFile('back')} /><KycUploadCard label="Page d’identité du passeport" description="À utiliser uniquement pour un passeport" value={files.passport} onChange={selectFile('passport')} /></div>
-           <div className="notice" style={{ marginTop: 16 }}><ShieldCheck size={14} /><span>Les images seront examinées manuellement. Mulapay ne valide jamais un simple nom de fichier et aucun contrôle biométrique automatique n’est lancé.</span></div>
+           <div className="kyc-fields-grid"><div className="field"><label htmlFor="kyc-document-number">Numéro de la carte d’identité <span className="required-mark">*</span></label><input id="kyc-document-number" value={documentNumber} onChange={event => setDocumentNumber(event.target.value)} placeholder="Entrez le numéro de votre carte" /></div><div className="field"><label htmlFor="kyc-document-expiry">Date d’expiration de la carte <span className="required-mark">*</span></label><input id="kyc-document-expiry" type="date" value={documentExpiry} onChange={event => setDocumentExpiry(event.target.value)} /><small className="field-hint">Format : JJ/MM/AAAA</small></div></div>
+           <div className="kyc-upload-grid"><KycUploadCard label="Recto de la carte" description="Ajouter une photo lisible" value={files.front} onChange={selectFile('front')} capture="environment" /><KycUploadCard label="Verso de la carte" description="Ajouter une photo lisible" value={files.back} onChange={selectFile('back')} capture="environment" /><KycUploadCard label="Photo avec la carte en main" description="Votre visage et la carte doivent être visibles" value={files.face} onChange={selectFile('face')} capture="user" /></div>
+           <div className="notice" style={{ marginTop: 16 }}><ShieldCheck size={14} /><span>Assurez-vous que les documents sont lisibles et que votre visage est clairement visible sur la photo avec la carte. La décision reste humaine.</span></div>
         </div>}
-         {step === 3 && <div className="kyc-face-step">
-           <div className={`kyc-camera-frame ${faceCaptured ? 'is-captured' : ''}`}>
-             {cameraStream ? <video ref={videoRef} autoPlay playsInline muted aria-label="Aperçu de la caméra" /> : faceCaptured ? <><CheckCircle2 size={36} /><span>Photo du visage sélectionnée pour la revue manuelle.</span></> : <><ScanFace size={36} /><span>Aucune photo du visage n’a encore été ajoutée.</span></>}
-           </div>
-           <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap' }}>
-             {!cameraStream && !faceCaptured && <button className="button button-ghost" type="button" onClick={() => void requestCamera()}><Camera size={15} /> Activer la caméra</button>}
-             {cameraStream && <button className="button button-primary" type="button" onClick={captureFace}><Camera size={15} /> Capturer la photo</button>}
-           </div>
-           <KycUploadCard label="Importer une photo du visage" description="Image nette, de face, pour aider la revue" value={files.face} onChange={selectFile('face')} />
-           <div className="kyc-instruction-list"><div><span>01</span><p>Cette photo est facultative et sera seulement examinée par la conformité.</p></div><div><span>02</span><p>Aucun liveness ni Face Match automatique ne sera exécuté.</p></div><div><span>03</span><p>Vous pouvez continuer sans ajouter de photo.</p></div></div>
-         </div>}
-         {step === 4 && <div className="kyc-review-step"><div className="kyc-review-icon"><RefreshCw size={24} /></div><strong>Revue manuelle Mulapay</strong><p>Votre dossier sera transmis à l’équipe conformité. Une décision sera prise après examen des informations et des documents fournis.</p><div className="kyc-review-checks"><span><Check size={13} /> Informations personnelles</span><span><Check size={13} /> Images du document</span><span><Check size={13} /> Photo du visage facultative</span><span><ShieldCheck size={13} /> Examen humain uniquement</span></div></div>}
-         <div className="kyc-form-actions">{step > 1 && <button className="button button-ghost" type="button" onClick={() => setStep(current => current - 1)}><ArrowLeft size={15} /> Retour</button>}<span />{step < 4 ? <button className="button button-primary" type="button" onClick={nextStep}>{step === 3 && !faceCaptured ? 'Continuer sans photo' : 'Continuer'} <ChevronRight size={15} /></button> : <button className="button button-primary" type="button" onClick={submit}><UploadCloud size={15} /> Envoyer pour revue manuelle</button>}</div>
+          {step === 3 && <div className="kyc-review-step"><div className="kyc-review-icon"><RefreshCw size={24} /></div><strong>Revue manuelle Mulapay</strong><p>Votre dossier comprend vos informations, les deux faces de la carte et votre photo avec la carte en main.</p><div className="kyc-review-checks"><span><Check size={13} /> Informations personnelles</span><span><Check size={13} /> Photo du recto</span><span><Check size={13} /> Photo du verso</span><span><Check size={13} /> Photo avec la carte en main</span></div></div>}
+          <div className="kyc-form-actions">{step > 1 && <button className="button button-ghost" type="button" onClick={() => setStep(current => current - 1)}><ArrowLeft size={15} /> Retour</button>}<span />{step < 3 ? <button className="button button-primary" type="button" onClick={nextStep}>Continuer <ChevronRight size={15} /></button> : <button className="button button-primary" type="button" onClick={submit}><UploadCloud size={15} /> Envoyer pour revue manuelle</button>}</div>
       </section>
-       <aside className="kyc-side-column"><div className="card card-pad"><div className="eyebrow">Revue manuelle</div><h3 className="kyc-side-title">Aucune décision biométrique automatique</h3><p className="section-note">L’équipe conformité Mulapay examine les informations et les documents fournis. Aucun liveness ni Face Match n’est exécuté.</p><div className="kyc-side-rule"><LockKeyhole size={15} /><span>Ne fournissez que des images nettes d’un document encore valide.</span></div></div><div className="card card-pad"><div className="eyebrow">Besoin d’aide ?</div><p className="section-note">Utilisez un document officiel en cours de validité, avec des photos nettes et sans reflet.</p><div className="kyc-side-rule"><CircleAlert size={15} /><span>La conformité peut demander des informations complémentaires après examen.</span></div></div></aside>
+        <aside className="kyc-side-column"><div className="card card-pad"><div className="eyebrow">Revue manuelle</div><h3 className="kyc-side-title">Votre identité est examinée par Mulapay</h3><p className="section-note">Aucun contrôle biométrique automatique n’est utilisé. L’équipe conformité compare manuellement vos informations, votre carte et votre photo.</p><div className="kyc-side-rule"><LockKeyhole size={15} /><span>Utilisez des photos nettes, sans reflet et avec toutes les informations visibles.</span></div></div><div className="card card-pad"><div className="eyebrow">Besoin d’aide ?</div><p className="section-note">La conformité peut demander des informations complémentaires après examen.</p><div className="kyc-side-rule"><CircleAlert size={15} /><span>Une photo avec la carte en main est obligatoire pour envoyer le dossier.</span></div></div></aside>
     </div>
   </main>;
 }
 
-function KycUploadCard({ label, description, value, onChange }: { label: string; description: string; value?: string; onChange: (event: ChangeEvent<HTMLInputElement>) => void }) {
-  return <label className={`kyc-upload-card ${value ? 'has-file' : ''}`}><input type="file" accept="image/*,.pdf" onChange={onChange} /><span className="kyc-upload-icon">{value ? <CheckCircle2 size={20} /> : <UploadCloud size={20} />}</span><strong>{value ? value : label}</strong><small>{value ? 'Document sélectionné' : description}</small><span className="kyc-upload-action">{value ? 'Changer le fichier' : 'Prendre une photo ou importer'}</span></label>;
+function KycUploadCard({ label, description, value, onChange, capture }: { label: string; description: string; value?: string; onChange: (event: ChangeEvent<HTMLInputElement>) => void; capture?: 'user' | 'environment' }) {
+  return <label className={`kyc-upload-card ${value ? 'has-file' : ''}`}><input type="file" accept="image/*" capture={capture} onChange={onChange} /><span className="kyc-upload-icon">{value ? <CheckCircle2 size={20} /> : <UploadCloud size={20} />}</span><strong>{value ? value : label}</strong><small>{value ? 'Photo sélectionnée' : description}</small><span className="kyc-upload-action">{value ? 'Changer la photo' : 'Ajouter une photo'}</span></label>;
 }
 
 function Kyc() {
@@ -2529,6 +2473,68 @@ function AdminKyc() {
   return <main className="page-wrap"><PageIntro eyebrow="Confiance et sécurité" title="Revue KYC" subtitle="Examinez les dossiers d’identité qui protègent le réseau Mulapay. Les documents restent dans le circuit de revue conformité." action={<span className="pill pill-pending"><Clock3 size={13} style={{ marginRight: 5 }} /> {adminSummary?.kycAwaiting ?? pending.length} à examiner</span>} /><div className="card card-pad" style={{ marginTop: 28 }}><div className="section-head"><div><h2 className="section-title">File de revue</h2><p className="section-note">Du plus ancien au plus récent · chaque décision est enregistrée et notifie le titulaire.</p></div><div className="filter-set"><button className="filter-button active" data-testid="button-kyc-filter-pending">En attente</button><button className="filter-button" onClick={() => toast('Les dossiers approuvés sont disponibles dans l’historique d’audit.')} data-testid="button-kyc-filter-approved">Approuvés</button></div></div><div className="case-list">{pending.map(item => <div className="case-row" key={item.id} data-testid={`row-kyc-${item.id}`}><div className="case-person"><div className="person-initial">{item.name.split(' ').map(n => n[0]).join('')}</div><div><div className="case-name">{item.name}</div><div className="case-meta">{countryLabel(item.country)} · {item.documents.join(' · ')} · envoyé le {new Date(item.submittedAt).toLocaleString('fr-FR')}</div></div></div><div className="case-actions"><button className="button button-ghost button-sm" onClick={() => toast(`Ouverture des documents de ${item.name}.`)} data-testid={`button-view-kyc-${item.id}`}><Eye size={13} /> Voir</button><button className="button button-amber button-sm" onClick={() => decide(item.id, 'REVIEW')} data-testid={`button-request-kyc-${item.id}`}><Info size={13} /> Complément</button><button className="button button-primary button-sm" onClick={() => decide(item.id, 'VERIFIED')} data-testid={`button-approve-kyc-${item.id}`}><Check size={13} /> Approuver</button><button className="button button-danger button-sm" onClick={() => decide(item.id, 'REFUSED')} data-testid={`button-reject-kyc-${item.id}`}><X size={13} /></button></div></div>)}{pending.length === 0 && <div className="empty-state"><CheckCircle2 size={25} /><strong>La file est vide</strong><p>Les nouveaux dossiers d’identité apparaîtront ici.</p></div>}</div></div></main>;
 }
 
+function AdminKycReview() {
+  const { adminKyc, adminSummary, decideKyc, toast } = useStore();
+  const pending = adminKyc.filter(item => item.status === 'EN_ATTENTE' || item.status === 'A_REVOIR');
+  const [selectedId, setSelectedId] = useState<string | null>(pending[0]?.id ?? null);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const selected = pending.find(item => item.id === selectedId) ?? null;
+  const details = selected?.details ?? {};
+  const detailValue = (key: string, fallback = 'Non renseigné') => details[key]?.trim() || fallback;
+  const documents = selected ? [
+    { label: 'Photo du recto', value: detailValue('documentFront', 'Non fournie') },
+    { label: 'Photo du verso', value: detailValue('documentBack', 'Non fournie') },
+    { label: 'Photo avec la carte en main', value: detailValue('facePhoto', 'Non fournie') },
+  ] : [];
+  const decide = (decision: 'VERIFIED' | 'REFUSED') => {
+    if (!selected) return;
+    if (decision === 'REFUSED' && !rejectionReason.trim()) {
+      toast('Indiquez le motif du rejet avant de continuer.');
+      return;
+    }
+    decideKyc(selected.id, decision, rejectionReason.trim() || undefined);
+    toast(decision === 'VERIFIED' ? 'Dossier KYC approuvé.' : 'Dossier KYC rejeté avec son motif.');
+    setRejectionReason('');
+    setSelectedId(null);
+  };
+  return <main className="page-wrap">
+    <PageIntro eyebrow="Confiance et sécurité" title="Revue KYC" subtitle="Examinez les informations et les documents avant de prendre une décision manuelle." action={<span className="pill pill-pending"><Clock3 size={13} style={{ marginRight: 5 }} /> {adminSummary?.kycAwaiting ?? pending.length} à examiner</span>} />
+    <div className="card card-pad" style={{ marginTop: 28 }}>
+      <div className="section-head"><div><h2 className="section-title">File de revue</h2><p className="section-note">Sélectionnez un dossier pour consulter les informations et décider.</p></div></div>
+      <div className="case-list">
+        {pending.map(item => <div className={`case-row ${selectedId === item.id ? 'is-selected' : ''}`} key={item.id} data-testid={`row-kyc-${item.id}`}>
+          <button type="button" className="case-person" style={{ border: 0, background: 'transparent', textAlign: 'left', padding: 0 }} onClick={() => { setSelectedId(item.id); setRejectionReason(''); }} data-testid={`button-view-kyc-${item.id}`}>
+            <div className="person-initial">{item.name.split(' ').map(n => n[0]).join('')}</div>
+            <div><div className="case-name">{item.name}</div><div className="case-meta">{countryLabel(item.country)} · envoyé le {new Date(item.submittedAt).toLocaleString('fr-FR')}</div></div>
+          </button>
+          <div className="case-actions"><button className="button button-primary button-sm" onClick={() => { setSelectedId(item.id); setRejectionReason(''); }}><Eye size={13} /> Voir le dossier</button></div>
+        </div>)}
+        {pending.length === 0 && <div className="empty-state"><CheckCircle2 size={25} /><strong>La file est vide</strong><p>Les nouveaux dossiers d’identité apparaîtront ici.</p></div>}
+      </div>
+    </div>
+    {selected && <div className="card card-pad" style={{ marginTop: 17 }}>
+      <div className="section-head"><div><div className="eyebrow">Dossier sélectionné</div><h2 className="section-title">{selected.name}</h2><p className="section-note">Soumis le {new Date(selected.submittedAt).toLocaleString('fr-FR')}</p></div><span className="pill pill-pending">En attente</span></div>
+      <div className="kyc-admin-details">
+        <div><span>Nom complet</span><strong>{detailValue('lastName')} {detailValue('firstName')}</strong></div>
+        <div><span>Date de naissance</span><strong>{detailValue('birthDate')}</strong></div>
+        <div><span>Adresse</span><strong>{detailValue('address')}</strong></div>
+        <div><span>Téléphone</span><strong>{detailValue('phone')}</strong></div>
+        <div><span>E-mail</span><strong>{detailValue('email')}</strong></div>
+        <div><span>Nationalité</span><strong>{detailValue('nationality')}</strong></div>
+        <div><span>Numéro de carte</span><strong>{detailValue('documentNumber')}</strong></div>
+        <div><span>Expiration</span><strong>{detailValue('documentExpiry')}</strong></div>
+      </div>
+      <div className="eyebrow" style={{ marginTop: 25 }}>Documents d’identité</div>
+      <div className="kyc-admin-documents">{documents.map(document => <div className="kyc-admin-document" key={document.label}><FileText size={17} /><div><strong>{document.label}</strong><span>{document.value}</span></div></div>)}</div>
+      <div className="notice" style={{ marginTop: 18 }}><Info size={14} /><span>Les références sont affichées dans le dossier. L’accès aux octets des photos sera activé avec le stockage privé des documents.</span></div>
+      <div className="kyc-admin-decision">
+        <div className="field"><label htmlFor="kyc-rejection-reason">Motif du rejet <span className="required-mark">* uniquement en cas de rejet</span></label><textarea id="kyc-rejection-reason" value={rejectionReason} onChange={event => setRejectionReason(event.target.value)} placeholder="Expliquez les éléments à corriger ou le motif du rejet." rows={3} /></div>
+        <div className="case-actions"><button className="button button-primary" type="button" onClick={() => decide('VERIFIED')}><Check size={15} /> Approuver</button><button className="button button-danger" type="button" onClick={() => decide('REFUSED')}><X size={15} /> Rejeter</button></div>
+      </div>
+    </div>}
+  </main>;
+}
+
 function AdminExchanges() {
   const { exchanges, setExchangeStatus, toast } = useStore();
   const pending = exchanges.filter(e => e.status === 'Pending review');
@@ -2575,6 +2581,7 @@ function RoutedApp() {
   const { signOut } = useClerk();
   const bootstrapQuery = useGetBootstrap({ query: { queryKey: getGetBootstrapQueryKey(), enabled: isLoaded && isSignedIn, retry: false } });
   const data = bootstrapQuery.data;
+  const clerkPhone = typeof user?.unsafeMetadata?.phone === 'string' ? user.unsafeMetadata.phone : '';
   const adminSummaryQuery = useGetAdminSummary({ query: { queryKey: getGetAdminSummaryQueryKey(), enabled: Boolean(data?.profile.role === 'ADMIN'), retry: false } });
   const adminKycQuery = useListAdminKyc({ query: { queryKey: getListAdminKycQueryKey(), enabled: Boolean(data?.profile.role === 'ADMIN'), retry: false } });
   const adminTransactionsQuery = useListAdminTransactions({ query: { queryKey: getListAdminTransactionsQueryKey(), enabled: Boolean(data?.profile.role === 'ADMIN'), retry: false } });
@@ -2594,7 +2601,7 @@ function RoutedApp() {
   const kycMutation = useSubmitKyc();
   const kycDecisionMutation = useDecideKyc();
   const store: Store = {
-    profile: { ...(data?.profile ?? { id: '', firstName: 'Utilisateur', lastName: 'Mulapay', email: '', role: 'USER', country: 'Togo', kycStatus: 'NON_VERIFIE' }), firstName: user?.firstName ?? data?.profile.firstName ?? 'Utilisateur', lastName: user?.lastName ?? data?.profile.lastName ?? 'Mulapay', email: user?.primaryEmailAddress?.emailAddress ?? data?.profile.email ?? '' },
+    profile: { ...(data?.profile ?? { id: '', firstName: 'Utilisateur', lastName: 'Mulapay', email: '', role: 'USER', country: 'Togo', kycStatus: 'NON_VERIFIE' }), firstName: user?.firstName ?? data?.profile.firstName ?? 'Utilisateur', lastName: user?.lastName ?? data?.profile.lastName ?? 'Mulapay', email: user?.primaryEmailAddress?.emailAddress ?? data?.profile.email ?? '', phone: clerkPhone, address: '' },
     wallets: data?.wallets ?? [], transactions: data?.transactions ?? [], exchanges: data?.exchanges ?? [], links: data?.links ?? [], notifications: data?.notifications ?? [],
     adminKyc: (adminKycQuery.data ?? []) as AdminKycCase[], adminTransactions: (adminTransactionsQuery.data ?? []) as Transaction[], adminSummary: adminSummaryQuery.data as AdminSummary | undefined, feePercentage: data?.feePercentage ?? 1,
     transfer: ({ amount, currency, country, counterparty, note, feePayer }) => { transferMutation.mutate({ data: { amount, currency, country, counterparty, note, feePayer } }, { onSuccess: response => { invalidate(); setTransferRequestKey(crypto.randomUUID()); toast(response.message); }, onError: () => { setTransferRequestKey(crypto.randomUUID()); toast('Transfert impossible. Vérifiez le solde disponible.'); } }); },
@@ -2609,7 +2616,7 @@ function RoutedApp() {
       });
     },
     submitKyc: (documents, details, onSuccess) => { kycMutation.mutate({ data: { country: data?.profile.country ?? 'Togo', documents, details } }, { onSuccess: response => { invalidate(); onSuccess?.(response.status); }, onError: error => { const message = error instanceof Error ? error.message : 'Le dossier KYC n’a pas pu être enregistré.'; toast(message); } }); },
-    decideKyc: (id, decision) => { kycDecisionMutation.mutate({ id, data: { decision } }, { onSuccess: response => { invalidate(); toast(response.message); }, onError: () => toast('La décision KYC n’a pas pu être enregistrée.') }); },
+    decideKyc: (id, decision, reason) => { kycDecisionMutation.mutate({ id, data: { decision, reason } }, { onSuccess: response => { invalidate(); toast(response.message); }, onError: () => toast('La décision KYC n’a pas pu être enregistrée.') }); },
     signOut: () => { void signOut({ redirectUrl: basePath || '/' }); },
     toast,
   };
@@ -2627,7 +2634,7 @@ function RoutedApp() {
           : null
   );
   const content = admin
-    ? <Switch><Route path="/admin" component={AdminOverview} /><Route path="/admin/kyc" component={AdminKyc} /><Route path="/admin/exchanges" component={AdminExchanges} /><Route path="/admin/transactions" component={AdminTransactions} /><Route component={NotFound} /></Switch>
+    ? <Switch><Route path="/admin" component={AdminOverview} /><Route path="/admin/kyc" component={AdminKycReview} /><Route path="/admin/exchanges" component={AdminExchanges} /><Route path="/admin/transactions" component={AdminTransactions} /><Route component={NotFound} /></Switch>
     : gatedPath
       ? <KycRequiredPage feature={gatedPath} />
       : <Switch><Route path="/app" component={Overview} /><Route path="/app/wallets" component={Wallets} /><Route path="/app/deposit" component={Deposit} /><Route path="/app/withdrawal" component={Withdrawal} /><Route path="/app/transactions" component={Transactions} /><Route path="/app/transfer" component={Transfer} /><Route path="/app/receive" component={Receive} /><Route path="/app/exchange" component={Exchange} /><Route path="/app/payments" component={Payments} /><Route path="/app/payment-links" component={PaymentLinks} /><Route path="/app/qr" component={QrPage} /><Route path="/app/api" component={ApiAccess} /><Route path="/app/api-docs" component={ApiPayinDocs} /><Route path="/app/documents" component={ApiPayinDocs} /><Route path="/app/notifications" component={NotificationsPage} /><Route path="/app/kyc" component={RealKyc} /><Route path="/app/security" component={Security} /><Route path="/app/support" component={Support} /><Route path="/app/settings" component={Settings} /><Route component={NotFound} /></Switch>;
