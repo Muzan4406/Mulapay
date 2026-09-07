@@ -473,14 +473,17 @@ components:
         reference: { type: string }
     Exchange:
       type: object
-      required: [id, source, destination, amount, rate, receivedAmount, status, requestedAt]
+      required: [id, source, destination, amount, rate, receivedAmount, fee, status, requestedAt]
       properties:
         id: { type: string }
+        sourceWalletId: { type: ["string", "null"] }
+        destinationWalletId: { type: ["string", "null"] }
         source: { type: string }
         destination: { type: string }
         amount: { type: number }
         rate: { type: number }
         receivedAmount: { type: number }
+        fee: { type: number }
         status: { type: string }
         requestedAt: { type: string }
     PaymentLink:

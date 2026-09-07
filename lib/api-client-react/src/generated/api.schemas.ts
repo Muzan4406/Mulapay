@@ -47,11 +47,16 @@ export interface Transaction {
 
 export interface Exchange {
   id: string;
+  /** @nullable */
+  sourceWalletId?: string | null;
+  /** @nullable */
+  destinationWalletId?: string | null;
   source: string;
   destination: string;
   amount: number;
   rate: number;
   receivedAmount: number;
+  fee: number;
   status: string;
   requestedAt: string;
 }

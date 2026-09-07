@@ -56,11 +56,14 @@ export const GetBootstrapResponse = zod.object({
 })),
   "exchanges": zod.array(zod.object({
   "id": zod.string(),
+  "sourceWalletId": zod.string().nullish(),
+  "destinationWalletId": zod.string().nullish(),
   "source": zod.string(),
   "destination": zod.string(),
   "amount": zod.number(),
   "rate": zod.number(),
   "receivedAmount": zod.number(),
+  "fee": zod.number(),
   "status": zod.string(),
   "requestedAt": zod.string()
 })),
