@@ -320,6 +320,15 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
           .where(eq(wallets.id, wallet.id));
       }
       await tx.update(transactions).set({ status: nextStatus }).where(eq(transactions.id, transaction.id));
+      if (["Failed", "Expired", "Cancelled"].includes(nextStatus)) {
+        await tx.insert(notifications).values({
+          id: crypto.randomUUID(),
+          userId: transaction.userId,
+          title: transaction.type === "Transfer" ? "Transfert non abouti" : "Retrait non abouti",
+          body: `Le ${transaction.type === "Transfer" ? "transfert" : "retrait"} de ${transaction.amount.toLocaleString("fr-FR")} ${transaction.currency} vers ${transaction.counterparty} est ${nextStatus === "Expired" ? "expiré" : nextStatus === "Cancelled" ? "annulé" : "échoué"}.`,
+          read: false,
+        });
+      }
       return { found: true };
     }
 
@@ -402,6 +411,15 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
         .where(eq(wallets.id, transaction.walletId ?? ""));
     }
     await tx.update(transactions).set({ status: nextStatus }).where(eq(transactions.id, transaction.id));
+    if (["Failed", "Expired", "Cancelled"].includes(nextStatus)) {
+      await tx.insert(notifications).values({
+        id: crypto.randomUUID(),
+        userId: transaction.userId,
+        title: transaction.type === "Payment" ? "Paiement non abouti" : "Dépôt non abouti",
+        body: `Le ${transaction.type === "Payment" ? "paiement" : "dépôt"} de ${transaction.amount.toLocaleString("fr-FR")} ${transaction.currency} n’a pas été confirmé.`,
+        read: false,
+      });
+    }
     return { found: true };
   });
 
@@ -575,6 +593,13 @@ async function submitDrimPayOutgoing(input: {
           .set({ pending: sql`GREATEST(${wallets.pending} - ${estimatedTotal}, 0)` })
           .where(eq(wallets.id, input.wallet.id));
         await tx.update(transactions).set({ status: "Failed" }).where(eq(transactions.id, localTransaction!.id));
+        await tx.insert(notifications).values({
+          id: crypto.randomUUID(),
+          userId: input.userId,
+          title: input.kind === "Transfer" ? "Transfert échoué" : "Retrait échoué",
+          body: `Votre ${input.kind === "Transfer" ? "transfert" : "retrait"} de ${input.amount.toLocaleString("fr-FR")} ${input.wallet.currency} n’a pas pu être lancé.`,
+          read: false,
+        });
       });
     }
     throw error;
@@ -679,6 +704,15 @@ async function handleAshtechPayWebhook(req: Request, res: Response) {
         .where(eq(wallets.id, transaction.walletId ?? ""));
     }
     await tx.update(transactions).set({ status: nextStatus }).where(eq(transactions.id, transaction.id));
+    if (["Failed", "Expired", "Cancelled"].includes(nextStatus)) {
+      await tx.insert(notifications).values({
+        id: crypto.randomUUID(),
+        userId: transaction.userId,
+        title: transaction.type === "Payment" ? "Paiement non abouti" : "Dépôt non abouti",
+        body: `Le ${transaction.type === "Payment" ? "paiement" : "dépôt"} de ${transaction.amount.toLocaleString("fr-FR")} ${transaction.currency} n’a pas été confirmé.`,
+        read: false,
+      });
+    }
     return { found: true, duplicate: false };
   });
 
@@ -869,6 +903,13 @@ router.post("/v1/api-keys", async (req, res) => {
     keyHash: hashApiKey(rawKey),
     scopes: DEFAULT_API_KEY_SCOPES,
   }).returning();
+  await db.insert(notifications).values({
+    id: crypto.randomUUID(),
+    userId: user.id,
+    title: "Clé API créée",
+    body: `La clé serveur « ${created.name} » a été créée. Conservez-la dans vos secrets d’environnement.`,
+    read: false,
+  });
   res.status(201).json({
     id: created.id,
     name: created.name,
@@ -889,6 +930,13 @@ router.delete("/v1/api-keys/:id", async (req, res) => {
     res.status(404).json({ error: "Clé API introuvable." });
     return;
   }
+  await db.insert(notifications).values({
+    id: crypto.randomUUID(),
+    userId: user.id,
+    title: "Clé API révoquée",
+    body: "Une clé API de votre compte a été révoquée et ne peut plus authentifier de requêtes.",
+    read: false,
+  });
   res.json({ ok: true, message: "Clé API supprimée définitivement." });
 });
 
@@ -1066,6 +1114,15 @@ router.post("/v1/transfers", async (req, res) => {
       kind: "Transfer",
       counterparty: `Transfert Mobile Money · ${recipientMatch[1]} · ${operator}`,
     });
+    if (!result.existing) {
+      await db.insert(notifications).values({
+        id: crypto.randomUUID(),
+        userId: user.id,
+        title: "Transfert initié",
+        body: `${result.amount.toLocaleString("fr-FR")} ${result.currency} sont en cours d’envoi vers ${input.counterparty}.`,
+        read: false,
+      });
+    }
     res.status(result.existing ? 200 : 201).json({
       ok: true,
       message: result.existing
@@ -1372,6 +1429,13 @@ router.post("/v1/payment-links", async (req, res) => {
     payments: 0,
   };
   const [created] = await db.insert(paymentLinks).values(link).returning();
+  await db.insert(notifications).values({
+    id: crypto.randomUUID(),
+    userId: user.id,
+    title: "Lien de paiement créé",
+    body: `Le lien « ${created.productName} » est actif et prêt à recevoir des paiements.`,
+    read: false,
+  });
   res.status(201).json(created);
 });
 
@@ -1563,6 +1627,13 @@ router.post("/v1/public/payment-links/:token/payments", async (req, res) => {
         providerOrderId: orderId,
         providerTransactionId: normalizedProvider.transactionId,
       });
+      await tx.insert(notifications).values({
+        id: crypto.randomUUID(),
+        userId: link.userId,
+        title: "Paiement initié",
+        body: `${input.amount.toLocaleString("fr-FR")} ${ownerWallet.currency} sont en attente de confirmation pour le lien « ${link.productName} ».`,
+        read: false,
+      });
     });
     res.status(201).json({ ok: true, message: normalizedProvider.paymentUrl ? "Ouvrez le lien de paiement pour confirmer." : "Confirmez le paiement sur votre téléphone.", reference: normalizedProvider.reference, status: "Pending", paymentUrl: normalizedProvider.paymentUrl, expiresAt: normalizedProvider.expiresAt?.toISOString() ?? null, fee: normalizedProvider.fee, netAmount: normalizedProvider.netAmount, platformFee: mulapayAmount.platformFee, merchantAmount: mulapayAmount.merchantAmount });
   } catch (error) {
@@ -1686,6 +1757,13 @@ router.patch("/v1/payment-links/:id", async (req, res) => {
     notifyEmail: input.notifyEmail,
     notifyWebhook: input.notifyWebhook,
   }).where(and(eq(paymentLinks.id, existing.id), eq(paymentLinks.userId, user.id))).returning();
+  await db.insert(notifications).values({
+    id: crypto.randomUUID(),
+    userId: user.id,
+    title: "Lien de paiement modifié",
+    body: `Le lien « ${updated.productName} » a été mis à jour.`,
+    read: false,
+  });
   res.json(presentPaymentLink(req, updated));
 });
 
@@ -1698,6 +1776,13 @@ router.delete("/v1/payment-links/:id", async (req, res) => {
     res.status(404).json({ error: "Lien de paiement introuvable." });
     return;
   }
+  await db.insert(notifications).values({
+    id: crypto.randomUUID(),
+    userId: user.id,
+    title: "Lien de paiement supprimé",
+    body: "Un lien de paiement de votre compte a été supprimé et ne peut plus recevoir de paiements.",
+    read: false,
+  });
   res.json({ ok: true, message: "Lien de paiement supprimé définitivement.", reference: null });
 });
 
@@ -1848,6 +1933,13 @@ router.post("/v1/deposits", async (req, res) => {
         reference: normalizedProvider.reference,
         providerOrderId: orderId,
         providerTransactionId: normalizedProvider.transactionId,
+      });
+      await tx.insert(notifications).values({
+        id: crypto.randomUUID(),
+        userId: user.id,
+        title: "Dépôt initié",
+        body: `${validatedAmount.toLocaleString("fr-FR")} ${wallet.currency} sont en attente de confirmation sur votre wallet ${wallet.country}.`,
+        read: false,
       });
     });
     res.status(201).json({
@@ -2066,6 +2158,13 @@ router.post("/v1/withdrawals", async (req, res) => {
         merchantAmount: requestedAmount,
       }).returning();
     });
+    await db.insert(notifications).values({
+      id: crypto.randomUUID(),
+      userId: user.id,
+      title: "Retrait initié",
+      body: `${requestedAmount.toLocaleString("fr-FR")} ${wallet.currency} sont en cours d’envoi vers ${requestedOperator}.`,
+      read: false,
+    });
 
     const provider = await initiatePayout({
       amount: requestedAmount,
@@ -2115,6 +2214,13 @@ router.post("/v1/withdrawals", async (req, res) => {
           .set({ pending: sql`GREATEST(${wallets.pending} - ${estimatedTotal}, 0)` })
           .where(eq(wallets.id, wallet.id));
         await tx.update(transactions).set({ status: "Failed" }).where(eq(transactions.id, localTransaction!.id));
+        await tx.insert(notifications).values({
+          id: crypto.randomUUID(),
+          userId: user.id,
+          title: "Retrait échoué",
+          body: `Votre retrait de ${requestedAmount.toLocaleString("fr-FR")} ${wallet.currency} n’a pas pu être confirmé.`,
+          read: false,
+        });
       });
     }
     if (error instanceof DrimPayError) {
@@ -2143,6 +2249,13 @@ router.post("/v1/kyc", async (req, res) => {
   const user = await ensureUser(req);
   const [kyc] = await db.insert(kycVerifications).values({ id: crypto.randomUUID(), userId: user.id, name: `${user.firstName} ${user.lastName}`, country: input.country, status: "EN_ATTENTE", documents: input.documents }).returning();
   await db.update(users).set({ kycStatus: "EN_ATTENTE" }).where(eq(users.id, user.id));
+  await db.insert(notifications).values({
+    id: crypto.randomUUID(),
+    userId: user.id,
+    title: "Dossier KYC envoyé",
+    body: "Votre dossier de vérification a été transmis à l’équipe conformité.",
+    read: false,
+  });
   res.status(201).json({ id: kyc.id, userId: kyc.userId, name: kyc.name, country: kyc.country, status: kyc.status, documents: kyc.documents, submittedAt: kyc.submittedAt.toISOString() });
 });
 
