@@ -620,15 +620,16 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
       const terminal = depositStatusIsTerminal(depositTracking.status);
       const completed = depositTracking.status.toLowerCase() === 'completed';
       const failed = ['failed', 'expired', 'cancelled', 'reversed'].includes(depositTracking.status.toLowerCase());
+      const reversed = depositTracking.status.toLowerCase() === 'reversed';
       const depositNetAmount = depositTracking.merchantAmount ?? depositTracking.netAmount ?? depositTracking.amount;
       const progress = `${Math.max(0, Math.min(100, (depositSecondsLeft / 60) * 100))}%`;
       return <main className="page-wrap deposit-page">
         <div className={`card card-pad deposit-status-card ${completed ? 'is-complete' : failed ? 'is-failed' : ''}`} data-testid="deposit-status-card">
           {selectedOperator && <div className="deposit-status-provider"><img src={`${import.meta.env.BASE_URL}mobile-money/${selectedOperator.src}`} alt="" /><span><small>Opération Mobile Money</small><strong>{operator}</strong></span></div>}
           <div className="deposit-status-icon">{completed ? <CheckCircle2 size={26} /> : failed ? <CircleAlert size={26} /> : <RefreshCw size={26} className="loading-spin" />}</div>
-           <span className="deposit-status-kicker">{completed ? 'PAIEMENT CONFIRMÉ' : failed ? 'PAIEMENT NON CONFIRMÉ' : 'PAIEMENT EN COURS'}</span>
-           <h2>{completed ? 'Votre wallet est crédité' : failed ? 'La confirmation n’a pas abouti' : 'Validez sur votre téléphone'}</h2>
-           <p className="deposit-status-copy">{completed ? 'Mulapay a confirmé votre dépôt.' : failed ? 'Aucun crédit ne sera appliqué tant que le paiement n’est pas confirmé.' : 'Confirmez le paiement sur votre téléphone.'}</p>
+           <span className="deposit-status-kicker">{completed ? 'PAIEMENT APPROUVÉ' : failed ? (reversed ? 'PAIEMENT REMBOURSÉ' : 'PAIEMENT REJETÉ') : 'PAIEMENT EN COURS'}</span>
+           <h2>{completed ? 'Dépôt approuvé' : failed ? (reversed ? 'Dépôt remboursé' : 'Dépôt rejeté') : 'Validez sur votre téléphone'}</h2>
+           <p className="deposit-status-copy">{completed ? 'Mulapay a confirmé votre dépôt et votre wallet a été crédité.' : failed ? (reversed ? 'Le crédit a été annulé et le montant a été remboursé.' : 'Le paiement a été refusé. Aucun crédit ne sera appliqué à votre wallet.') : 'Confirmez le paiement sur votre téléphone.'}</p>
           <div className="deposit-status-amount">
             <small>Net après frais Mulapay</small>
             <strong>{money(depositNetAmount, depositTracking.currency)}</strong>
