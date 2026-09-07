@@ -724,8 +724,8 @@ h1,h2,h3,p { margin:0; }
   .admin-bar { width:100dvw !important; max-width:100dvw !important; min-width:0; }
   .app-shell { display:block !important; }
   .main-pane { display:block; flex:none; overflow-x:hidden; }
-  .side-rail { display:none !important; }
-  .side-rail.mobile-open { display:flex; position:fixed; z-index:30; inset:0 auto 0 0; width:min(84vw, 300px); flex-basis:auto; overflow-y:auto; box-shadow:18px 0 42px hsl(205 38% 16% / .28); animation:mobile-sidebar-in .2s ease-out both; }
+  .side-rail { display:none; }
+  .side-rail.mobile-open { display:flex !important; position:fixed; z-index:30; inset:0 auto 0 0; width:min(84vw, 300px); flex-basis:auto; overflow-y:auto; box-shadow:18px 0 42px hsl(205 38% 16% / .28); animation:mobile-sidebar-in .2s ease-out both; }
   .mobile-menu-backdrop { display:block; position:fixed; z-index:25; inset:0; width:100%; height:100%; padding:0; border:0; background:hsl(205 38% 16% / .42); cursor:pointer; }
   .mobile-top { height:62px; padding:0 17px; display:grid; grid-template-columns:40px minmax(0, 1fr); align-items:center; background:hsl(var(--sidebar)); color:hsl(var(--sidebar-foreground)); }
   .mobile-top .brand { margin:0; padding:0; }
@@ -740,6 +740,13 @@ h1,h2,h3,p { margin:0; }
   .topbar-leading { gap:10px; }
   .back-button { padding:7px 9px 7px 7px; }
   .page-wrap { padding:23px 17px 42px; }
+  .deposit-form,
+  .deposit-status-card,
+  .withdrawal-unavailable-card { width:100%; max-width:none; }
+  .form-layout,
+  .exchange-layout,
+  .payment-builder-layout,
+  .api-docs-grid { width:100%; min-width:0; }
   .dashboard-grid,.form-layout { grid-template-columns:1fr; }
   .kyc-progress { grid-template-columns:repeat(3,minmax(0,1fr)); }
   .kyc-layout { grid-template-columns:1fr; }
