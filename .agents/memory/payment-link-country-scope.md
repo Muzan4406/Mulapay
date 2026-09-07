@@ -3,8 +3,8 @@ name: Payment link country scope
 description: Country restriction behavior for wallet-specific public payment links.
 ---
 
-When a payment link is attached to a specific wallet, that wallet’s country is the only allowed payer country. The public form must filter to that country, and the public payment endpoint must reject any other country.
+Payment links support either all available countries or an explicit allowlist of one or more country codes. A single-country link may remain attached to that wallet; multi-country links route each payment to the matching local wallet. The public form must filter to the allowlist, and the public payment endpoint must reject any other country.
 
-**Why:** The link’s `walletId` is the source of truth for where funds are received; showing all regional countries can route a payer to an unintended provider or create a country/wallet mismatch.
+**Why:** The payer country determines the provider route and receiving wallet. Showing all regional countries for a restricted link can route a payer to an unintended provider or create a country/wallet mismatch.
 
-**How to apply:** Derive the public `allowedCountry` and `allowedCountryCode` from the linked wallet, initialize and filter the public form from those values, and enforce the same constraint server-side. Links without a wallet may retain the regional country list.
+**How to apply:** Persist `allowedCountryCodes` as null for all available countries or as a non-empty allowlist. Initialize and filter the public form from it, validate selected countries have active wallets in the link currency, route multi-country payments by payer country, and enforce the same constraint server-side. For legacy single-wallet links, derive the allowlist from the linked wallet.

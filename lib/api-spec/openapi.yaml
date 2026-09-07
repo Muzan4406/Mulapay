@@ -689,7 +689,7 @@ components:
         requestedAt: { type: string }
     PaymentLink:
       type: object
-      required: [id, slug, reference, productName, amount, currency, description, walletId, amountType, amountMin, amountMax, customerFields, status, expiresAt, maxPayments, afterPaymentAction, redirectUrl, notifyApp, notifyEmail, notifyWebhook, payments]
+      required: [id, slug, reference, productName, amount, currency, description, walletId, allowedCountryCodes, amountType, amountMin, amountMax, customerFields, status, expiresAt, maxPayments, afterPaymentAction, redirectUrl, notifyApp, notifyEmail, notifyWebhook, payments]
       properties:
         id: { type: string }
         slug: { type: string }
@@ -699,6 +699,9 @@ components:
         currency: { type: string }
         description: { type: string }
         walletId: { type: ["string", "null"] }
+        allowedCountryCodes:
+          type: ["array", "null"]
+          items: { type: string, minLength: 2, maxLength: 2 }
         amountType: { type: string, enum: [FIXED, CUSTOMER_CHOOSES] }
         amountMin: { type: number }
         amountMax: { type: number }
@@ -716,7 +719,7 @@ components:
         payments: { type: number }
     PublicPaymentLink:
       type: object
-      required: [slug, reference, productName, amount, currency, description, amountType, amountMin, amountMax, customerFields, status, expiresAt, maxPayments, afterPaymentAction, redirectUrl, payments]
+      required: [slug, reference, productName, amount, currency, description, allowedCountryCodes, amountType, amountMin, amountMax, customerFields, status, expiresAt, maxPayments, afterPaymentAction, redirectUrl, payments]
       properties:
         slug: { type: string }
         reference: { type: ["string", "null"] }
@@ -724,6 +727,9 @@ components:
         amount: { type: number }
         currency: { type: string }
         description: { type: string }
+        allowedCountryCodes:
+          type: ["array", "null"]
+          items: { type: string, minLength: 2, maxLength: 2 }
         amountType: { type: string, enum: [FIXED, CUSTOMER_CHOOSES] }
         amountMin: { type: number }
         amountMax: { type: number }
@@ -846,13 +852,16 @@ components:
         amount: { type: number, exclusiveMinimum: 0, description: "Must be an integer." }
     PaymentLinkInput:
       type: object
-      required: [currency, productName, description, walletId, amountType, amountMin, amountMax, customerFields, expiresAt, maxPayments, afterPaymentAction, redirectUrl, notifyApp, notifyEmail, notifyWebhook]
+      required: [currency, productName, description, walletId, allowedCountryCodes, amountType, amountMin, amountMax, customerFields, expiresAt, maxPayments, afterPaymentAction, redirectUrl, notifyApp, notifyEmail, notifyWebhook]
       properties:
         amount: { type: ["number", "null"], minimum: 0 }
         currency: { type: string }
         productName: { type: string, minLength: 2 }
         description: { type: string }
         walletId: { type: ["string", "null"] }
+        allowedCountryCodes:
+          type: ["array", "null"]
+          items: { type: string, minLength: 2, maxLength: 2 }
         amountType: { type: string, enum: [FIXED, CUSTOMER_CHOOSES] }
         amountMin: { type: number, minimum: 300, maximum: 500000 }
         amountMax: { type: number, minimum: 300, maximum: 500000 }

@@ -78,6 +78,7 @@ const PUBLIC_PAYMENT_MIN_AMOUNT = 300;
 const PUBLIC_PAYMENT_MAX_AMOUNT = 500_000;
 const PLATFORM_SETTINGS_ID = "global";
 const DEFAULT_FEE_PERCENTAGE = 1;
+const PAYMENT_LINK_COUNTRY_CODES = new Set(["TG", "BJ", "CI", "BF", "SN", "ML"]);
 type PaymentProvider = "DRIMPAY" | "ASHTECHPAY";
 
 function firstHeaderValue(value: string | string[] | undefined) {
@@ -105,6 +106,28 @@ function presentPaymentLink(req: Request, link: typeof paymentLinks.$inferSelect
   if (linkUrl.origin === currentOrigin) return link;
   const token = linkUrl.pathname.split("/").filter(Boolean).pop();
   return token ? { ...link, slug: `${requestOrigin(req)}/pay/${token}` } : link;
+}
+
+function normalizePaymentLinkCountryCodes(value: string[] | null | undefined) {
+  const codes = [...new Set((value ?? []).map((code) => code.trim().toUpperCase()).filter(Boolean))];
+  if (codes.length === 0) return null;
+  return codes;
+}
+
+async function validatePaymentLinkCountryCodes(userId: string, currency: string, countryCodes: string[] | null) {
+  if (!countryCodes) return null;
+  const unsupported = countryCodes.filter((code) => !PAYMENT_LINK_COUNTRY_CODES.has(code));
+  if (unsupported.length > 0) {
+    return "Un ou plusieurs pays sélectionnés ne sont pas encore disponibles pour les liens de paiement.";
+  }
+  const matchingWallets = await db
+    .select({ code: wallets.code })
+    .from(wallets)
+    .where(and(eq(wallets.userId, userId), eq(wallets.currency, currency), eq(wallets.status, "Active"), inArray(wallets.code, countryCodes)));
+  if (matchingWallets.length !== countryCodes.length) {
+    return "Chaque pays sélectionné doit disposer d’un wallet actif dans la devise du lien.";
+  }
+  return null;
 }
 
 async function getPlatformSettings() {
@@ -1639,6 +1662,7 @@ router.patch("/v1/exchanges/:id/decision", requireAdmin, async (req, res) => {
 router.post("/v1/payment-links", async (req, res) => {
   const input = CreatePaymentLinkBody.parse(req.body);
   const user = await ensureUser(req);
+  const allowedCountryCodes = normalizePaymentLinkCountryCodes(input.allowedCountryCodes);
   if (input.amountType === "FIXED" && (!input.amount || input.amount <= 0)) {
     res.status(400).json({ error: "Un montant fixe supérieur à zéro est requis." });
     return;
@@ -1675,6 +1699,11 @@ router.post("/v1/payment-links", async (req, res) => {
       return;
     }
   }
+  const countryValidationError = await validatePaymentLinkCountryCodes(user.id, input.currency, allowedCountryCodes);
+  if (countryValidationError) {
+    res.status(400).json({ error: countryValidationError });
+    return;
+  }
   const reference = `MP-LINK-${randomBytes(4).toString("hex").toUpperCase()}`;
   const link = {
     id: crypto.randomUUID(),
@@ -1686,6 +1715,7 @@ router.post("/v1/payment-links", async (req, res) => {
     currency: input.currency,
     description: input.description,
     walletId: input.walletId,
+    allowedCountryCodes,
     amountType: input.amountType,
     amountMin: input.amountType === "CUSTOMER_CHOOSES" ? input.amountMin : PUBLIC_PAYMENT_MIN_AMOUNT,
     amountMax: input.amountType === "CUSTOMER_CHOOSES" ? input.amountMax : PUBLIC_PAYMENT_MAX_AMOUNT,
@@ -1737,6 +1767,11 @@ router.get("/v1/public/payment-links/:token", async (req, res) => {
       ),
     })
     : null;
+  const allowedCountryCodes = link.allowedCountryCodes?.length
+    ? link.allowedCountryCodes
+    : allowedWallet?.code
+      ? [allowedWallet.code]
+      : null;
   res.json({
     slug: `${requestOrigin(req)}/pay/${token}`,
     reference: link.reference,
@@ -1756,6 +1791,7 @@ router.get("/v1/public/payment-links/:token", async (req, res) => {
     payments: link.payments,
     allowedCountry: allowedWallet?.country ?? null,
     allowedCountryCode: allowedWallet?.code ?? null,
+    allowedCountryCodes,
   });
 });
 
@@ -1816,8 +1852,17 @@ router.post("/v1/public/payment-links/:token/payments", async (req, res) => {
     res.status(400).json({ error: "Aucun wallet de réception actif ne correspond au pays choisi." });
     return;
   }
-  if (link.walletId && ownerWallet.code !== countryCode) {
-    res.status(400).json({ error: `Ce lien accepte uniquement les paiements depuis ${ownerWallet.country}.` });
+  const allowedCountryCodes = link.allowedCountryCodes?.length
+    ? link.allowedCountryCodes
+    : link.walletId
+      ? [ownerWallet.code]
+      : null;
+  if (allowedCountryCodes && !allowedCountryCodes.includes(countryCode)) {
+    res.status(400).json({
+      error: allowedCountryCodes.length === 1
+        ? `Ce lien accepte uniquement les paiements depuis ${ownerWallet.country}.`
+        : "Ce lien n’accepte pas les paiements depuis le pays choisi.",
+    });
     return;
   }
   const settings = await getPlatformSettings();
@@ -1994,6 +2039,7 @@ router.get("/v1/payment-links", async (req, res) => {
 router.patch("/v1/payment-links/:id", async (req, res) => {
   const input = CreatePaymentLinkBody.parse(req.body);
   const user = await ensureUser(req);
+  const allowedCountryCodes = normalizePaymentLinkCountryCodes(input.allowedCountryCodes);
   const existing = await db.query.paymentLinks.findFirst({ where: and(eq(paymentLinks.id, req.params.id), eq(paymentLinks.userId, user.id)) });
   if (!existing) {
     res.status(404).json({ error: "Lien de paiement introuvable." });
@@ -2035,12 +2081,18 @@ router.patch("/v1/payment-links/:id", async (req, res) => {
       return;
     }
   }
+  const countryValidationError = await validatePaymentLinkCountryCodes(user.id, input.currency, allowedCountryCodes);
+  if (countryValidationError) {
+    res.status(400).json({ error: countryValidationError });
+    return;
+  }
   const [updated] = await db.update(paymentLinks).set({
     productName: input.productName,
     description: input.description,
     amount: input.amount ?? 0,
     currency: input.currency,
     walletId: input.walletId,
+    allowedCountryCodes,
     amountType: input.amountType,
     amountMin: input.amountType === "CUSTOMER_CHOOSES" ? input.amountMin : PUBLIC_PAYMENT_MIN_AMOUNT,
     amountMax: input.amountType === "CUSTOMER_CHOOSES" ? input.amountMax : PUBLIC_PAYMENT_MAX_AMOUNT,

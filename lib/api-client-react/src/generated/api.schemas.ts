@@ -101,6 +101,12 @@ export interface PaymentLink {
   description: string;
   /** @nullable */
   walletId: string | null;
+  /**
+     * @nullable
+     * @items.minLength 2
+     * @items.maxLength 2
+     */
+  allowedCountryCodes: string[] | null;
   amountType: PaymentLinkAmountType;
   amountMin: number;
   amountMax: number;
@@ -153,6 +159,12 @@ export interface PublicPaymentLink {
   amount: number;
   currency: string;
   description: string;
+  /**
+     * @nullable
+     * @items.minLength 2
+     * @items.maxLength 2
+     */
+  allowedCountryCodes: string[] | null;
   amountType: PublicPaymentLinkAmountType;
   amountMin: number;
   amountMax: number;
@@ -382,6 +394,12 @@ export interface PaymentLinkInput {
   description: string;
   /** @nullable */
   walletId: string | null;
+  /**
+     * @nullable
+     * @items.minLength 2
+     * @items.maxLength 2
+     */
+  allowedCountryCodes: string[] | null;
   amountType: PaymentLinkInputAmountType;
   /**
      * @minimum 300

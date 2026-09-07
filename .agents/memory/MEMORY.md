@@ -12,4 +12,4 @@
 - [Supabase Session Pooler](supabase-session-pooler.md) — use the Node PostgreSQL client for migration URLs with special password characters; libpq URL parsing may fail.
 - [Responsive shell layout](responsive-shell-layout.md) — keep mobile shell children and tables inside the viewport; hiding document overflow alone is not enough.
 - [Wallet pending semantics](wallet-pending-semantics.md) — pending is reserved outgoing funds only; incoming deposits must not reduce displayed wallet availability.
-- [Payment link country scope](payment-link-country-scope.md) — a wallet-specific payment link exposes and accepts only that wallet’s country.
+- [Payment link country scope](payment-link-country-scope.md) — payment links support all countries or an explicit country allowlist routed to local wallets.

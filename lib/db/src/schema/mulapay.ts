@@ -146,6 +146,7 @@ export const paymentLinks = pgTable(
     currency: text("currency").notNull(),
     description: text("description").notNull(),
     walletId: text("wallet_id"),
+    allowedCountryCodes: jsonb("allowed_country_codes").$type<string[] | null>(),
     amountType: text("amount_type").notNull().default("FIXED"),
     amountMin: integer("amount_min").notNull().default(300),
     amountMax: integer("amount_max").notNull().default(500_000),

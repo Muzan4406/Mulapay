@@ -17,6 +17,12 @@ export interface PublicPaymentLink {
   amount: number;
   currency: string;
   description: string;
+  /**
+     * @nullable
+     * @items.minLength 2
+     * @items.maxLength 2
+     */
+  allowedCountryCodes: string[] | null;
   amountType: PublicPaymentLinkAmountType;
   amountMin: number;
   amountMax: number;

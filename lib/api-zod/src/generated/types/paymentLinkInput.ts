@@ -21,6 +21,12 @@ export interface PaymentLinkInput {
   description: string;
   /** @nullable */
   walletId: string | null;
+  /**
+     * @nullable
+     * @items.minLength 2
+     * @items.maxLength 2
+     */
+  allowedCountryCodes: string[] | null;
   amountType: PaymentLinkInputAmountType;
   /**
      * @minimum 300

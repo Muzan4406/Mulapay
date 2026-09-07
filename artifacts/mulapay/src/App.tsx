@@ -49,7 +49,7 @@ type Wallet = { id: string; country: string; code: string; currency: string; bal
 type Transaction = { id: string; type: string; status: string; amount: number; currency: string; country: string; counterparty: string; createdAt: string; reference: string };
 type Exchange = { id: string; sourceWalletId?: string | null; destinationWalletId?: string | null; source: string; destination: string; amount: number; rate: number; receivedAmount: number; fee: number; status: string; requestedAt: string };
 type PaymentLink = ApiPaymentLink;
-type PublicPaymentLink = Omit<PaymentLink, 'id' | 'walletId' | 'notifyApp' | 'notifyEmail' | 'notifyWebhook'> & { allowedCountry?: string | null; allowedCountryCode?: string | null };
+type PublicPaymentLink = Omit<PaymentLink, 'id' | 'walletId' | 'notifyApp' | 'notifyEmail' | 'notifyWebhook'> & { allowedCountry?: string | null; allowedCountryCode?: string | null; allowedCountryCodes?: string[] | null };
 type Notification = { id: string; title: string; body: string; read: boolean; createdAt: string };
 type ApiKey = { id: string; name: string; keyPrefix: string; scopes: string[]; lastUsedAt: string | null; revokedAt: string | null; createdAt: string };
 
@@ -1798,7 +1798,7 @@ function PaymentLinks() {
   const updatePaymentLink = useUpdatePaymentLink();
   const [productName, setProductName] = useState('');
   const [description, setDescription] = useState('');
-  const [walletId, setWalletId] = useState('all');
+  const [allowedCountryCodes, setAllowedCountryCodes] = useState<string[] | null>(null);
   const [amountType, setAmountType] = useState<'FIXED' | 'CUSTOMER_CHOOSES'>('FIXED');
   const [amount, setAmount] = useState('');
   const [amountMin, setAmountMin] = useState(String(PUBLIC_PAYMENT_MIN_AMOUNT));
@@ -1818,6 +1818,11 @@ function PaymentLinks() {
   const [copiedId, setCopiedId] = useState('');
   const [qrLink, setQrLink] = useState<PaymentLink | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const linkCountryOptions = mobileMoneyCountryOptions.filter(option => option.code !== 'NE' && wallets.some(wallet => wallet.code === option.code && wallet.status === 'Active'));
+  const selectedCountryWallets = allowedCountryCodes
+    ? wallets.filter(wallet => allowedCountryCodes.includes(wallet.code) && wallet.status === 'Active')
+    : [];
+  const linkCurrency = selectedCountryWallets[0]?.currency ?? wallets[0]?.currency ?? 'XOF';
 
   const expiryValue = () => {
     if (validity === 'never') return '';
@@ -1868,7 +1873,7 @@ function PaymentLinks() {
   const resetForm = () => {
     setProductName('');
     setDescription('');
-    setWalletId('all');
+    setAllowedCountryCodes(null);
     setAmountType('FIXED');
     setAmount('');
     setAmountMin(String(PUBLIC_PAYMENT_MIN_AMOUNT));
@@ -1890,7 +1895,8 @@ function PaymentLinks() {
     setCreatedLink(null);
     setProductName(link.productName ?? '');
     setDescription(link.description ?? '');
-    setWalletId(link.walletId ?? 'all');
+    const legacyCountryCode = link.walletId ? wallets.find(wallet => wallet.id === link.walletId)?.code : null;
+    setAllowedCountryCodes(link.allowedCountryCodes ?? (legacyCountryCode ? [legacyCountryCode] : null));
     setAmountType(link.amountType);
     setAmount(link.amountType === 'FIXED' ? String(link.amount || '') : '');
     setAmountMin(String(link.amountMin ?? PUBLIC_PAYMENT_MIN_AMOUNT));
@@ -1943,15 +1949,18 @@ function PaymentLinks() {
         if (!['http:', 'https:'].includes(url.protocol)) throw new Error('protocol');
       } catch { setFormError('Saisissez une URL de redirection valide en HTTP ou HTTPS.'); return; }
     }
-    const selectedWallet = wallets.find(wallet => wallet.id === walletId);
+    const selectedWallet = allowedCountryCodes?.length === 1
+      ? selectedCountryWallets[0]
+      : undefined;
     const data: PaymentLinkInput = {
       amount: amountType === 'FIXED' ? Number(amount) : null,
       amountMin: amountType === 'CUSTOMER_CHOOSES' ? Number(amountMin) : PUBLIC_PAYMENT_MIN_AMOUNT,
       amountMax: amountType === 'CUSTOMER_CHOOSES' ? Number(amountMax) : PUBLIC_PAYMENT_MAX_AMOUNT,
-      currency: selectedWallet?.currency ?? wallets[0]?.currency ?? 'XOF',
+      currency: linkCurrency,
       productName: cleanName,
       description: cleanDescription,
-      walletId: walletId === 'all' ? null : walletId,
+      walletId: selectedWallet?.id ?? null,
+      allowedCountryCodes,
       amountType,
       customerFields: ['full_name', 'country', 'operator', 'phone', 'email'] as PaymentLinkInput['customerFields'],
       expiresAt: expiryValue(),
@@ -2000,10 +2009,10 @@ function PaymentLinks() {
           <div className="field"><label htmlFor="link-description">Description <span>(facultatif)</span></label><textarea id="link-description" value={description} onChange={event => setDescription(event.target.value)} placeholder="Ajoutez quelques détails utiles pour votre client" data-testid="input-link-description" /></div>
         </div>
         <div className="builder-section"><div className="builder-section-title"><span className="section-index">02</span><div><h3>Montant et réception</h3><p>Choisissez la destination des fonds et le type de montant.</p></div></div>
-          <div className="field"><label htmlFor="link-wallet">Wallet de réception</label><select id="link-wallet" value={walletId} onChange={event => setWalletId(event.target.value)} data-testid="select-link-wallet"><option value="all">Tous les wallets disponibles</option>{wallets.map(wallet => <option key={wallet.id} value={wallet.id}>{countryLabel(wallet.country)} · {wallet.currency}</option>)}</select><span className="field-hint">Mulapay dirigera le paiement vers le wallet choisi.</span></div>
+          <div className="field"><label>Pays disponibles pour le paiement</label><div className="country-scope-grid"><label className={`country-scope-option ${allowedCountryCodes === null ? 'selected' : ''}`}><input type="checkbox" checked={allowedCountryCodes === null} onChange={() => setAllowedCountryCodes(null)} /><span><strong>Tous les pays disponibles</strong><small>Le paiement est dirigé vers le wallet local du client.</small></span></label>{linkCountryOptions.map(option => { const selected = allowedCountryCodes?.includes(option.code) ?? false; return <label className={`country-scope-option ${selected ? 'selected' : ''}`} key={option.code}><input type="checkbox" checked={selected} onChange={() => setAllowedCountryCodes(current => { if (current === null) return [option.code]; const next = current.includes(option.code) ? current.filter(code => code !== option.code) : [...current, option.code]; return next.length > 0 ? next : null; })} /><span><strong>{option.country}</strong><small>{wallets.find(wallet => wallet.code === option.code)?.currency ?? 'Wallet local'}</small></span></label>; })}</div><span className="field-hint">{allowedCountryCodes === null ? 'Tous les pays avec un wallet actif peuvent payer ce lien.' : `${allowedCountryCodes.length} pays sélectionné(s). Le paiement sera dirigé vers le wallet local correspondant.`}</span></div>
           <div className="choice-grid"><label className={`choice-card ${amountType === 'FIXED' ? 'selected' : ''}`}><input type="radio" name="amount-type" checked={amountType === 'FIXED'} onChange={() => setAmountType('FIXED')} /><span className="choice-radio" /><span><strong>Montant fixe</strong><small>Le client paie exactement le montant indiqué.</small></span></label><label className={`choice-card ${amountType === 'CUSTOMER_CHOOSES' ? 'selected' : ''}`}><input type="radio" name="amount-type" checked={amountType === 'CUSTOMER_CHOOSES'} onChange={() => setAmountType('CUSTOMER_CHOOSES')} /><span className="choice-radio" /><span><strong>Montant choisi par le client</strong><small>Le client saisit le montant au moment du paiement.</small></span></label></div>
-          {amountType === 'FIXED' && <div className="field amount-field"><label htmlFor="link-amount">Montant à payer <b>*</b></label><div className="input-prefix"><span>{wallets.find(wallet => wallet.id === walletId)?.currency ?? wallets[0]?.currency ?? 'XOF'}</span><input id="link-amount" type="number" min="1" step="1" value={amount} onChange={event => setAmount(event.target.value)} placeholder="0" required data-testid="input-link-amount" /></div></div>}
-          {amountType === 'CUSTOMER_CHOOSES' && <div className="builder-amount-range"><div className="field"><label htmlFor="link-amount-min">Montant minimum <b>*</b></label><div className="input-prefix"><span>{wallets.find(wallet => wallet.id === walletId)?.currency ?? wallets[0]?.currency ?? 'XOF'}</span><input id="link-amount-min" type="number" min={PUBLIC_PAYMENT_MIN_AMOUNT} max={PUBLIC_PAYMENT_MAX_AMOUNT} step="1" value={amountMin} onChange={event => setAmountMin(event.target.value)} required data-testid="input-link-amount-min" /></div></div><div className="field"><label htmlFor="link-amount-max">Montant maximum <b>*</b></label><div className="input-prefix"><span>{wallets.find(wallet => wallet.id === walletId)?.currency ?? wallets[0]?.currency ?? 'XOF'}</span><input id="link-amount-max" type="number" min={PUBLIC_PAYMENT_MIN_AMOUNT} max={PUBLIC_PAYMENT_MAX_AMOUNT} step="1" value={amountMax} onChange={event => setAmountMax(event.target.value)} required data-testid="input-link-amount-max" /></div></div><span className="field-hint">Le client pourra choisir un montant entier compris entre {PUBLIC_PAYMENT_MIN_AMOUNT.toLocaleString('fr-FR')} et {PUBLIC_PAYMENT_MAX_AMOUNT.toLocaleString('fr-FR')} {wallets.find(wallet => wallet.id === walletId)?.currency ?? wallets[0]?.currency ?? 'XOF'}.</span></div>}
+          {amountType === 'FIXED' && <div className="field amount-field"><label htmlFor="link-amount">Montant à payer <b>*</b></label><div className="input-prefix"><span>{linkCurrency}</span><input id="link-amount" type="number" min="1" step="1" value={amount} onChange={event => setAmount(event.target.value)} placeholder="0" required data-testid="input-link-amount" /></div></div>}
+          {amountType === 'CUSTOMER_CHOOSES' && <div className="builder-amount-range"><div className="field"><label htmlFor="link-amount-min">Montant minimum <b>*</b></label><div className="input-prefix"><span>{linkCurrency}</span><input id="link-amount-min" type="number" min={PUBLIC_PAYMENT_MIN_AMOUNT} max={PUBLIC_PAYMENT_MAX_AMOUNT} step="1" value={amountMin} onChange={event => setAmountMin(event.target.value)} required data-testid="input-link-amount-min" /></div></div><div className="field"><label htmlFor="link-amount-max">Montant maximum <b>*</b></label><div className="input-prefix"><span>{linkCurrency}</span><input id="link-amount-max" type="number" min={PUBLIC_PAYMENT_MIN_AMOUNT} max={PUBLIC_PAYMENT_MAX_AMOUNT} step="1" value={amountMax} onChange={event => setAmountMax(event.target.value)} required data-testid="input-link-amount-max" /></div></div><span className="field-hint">Le client pourra choisir un montant entier compris entre {PUBLIC_PAYMENT_MIN_AMOUNT.toLocaleString('fr-FR')} et {PUBLIC_PAYMENT_MAX_AMOUNT.toLocaleString('fr-FR')} {linkCurrency}.</span></div>}
         </div>
          <div className="builder-section"><div className="builder-section-title"><span className="section-index">03</span><div><h3>Règles du lien</h3><p>Gardez la main sur sa durée de vie et son nombre d’utilisations.</p></div></div>
           <div className="field"><label htmlFor="link-validity">Validité du lien</label><select id="link-validity" value={validity} onChange={event => setValidity(event.target.value)} data-testid="select-link-expiry"><option value="never">Sans expiration</option><option value="24h">24 heures</option><option value="7d">7 jours</option><option value="30d">30 jours</option><option value="custom">Date personnalisée</option></select></div>
@@ -2020,7 +2029,7 @@ function PaymentLinks() {
         </div>
         <div className="builder-footer"><div className="reference-field"><span>Référence du paiement</span><strong>{editingLink?.reference ?? createdLink?.reference ?? 'MP-LINK-••••••••'}</strong><small>{editingLink ? 'La référence et l’URL restent inchangées' : 'Générée automatiquement · non modifiable'}</small></div><div className="builder-submit">{formError && <div className="form-error"><CircleAlert size={14} /> {formError}</div>}<div className="builder-submit-actions">{editingLink && <button type="button" className="button button-ghost" onClick={cancelEdit}>Annuler</button>}<button type="submit" className="button button-primary" disabled={createPaymentLink.isPending || updatePaymentLink.isPending} data-testid="button-submit-link">{createPaymentLink.isPending || updatePaymentLink.isPending ? (editingLink ? 'Mise à jour en cours…' : 'Création en cours…') : <><Pencil size={15} /> {editingLink ? 'Enregistrer les modifications' : 'Créer le lien de paiement'}</>}</button></div></div></div>
       </form>
-       <aside className="payment-builder-aside"><div className="payment-preview card"><div className="preview-top"><div><span className="eyebrow">Aperçu</span><h2>Ce que votre client verra</h2></div><Eye size={17} /></div><div className="preview-payment"><div className="preview-brand"><span className="preview-mark">M</span><span>Mulapay</span><ShieldCheck size={13} /></div><div className="preview-product"><span className="preview-label">Paiement demandé</span><strong>{productName.trim() || 'Votre produit ou service'}</strong><p>{description.trim() || 'La description de votre paiement apparaîtra ici.'}</p></div><div className="preview-amount"><span>{amountType === 'FIXED' ? 'Montant' : 'Montant libre'}</span><strong>{amountType === 'FIXED' && amount ? money(Number(amount), wallets.find(wallet => wallet.id === walletId)?.currency ?? wallets[0]?.currency ?? 'XOF') : amountType === 'FIXED' ? '—' : 'Au choix'}</strong></div><div className="preview-detail"><span><Clock3 size={13} /> {validity === 'never' ? 'Sans expiration' : validity === 'custom' && customDate ? `Jusqu’au ${new Date(`${customDate}T12:00:00`).toLocaleDateString('fr-FR')}` : `Valide ${validity === '24h' ? '24 heures' : validity === '7d' ? '7 jours' : '30 jours'}`}</span><span><ShieldCheck size={13} /> Paiement sécurisé</span></div><div className="preview-button">Continuer vers le paiement <ArrowRight size={14} /></div></div></div></aside>
+        <aside className="payment-builder-aside"><div className="payment-preview card"><div className="preview-top"><div><span className="eyebrow">Aperçu</span><h2>Ce que votre client verra</h2></div><Eye size={17} /></div><div className="preview-payment"><div className="preview-brand"><span className="preview-mark">M</span><span>Mulapay</span><ShieldCheck size={13} /></div><div className="preview-product"><span className="preview-label">Paiement demandé</span><strong>{productName.trim() || 'Votre produit ou service'}</strong><p>{description.trim() || 'La description de votre paiement apparaîtra ici.'}</p></div><div className="preview-amount"><span>{amountType === 'FIXED' ? 'Montant' : 'Montant libre'}</span><strong>{amountType === 'FIXED' && amount ? money(Number(amount), linkCurrency) : amountType === 'FIXED' ? '—' : 'Au choix'}</strong></div><div className="preview-detail"><span><Clock3 size={13} /> {validity === 'never' ? 'Sans expiration' : validity === 'custom' && customDate ? `Jusqu’au ${new Date(`${customDate}T12:00:00`).toLocaleDateString('fr-FR')}` : `Valide ${validity === '24h' ? '24 heures' : validity === '7d' ? '7 jours' : '30 jours'}`}</span><span><ShieldCheck size={13} /> Paiement sécurisé</span></div><div className="preview-button">Continuer vers le paiement <ArrowRight size={14} /></div></div></div></aside>
     </div>
     ) : (
       <section className="payment-builder-collapsed card card-pad">
@@ -2061,8 +2070,11 @@ function PublicPaymentPage() {
       })
       .then(data => {
         if (!mounted) return;
-        const allowedCountry = data.allowedCountryCode
-          ? mobileMoneyCountryOptions.find(option => option.code === data.allowedCountryCode)
+        const initialCountryCode = data.allowedCountryCodes?.length === 1
+          ? data.allowedCountryCodes[0]
+          : data.allowedCountryCode;
+        const allowedCountry = initialCountryCode
+          ? mobileMoneyCountryOptions.find(option => option.code === initialCountryCode)
           : null;
         if (allowedCountry) {
           setCustomerCountry(allowedCountry.country);
@@ -2144,8 +2156,10 @@ function PublicPaymentPage() {
   if (state === 'loading') return <main className="public-payment-loading" aria-busy="true"><div className="public-payment-loading-card"><div className="public-payment-loading-head"><Logo /><span className="public-payment-loading-lock"><LockKeyhole size={13} /> Sécurisé</span></div><div className="public-payment-loading-art"><span /><span /><span /></div><div className="public-payment-loading-copy"><span className="eyebrow">Mulapay</span><h1>Préparation de votre paiement</h1><p>Nous vérifions le lien reçu. Cela ne prendra qu’un instant.</p><div className="public-payment-loading-progress"><span /></div></div></div></main>;
   if (state === 'error' || !link) return <main className="page-wrap public-payment-page"><div className="public-payment-header"><Logo /></div><PageIntro eyebrow="Paiement Mulapay" title="Lien indisponible" subtitle="Vérifiez l’adresse reçue ou demandez un nouveau lien au commerçant." /><div className="card card-pad public-payment-unavailable"><CircleAlert size={22} /><strong>Ce lien de paiement n’est plus disponible.</strong><Link className="button button-primary" href="/">Retour à Mulapay</Link></div></main>;
 
-  const customerCountryOptions = link?.allowedCountryCode
-    ? mobileMoneyCountryOptions.filter(option => option.code === link.allowedCountryCode)
+  const customerCountryOptions = link?.allowedCountryCodes?.length
+    ? mobileMoneyCountryOptions.filter(option => link.allowedCountryCodes?.includes(option.code))
+    : link?.allowedCountryCode
+      ? mobileMoneyCountryOptions.filter(option => option.code === link.allowedCountryCode)
     : mobileMoneyCountryOptions;
   const selectedCustomerCountry = customerCountryOptions.find(option => option.country === customerCountry) ?? customerCountryOptions[0] ?? mobileMoneyCountryOptions[0];
    // Les informations de paiement sont toujours obligatoires pour une transaction réelle,

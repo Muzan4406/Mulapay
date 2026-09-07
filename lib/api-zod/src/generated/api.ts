@@ -19,6 +19,9 @@ export const HealthCheckResponse = zod.object({
 /**
  * @summary Loads the authenticated Mulapay workspace
  */
+export const getBootstrapResponseLinksItemAllowedCountryCodesItemMin = 2;
+export const getBootstrapResponseLinksItemAllowedCountryCodesItemMax = 2;
+
 export const getBootstrapResponseKycDocumentsItemObjectPathRegExp = new RegExp('^/objects');
 export const getBootstrapResponseKycDocumentsItemFileNameMax = 255;
 
@@ -81,6 +84,7 @@ export const GetBootstrapResponse = zod.object({
   "currency": zod.string(),
   "description": zod.string(),
   "walletId": zod.string().nullable(),
+  "allowedCountryCodes": zod.array(zod.string().min(getBootstrapResponseLinksItemAllowedCountryCodesItemMin).max(getBootstrapResponseLinksItemAllowedCountryCodesItemMax)).nullable(),
   "amountType": zod.enum(['FIXED', 'CUSTOMER_CHOOSES']),
   "amountMin": zod.number(),
   "amountMax": zod.number(),
@@ -234,6 +238,9 @@ export const createPaymentLinkBodyAmountMin = 0;
 
 export const createPaymentLinkBodyProductNameMin = 2;
 
+export const createPaymentLinkBodyAllowedCountryCodesItemMin = 2;
+export const createPaymentLinkBodyAllowedCountryCodesItemMax = 2;
+
 export const createPaymentLinkBodyAmountMinMin = 300;
 export const createPaymentLinkBodyAmountMinMax = 500000;
 
@@ -249,6 +256,7 @@ export const CreatePaymentLinkBody = zod.object({
   "productName": zod.string().min(createPaymentLinkBodyProductNameMin),
   "description": zod.string(),
   "walletId": zod.string().nullable(),
+  "allowedCountryCodes": zod.array(zod.string().min(createPaymentLinkBodyAllowedCountryCodesItemMin).max(createPaymentLinkBodyAllowedCountryCodesItemMax)).nullable(),
   "amountType": zod.enum(['FIXED', 'CUSTOMER_CHOOSES']),
   "amountMin": zod.number().min(createPaymentLinkBodyAmountMinMin).max(createPaymentLinkBodyAmountMinMax),
   "amountMax": zod.number().min(createPaymentLinkBodyAmountMaxMin).max(createPaymentLinkBodyAmountMaxMax),
@@ -262,6 +270,11 @@ export const CreatePaymentLinkBody = zod.object({
   "notifyWebhook": zod.boolean()
 })
 
+export const createPaymentLinkResponseAllowedCountryCodesItemMin = 2;
+export const createPaymentLinkResponseAllowedCountryCodesItemMax = 2;
+
+
+
 export const CreatePaymentLinkResponse = zod.object({
   "id": zod.string(),
   "slug": zod.string(),
@@ -271,6 +284,7 @@ export const CreatePaymentLinkResponse = zod.object({
   "currency": zod.string(),
   "description": zod.string(),
   "walletId": zod.string().nullable(),
+  "allowedCountryCodes": zod.array(zod.string().min(createPaymentLinkResponseAllowedCountryCodesItemMin).max(createPaymentLinkResponseAllowedCountryCodesItemMax)).nullable(),
   "amountType": zod.enum(['FIXED', 'CUSTOMER_CHOOSES']),
   "amountMin": zod.number(),
   "amountMax": zod.number(),
@@ -290,6 +304,11 @@ export const CreatePaymentLinkResponse = zod.object({
 /**
  * @summary Lists payment links
  */
+export const listPaymentLinksResponseAllowedCountryCodesItemMin = 2;
+export const listPaymentLinksResponseAllowedCountryCodesItemMax = 2;
+
+
+
 export const ListPaymentLinksResponseItem = zod.object({
   "id": zod.string(),
   "slug": zod.string(),
@@ -299,6 +318,7 @@ export const ListPaymentLinksResponseItem = zod.object({
   "currency": zod.string(),
   "description": zod.string(),
   "walletId": zod.string().nullable(),
+  "allowedCountryCodes": zod.array(zod.string().min(listPaymentLinksResponseAllowedCountryCodesItemMin).max(listPaymentLinksResponseAllowedCountryCodesItemMax)).nullable(),
   "amountType": zod.enum(['FIXED', 'CUSTOMER_CHOOSES']),
   "amountMin": zod.number(),
   "amountMax": zod.number(),
@@ -323,6 +343,11 @@ export const GetPublicPaymentLinkParams = zod.object({
   "token": zod.coerce.string()
 })
 
+export const getPublicPaymentLinkResponseAllowedCountryCodesItemMin = 2;
+export const getPublicPaymentLinkResponseAllowedCountryCodesItemMax = 2;
+
+
+
 export const GetPublicPaymentLinkResponse = zod.object({
   "slug": zod.string(),
   "reference": zod.string().nullable(),
@@ -330,6 +355,7 @@ export const GetPublicPaymentLinkResponse = zod.object({
   "amount": zod.number(),
   "currency": zod.string(),
   "description": zod.string(),
+  "allowedCountryCodes": zod.array(zod.string().min(getPublicPaymentLinkResponseAllowedCountryCodesItemMin).max(getPublicPaymentLinkResponseAllowedCountryCodesItemMax)).nullable(),
   "amountType": zod.enum(['FIXED', 'CUSTOMER_CHOOSES']),
   "amountMin": zod.number(),
   "amountMax": zod.number(),
@@ -435,6 +461,9 @@ export const updatePaymentLinkBodyAmountMin = 0;
 
 export const updatePaymentLinkBodyProductNameMin = 2;
 
+export const updatePaymentLinkBodyAllowedCountryCodesItemMin = 2;
+export const updatePaymentLinkBodyAllowedCountryCodesItemMax = 2;
+
 export const updatePaymentLinkBodyAmountMinMin = 300;
 export const updatePaymentLinkBodyAmountMinMax = 500000;
 
@@ -450,6 +479,7 @@ export const UpdatePaymentLinkBody = zod.object({
   "productName": zod.string().min(updatePaymentLinkBodyProductNameMin),
   "description": zod.string(),
   "walletId": zod.string().nullable(),
+  "allowedCountryCodes": zod.array(zod.string().min(updatePaymentLinkBodyAllowedCountryCodesItemMin).max(updatePaymentLinkBodyAllowedCountryCodesItemMax)).nullable(),
   "amountType": zod.enum(['FIXED', 'CUSTOMER_CHOOSES']),
   "amountMin": zod.number().min(updatePaymentLinkBodyAmountMinMin).max(updatePaymentLinkBodyAmountMinMax),
   "amountMax": zod.number().min(updatePaymentLinkBodyAmountMaxMin).max(updatePaymentLinkBodyAmountMaxMax),
@@ -463,6 +493,11 @@ export const UpdatePaymentLinkBody = zod.object({
   "notifyWebhook": zod.boolean()
 })
 
+export const updatePaymentLinkResponseAllowedCountryCodesItemMin = 2;
+export const updatePaymentLinkResponseAllowedCountryCodesItemMax = 2;
+
+
+
 export const UpdatePaymentLinkResponse = zod.object({
   "id": zod.string(),
   "slug": zod.string(),
@@ -472,6 +507,7 @@ export const UpdatePaymentLinkResponse = zod.object({
   "currency": zod.string(),
   "description": zod.string(),
   "walletId": zod.string().nullable(),
+  "allowedCountryCodes": zod.array(zod.string().min(updatePaymentLinkResponseAllowedCountryCodesItemMin).max(updatePaymentLinkResponseAllowedCountryCodesItemMax)).nullable(),
   "amountType": zod.enum(['FIXED', 'CUSTOMER_CHOOSES']),
   "amountMin": zod.number(),
   "amountMax": zod.number(),

@@ -20,6 +20,12 @@ export interface PaymentLink {
   description: string;
   /** @nullable */
   walletId: string | null;
+  /**
+     * @nullable
+     * @items.minLength 2
+     * @items.maxLength 2
+     */
+  allowedCountryCodes: string[] | null;
   amountType: PaymentLinkAmountType;
   amountMin: number;
   amountMax: number;
