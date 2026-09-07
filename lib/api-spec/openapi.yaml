@@ -333,6 +333,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/OperationResult"
+  /v1/notifications/read-all:
+    patch:
+      operationId: markAllNotificationsRead
+      tags: [wallet]
+      summary: Marks all account notifications as read
+      security:
+        - MulapayApiKey: []
+      responses:
+        "200":
+          description: Notifications updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationResult"
   /v1/withdrawals/{reference}:
     get:
       operationId: getWithdrawal
@@ -688,12 +702,13 @@ components:
         payments: { type: number }
     Notification:
       type: object
-      required: [id, title, body, read]
+      required: [id, title, body, read, createdAt]
       properties:
         id: { type: string }
         title: { type: string }
         body: { type: string }
         read: { type: boolean }
+        createdAt: { type: string }
     KycVerification:
       type: object
       required: [id, userId, name, country, status, documents, submittedAt]

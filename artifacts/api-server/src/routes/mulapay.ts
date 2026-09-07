@@ -986,7 +986,7 @@ async function bootstrap(req: Request) {
     transactions: userTransactions.map(formatTransaction),
     exchanges: userExchanges.map(formatExchange),
     links: userLinks.map((link) => presentPaymentLink(req, link)),
-    notifications: userNotifications.map((notification) => ({ id: notification.id, title: notification.title, body: notification.body, read: notification.read })),
+    notifications: userNotifications.map((notification) => ({ id: notification.id, title: notification.title, body: notification.body, read: notification.read, createdAt: notification.createdAt.toISOString() })),
     kyc: userKyc ? { id: userKyc.id, userId: userKyc.userId, name: userKyc.name, country: userKyc.country, status: userKyc.status, documents: userKyc.documents, submittedAt: userKyc.submittedAt.toISOString() } : { id: "none", userId: user.id, name: `${user.firstName} ${user.lastName}`, country: user.country, status: user.kycStatus, documents: [], submittedAt: nowLabel() },
     feePercentage: Number(settings.feePercentage),
   });
@@ -2130,6 +2130,12 @@ router.patch("/v1/notifications/:id/read", async (req, res) => {
   const user = await ensureUser(req);
   await db.update(notifications).set({ read: true }).where(and(eq(notifications.id, id), eq(notifications.userId, user.id)));
   res.json(MarkNotificationReadResponse.parse({ ok: true, message: "Notification marquée comme lue.", reference: null }));
+});
+
+router.patch("/v1/notifications/read-all", async (req, res) => {
+  const user = await ensureUser(req);
+  await db.update(notifications).set({ read: true }).where(eq(notifications.userId, user.id));
+  res.json(MarkNotificationReadResponse.parse({ ok: true, message: "Toutes les notifications sont marquées comme lues.", reference: null }));
 });
 
 router.post("/v1/kyc", async (req, res) => {

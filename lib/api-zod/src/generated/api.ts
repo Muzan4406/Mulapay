@@ -94,7 +94,8 @@ export const GetBootstrapResponse = zod.object({
   "id": zod.string(),
   "title": zod.string(),
   "body": zod.string(),
-  "read": zod.boolean()
+  "read": zod.boolean(),
+  "createdAt": zod.string()
 })),
   "kyc": zod.object({
   "id": zod.string(),
@@ -625,6 +626,26 @@ export const MarkNotificationReadParams = zod.object({
 })
 
 export const MarkNotificationReadResponse = zod.object({
+  "ok": zod.boolean(),
+  "message": zod.string(),
+  "reference": zod.string().nullish(),
+  "status": zod.string().optional(),
+  "amount": zod.number().optional(),
+  "currency": zod.string().optional(),
+  "paymentUrl": zod.string().nullish(),
+  "expiresAt": zod.coerce.date().nullish(),
+  "fee": zod.number().optional(),
+  "netAmount": zod.number().optional(),
+  "platformFee": zod.number().optional(),
+  "merchantAmount": zod.number().optional(),
+  "totalDebited": zod.number().optional()
+})
+
+
+/**
+ * @summary Marks all account notifications as read
+ */
+export const MarkAllNotificationsReadResponse = zod.object({
   "ok": zod.boolean(),
   "message": zod.string(),
   "reference": zod.string().nullish(),

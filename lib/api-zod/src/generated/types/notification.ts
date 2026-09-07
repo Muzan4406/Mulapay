@@ -11,4 +11,5 @@ export interface Notification {
   title: string;
   body: string;
   read: boolean;
+  createdAt: string;
 }
