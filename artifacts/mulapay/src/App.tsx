@@ -1245,7 +1245,6 @@ function Transfer() {
         <div className="summary-line"><span>Montant reçu</span><strong>{money(recipientAmount, selectedWallet?.currency ?? 'XOF')}</strong></div>
         <div className="summary-line total"><span>Total débité</span><strong>{money(debitAmount, selectedWallet?.currency ?? 'XOF')}</strong></div>
       </div>}
-      <div className="notice" style={{ marginBottom: 16 }}><Info size={15} /><span>Le transfert est exécuté par DrimPay. Le destinataire reçoit le montant saisi et les frais DrimPay sont ajoutés au débit du wallet source.</span></div>
       <button className="button button-primary button-wide" type="submit" disabled={!canSubmit} data-testid="button-submit-transfer"><Send size={15} /> Envoyer maintenant</button>
     </form>
   </main>;
