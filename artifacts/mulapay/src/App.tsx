@@ -2116,11 +2116,43 @@ function PasswordInput({ value, onChange, placeholder, autoComplete, show, onTog
 function SignInPage() {
   const { signIn } = useSignIn();
   const [, setLocation] = useLocation();
+  const [verificationStep, setVerificationStep] = useState<'credentials' | 'email_code' | 'phone_code' | 'totp' | 'backup_code'>('credentials');
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const finalizeSignIn = async () => {
+    const finalized = await (signIn as any).finalize();
+    if (finalized.error) throw finalized.error;
+    setLocation('/app');
+  };
+  const prepareSecondFactor = async () => {
+    const factors = ((signIn as any).supportedSecondFactors ?? []) as Array<{ strategy?: string }>;
+    const strategies = factors.map(factor => factor.strategy);
+    if (strategies.includes('email_code')) {
+      const sent = await (signIn as any).mfa.sendEmailCode();
+      if (sent.error) throw sent.error;
+      setVerificationStep('email_code');
+      return;
+    }
+    if (strategies.includes('phone_code')) {
+      const sent = await (signIn as any).mfa.sendPhoneCode();
+      if (sent.error) throw sent.error;
+      setVerificationStep('phone_code');
+      return;
+    }
+    if (strategies.includes('totp')) {
+      setVerificationStep('totp');
+      return;
+    }
+    if (strategies.includes('backup_code')) {
+      setVerificationStep('backup_code');
+      return;
+    }
+    throw new Error('Une vérification supplémentaire est requise, mais aucune méthode compatible n’est disponible.');
+  };
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     const normalizedIdentifier = identifier.trim();
@@ -2135,19 +2167,45 @@ function SignInPage() {
       if (created.error) throw created.error;
       const completed = await (signIn as any).password({ password });
       if (completed.error) throw completed.error;
-      if ((signIn as any).status !== 'complete') {
-        setError('Une étape supplémentaire de vérification est requise. Recommencez depuis votre e-mail.');
-        return;
-      }
-      const finalized = await (signIn as any).finalize();
-      if (finalized.error) throw finalized.error;
-      setLocation('/app');
+      if ((signIn as any).status === 'complete') await finalizeSignIn();
+      else if ((signIn as any).status === 'needs_second_factor' || (signIn as any).status === 'needs_client_trust') await prepareSecondFactor();
+      else setError('La connexion nécessite une étape supplémentaire qui n’est pas disponible.');
     } catch (authError) {
       setError(authErrorMessage(authError));
     } finally {
       setSubmitting(false);
     }
   };
+  const verifyAdditionalFactor = async (event: FormEvent) => {
+    event.preventDefault();
+    setError('');
+    setSubmitting(true);
+    try {
+      const method = verificationStep === 'email_code'
+        ? (signIn as any).mfa.verifyEmailCode
+        : verificationStep === 'phone_code'
+          ? (signIn as any).mfa.verifyPhoneCode
+          : verificationStep === 'totp'
+            ? (signIn as any).mfa.verifyTOTP
+            : (signIn as any).mfa.verifyBackupCode;
+      const verified = await method({ code: verificationCode.trim() });
+      if (verified.error) throw verified.error;
+      if ((signIn as any).status !== 'complete') {
+        setError('Le code a été accepté, mais la session n’est pas encore finalisée. Recommencez la vérification.');
+        return;
+      }
+      await finalizeSignIn();
+    } catch (authError) {
+      setError(authErrorMessage(authError));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+  if (verificationStep !== 'credentials') {
+    const verificationTitle = verificationStep === 'email_code' ? 'Vérifiez votre e-mail' : verificationStep === 'phone_code' ? 'Vérifiez votre téléphone' : verificationStep === 'totp' ? 'Code de votre application' : 'Code de secours';
+    const verificationSubtitle = verificationStep === 'email_code' ? `Saisissez le code envoyé à ${identifier}.` : verificationStep === 'phone_code' ? 'Saisissez le code reçu sur votre numéro vérifié.' : verificationStep === 'totp' ? 'Saisissez le code affiché dans votre application d’authentification.' : 'Saisissez l’un de vos codes de secours Clerk.';
+    return <AuthFrame eyebrow="Vérification supplémentaire" title={verificationTitle} subtitle={verificationSubtitle} footer={<><span>Ce n’est pas votre compte ?</span><Link href="/sign-in">Recommencer</Link></>}><form className="auth-form" onSubmit={verifyAdditionalFactor}>{error && <div className="auth-error">{error}</div>}<label>Code de vérification<input value={verificationCode} onChange={event => setVerificationCode(event.target.value)} placeholder={verificationStep === 'backup_code' ? 'Code de secours' : '123456'} inputMode={verificationStep === 'backup_code' ? 'text' : 'numeric'} autoComplete="one-time-code" required /></label><button className="button button-primary auth-submit" type="submit" disabled={submitting}>{submitting ? 'Vérification…' : 'Vérifier et continuer'} <ChevronRight size={15} /></button></form></AuthFrame>;
+  }
   return <AuthFrame eyebrow="Espace membre" title="Se connecter" subtitle="Accédez à vos wallets, vos opérations et votre historique Mulapay." footer={<><span>Pas encore de compte ?</span><Link href="/sign-up">Créer un compte</Link></>}><form className="auth-form" onSubmit={submit}>{error && <div className="auth-error">{error}</div>}<label>Adresse e-mail<input type="email" value={identifier} onChange={event => setIdentifier(event.target.value)} placeholder="vous@exemple.com" autoComplete="username" autoCapitalize="none" required /></label><label>Mot de passe<PasswordInput value={password} onChange={setPassword} placeholder="Votre mot de passe" autoComplete="current-password" show={showPassword} onToggle={() => setShowPassword(value => !value)} /></label><Link href="/forgot-password" className="auth-forgot">Mot de passe oublié ?</Link><button className="button button-primary auth-submit" type="submit" disabled={submitting}>{submitting ? 'Connexion…' : 'Se connecter'} <ChevronRight size={15} /></button></form></AuthFrame>;
 }
 
