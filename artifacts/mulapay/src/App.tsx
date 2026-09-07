@@ -440,7 +440,6 @@ function Wallets() {
 
 function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
   const { wallets, toast, feePercentage } = useStore();
-  const [, setLocation] = useLocation();
   const [walletId, setWalletId] = useState(wallets[0]?.id ?? '');
   const [country, setCountry] = useState(countryLabel(wallets[0]?.country ?? mobileMoneyCountryOptions[0].country));
   const [amount, setAmount] = useState('');
@@ -532,8 +531,8 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
 
   useEffect(() => {
     if (!isDeposit || !depositTracking?.reference || depositTracking.status.toLowerCase() !== 'completed') return;
-    toast('Dépôt confirmé. Votre dashboard va être actualisé.');
-    setLocation('/app');
+    void queryClient.invalidateQueries({ queryKey: getGetBootstrapQueryKey() });
+    toast('Dépôt confirmé. Votre wallet a été crédité.');
   }, [depositTracking?.reference, depositTracking?.status, isDeposit]);
 
   useEffect(() => {
