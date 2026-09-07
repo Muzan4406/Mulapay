@@ -77,7 +77,6 @@ const PUBLIC_PAYMENT_MIN_AMOUNT = 300;
 const PUBLIC_PAYMENT_MAX_AMOUNT = 500_000;
 const PLATFORM_SETTINGS_ID = "global";
 const DEFAULT_FEE_PERCENTAGE = 1;
-const DRIMPAY_PAYOUT_FEE_RATE = 0.035;
 type PaymentProvider = "DRIMPAY" | "ASHTECHPAY";
 
 function firstHeaderValue(value: string | string[] | undefined) {
@@ -119,8 +118,8 @@ function calculateMulapayNetAmount(amount: number, feePercentage: number) {
   return { platformFee, merchantAmount: Math.max(0, amount - platformFee) };
 }
 
-function estimateDrimPayPayoutFee(amount: number) {
-  return Math.ceil(amount * DRIMPAY_PAYOUT_FEE_RATE);
+function createMulapayReference(kind: "DEP" | "PAY" | "WD" | "TRF") {
+  return `MP-${kind}-${crypto.randomUUID().replaceAll("-", "").slice(0, 12).toUpperCase()}`;
 }
 
 function withdrawalReservationAmount(transaction: typeof transactions.$inferSelect) {
@@ -238,6 +237,7 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
         eq(transactions.paymentProvider, "DRIMPAY"),
         or(
           eq(transactions.reference, payload.reference!),
+          eq(transactions.providerReference, payload.reference!),
           ...(payload.order_id ? [eq(transactions.providerOrderId, payload.order_id)] : []),
         ),
       ),
@@ -264,15 +264,7 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
       }
 
       if (nextStatus === "Completed" && transaction.status !== "Completed") {
-        if (
-          typeof payload.fee !== "number" ||
-          typeof payload.total_debited !== "number" ||
-          payload.fee < 0 ||
-          payload.total_debited !== payload.amount + payload.fee
-        ) {
-          throw new Error("INVALID_PROVIDER_PAYOUT_TOTAL");
-        }
-        const debitAmount = payload.total_debited;
+        const debitAmount = transaction.amount + (transaction.fee ?? 0);
         const reservedAmount = withdrawalReservationAmount(transaction);
         const updatedWallets = await tx
           .update(wallets)
@@ -285,7 +277,6 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
         if (!updatedWallets.length) throw new Error("WITHDRAWAL_BALANCE_UNAVAILABLE");
         await tx.update(transactions).set({
           status: "Completed",
-          fee: payload.fee,
           netAmount: payload.amount,
           merchantAmount: payload.amount,
         }).where(eq(transactions.id, transaction.id));
@@ -297,7 +288,7 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
           entryType: "DEBIT",
           amount: debitAmount,
           currency: transaction.currency,
-          description: `${transaction.type === "Transfer" ? "Transfert" : "Retrait"} DrimPay confirmé · ${payload.reference}`,
+          description: `${transaction.type === "Transfer" ? "Transfert" : "Retrait"} Mulapay confirmé · ${transaction.reference}`,
         });
         await tx.insert(notifications).values({
           id: crypto.randomUUID(),
@@ -321,13 +312,13 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
           entryType: "CREDIT",
           amount: debitAmount,
           currency: transaction.currency,
-          description: `${transaction.type === "Transfer" ? "Transfert" : "Retrait"} DrimPay remboursé · ${payload.reference}`,
+          description: `${transaction.type === "Transfer" ? "Transfert" : "Retrait"} Mulapay remboursé · ${transaction.reference}`,
         });
         await tx.insert(notifications).values({
           id: crypto.randomUUID(),
           userId: transaction.userId,
           title: transaction.type === "Transfer" ? "Transfert remboursé" : "Retrait remboursé",
-          body: `Le ${transaction.type === "Transfer" ? "transfert" : "retrait"} DrimPay ${payload.reference} a été remboursé.`,
+          body: `Le ${transaction.type === "Transfer" ? "transfert" : "retrait"} Mulapay ${transaction.reference} a été remboursé.`,
           read: false,
         });
         return { found: true };
@@ -360,7 +351,7 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
       ) {
         return { found: true, walletMismatch: true };
       }
-      const providerNetAmount = payload.net_amount ?? transaction.netAmount;
+      const providerNetAmount = payload.net_amount;
       const merchantAmount = transaction.merchantAmount ?? providerNetAmount;
       if (providerNetAmount == null || providerNetAmount <= 0 || providerNetAmount > payload.amount) throw new Error("INVALID_PROVIDER_NET_AMOUNT");
       if (merchantAmount == null || merchantAmount <= 0 || merchantAmount > payload.amount) throw new Error("INVALID_MULAPAY_NET_AMOUNT");
@@ -370,7 +361,7 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
           balance: sql`${wallets.balance} + ${merchantAmount}`,
         })
         .where(eq(wallets.id, wallet.id));
-      await tx.update(transactions).set({ status: "Completed", netAmount: providerNetAmount }).where(eq(transactions.id, transaction.id));
+      await tx.update(transactions).set({ status: "Completed", netAmount: merchantAmount }).where(eq(transactions.id, transaction.id));
       await tx.insert(ledgerEntries).values({
         id: crypto.randomUUID(),
         userId: transaction.userId,
@@ -379,7 +370,7 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
         entryType: "CREDIT",
         amount: merchantAmount,
         currency: transaction.currency,
-        description: `${transaction.type === "Payment" ? "Paiement par lien" : "Dépôt Mulapay"} confirmé · ${payload.reference}`,
+        description: `${transaction.type === "Payment" ? "Paiement par lien" : "Dépôt Mulapay"} confirmé · ${transaction.reference}`,
       });
       const paymentLinkId = transaction.providerOrderId?.match(/^paylink_(.+)_[0-9a-f-]{36}$/i)?.[1];
       if (transaction.type === "Payment" && paymentLinkId) {
@@ -410,13 +401,13 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
         entryType: "DEBIT",
         amount: merchantAmount,
         currency: transaction.currency,
-        description: `Dépôt Mulapay remboursé · ${payload.reference}`,
+        description: `Dépôt Mulapay remboursé · ${transaction.reference}`,
       });
       await tx.insert(notifications).values({
         id: crypto.randomUUID(),
         userId: transaction.userId,
         title: "Dépôt remboursé",
-        body: `Le dépôt Mulapay ${payload.reference} a été remboursé.`,
+        body: `Le dépôt Mulapay ${transaction.reference} a été remboursé.`,
         read: false,
       });
       return { found: true };
@@ -518,8 +509,10 @@ async function submitDrimPayOutgoing(input: {
     };
   }
 
-  const estimatedFee = estimateDrimPayPayoutFee(input.amount);
+  const settings = await getPlatformSettings();
+  const estimatedFee = calculateMulapayNetAmount(input.amount, Number(settings.feePercentage)).platformFee;
   const estimatedTotal = input.amount + estimatedFee;
+  const mulapayReference = createMulapayReference(input.kind === "Transfer" ? "TRF" : "WD");
   let localTransaction: typeof transactions.$inferSelect | undefined;
   try {
     if (!isDrimPayConfigured()) {
@@ -550,7 +543,8 @@ async function submitDrimPayOutgoing(input: {
         currency: input.wallet.currency,
         country: input.wallet.country,
         counterparty: input.counterparty,
-        reference: orderId,
+        reference: mulapayReference,
+        providerReference: null,
         providerOrderId: orderId,
         fee: estimatedFee,
         netAmount: input.amount,
@@ -569,34 +563,23 @@ async function submitDrimPayOutgoing(input: {
       description: `${input.kind === "Withdrawal" ? "Retrait" : "Transfert"} Mulapay · ${input.wallet.country}`,
       metadata: { mulapay_user_id: input.userId, mulapay_wallet_id: input.wallet.id },
     });
-    const providerTotal = provider.total_debited;
-    if (
-      provider.amount !== input.amount ||
-      providerTotal !== provider.amount + provider.fee ||
-      providerTotal <= 0
-    ) {
+    if (provider.amount !== input.amount || provider.total_debited <= 0) {
       throw new DrimPayError("La réponse payout DrimPay est incohérente. L’opération reste en attente de vérification.", 502, "INVALID_PAYOUT_RESPONSE");
     }
 
     await db.transaction(async (tx) => {
-      await tx.update(wallets)
-        .set({ pending: sql`${wallets.pending} + ${providerTotal - estimatedTotal}` })
-        .where(eq(wallets.id, input.wallet.id));
       await tx.update(transactions).set({
-        reference: provider.reference,
-        fee: provider.fee,
-        netAmount: provider.amount,
-        merchantAmount: provider.amount,
+        providerReference: provider.reference,
       }).where(eq(transactions.id, localTransaction!.id));
     });
     return {
       existing: false,
-      reference: provider.reference,
+      reference: mulapayReference,
       status: "Pending",
-      amount: provider.amount,
-      currency: provider.currency,
-      fee: provider.fee,
-      totalDebited: providerTotal,
+      amount: input.amount,
+      currency: input.wallet.currency,
+      fee: estimatedFee,
+      totalDebited: estimatedTotal,
     };
   } catch (error) {
     if (localTransaction && (error instanceof DrimPayError ? error.statusCode < 500 : false)) {
@@ -658,7 +641,13 @@ async function handleAshtechPayWebhook(req: Request, res: Response) {
     }).returning();
     if (!event) return { found: true, duplicate: true };
     const transaction = await tx.query.transactions.findFirst({
-      where: and(eq(transactions.reference, payload.reference!), eq(transactions.paymentProvider, "ASHTECHPAY")),
+      where: and(
+        eq(transactions.paymentProvider, "ASHTECHPAY"),
+        or(
+          eq(transactions.reference, payload.reference!),
+          eq(transactions.providerReference, payload.reference!),
+        ),
+      ),
     });
     if (!transaction) return { found: false, duplicate: false };
     const nextStatus = ashtechStatusToTransactionStatus(payload.status!);
@@ -677,14 +666,14 @@ async function handleAshtechPayWebhook(req: Request, res: Response) {
         providerNetAmount <= 0 ||
         providerNetAmount > (payload.total_amount ?? transaction.amount) ||
         merchantAmount <= 0 ||
-        merchantAmount > providerNetAmount
+        merchantAmount > (payload.total_amount ?? transaction.amount)
       ) {
         return { found: true, duplicate: false, walletMismatch: true };
       }
       await tx.update(wallets).set({
         balance: sql`${wallets.balance} + ${merchantAmount}`,
       }).where(eq(wallets.id, wallet.id));
-      await tx.update(transactions).set({ status: "Completed", netAmount: providerNetAmount }).where(eq(transactions.id, transaction.id));
+      await tx.update(transactions).set({ status: "Completed", netAmount: merchantAmount }).where(eq(transactions.id, transaction.id));
       await tx.insert(ledgerEntries).values({
         id: crypto.randomUUID(),
         userId: transaction.userId,
@@ -693,7 +682,7 @@ async function handleAshtechPayWebhook(req: Request, res: Response) {
         entryType: "CREDIT",
         amount: merchantAmount,
         currency: transaction.currency,
-        description: `${transaction.type === "Payment" ? "Paiement par lien" : "Dépôt AshtechPay"} confirmé · ${payload.reference}`,
+        description: `${transaction.type === "Payment" ? "Paiement par lien" : "Dépôt Mulapay"} confirmé · ${transaction.reference}`,
       });
       const paymentLinkId = transaction.providerOrderId?.match(/^paylink_(.+)_[0-9a-f-]{36}$/i)?.[1];
       if (transaction.type === "Payment" && paymentLinkId) {
@@ -757,7 +746,7 @@ async function reconcileAshtechTransaction(transaction: typeof transactions.$inf
   }
 
   const nextStatus = ashtechStatusToTransactionStatus(provider.status);
-  if (nextStatus === "Pending" || provider.reference !== transaction.reference) return transaction;
+  if (nextStatus === "Pending" || provider.reference !== (transaction.providerReference ?? transaction.reference)) return transaction;
 
   try {
     return await db.transaction(async (tx) => {
@@ -774,14 +763,14 @@ async function reconcileAshtechTransaction(transaction: typeof transactions.$inf
           provider.credited_amount <= 0 ||
           provider.credited_amount > provider.amount ||
           merchantAmount <= 0 ||
-          merchantAmount > provider.credited_amount
+          merchantAmount > provider.amount
         ) {
           throw new Error("INVALID_ASHTECH_STATUS_RESPONSE");
         }
         await tx.update(wallets).set({ balance: sql`${wallets.balance} + ${merchantAmount}` }).where(eq(wallets.id, wallet.id));
         await tx.update(transactions).set({
           status: "Completed",
-          netAmount: provider.credited_amount,
+          netAmount: merchantAmount,
         }).where(eq(transactions.id, current.id));
         await tx.insert(ledgerEntries).values({
           id: crypto.randomUUID(),
@@ -791,7 +780,7 @@ async function reconcileAshtechTransaction(transaction: typeof transactions.$inf
           entryType: "CREDIT",
           amount: merchantAmount,
           currency: current.currency,
-          description: `${current.type === "Payment" ? "Paiement par lien" : "Dépôt AshtechPay"} confirmé par vérification sécurisée · ${current.reference}`,
+          description: `${current.type === "Payment" ? "Paiement par lien" : "Dépôt Mulapay"} confirmé par vérification sécurisée · ${current.reference}`,
         });
         await tx.insert(notifications).values({
           id: crypto.randomUUID(),
@@ -800,7 +789,7 @@ async function reconcileAshtechTransaction(transaction: typeof transactions.$inf
           body: `${merchantAmount.toLocaleString("fr-FR")} ${current.currency} ont été crédités sur le wallet ${wallet.country}.`,
           read: false,
         });
-        return { ...current, status: "Completed", netAmount: provider.credited_amount };
+        return { ...current, status: "Completed", netAmount: merchantAmount };
       }
 
       await tx.update(transactions).set({ status: "Failed" }).where(eq(transactions.id, current.id));
@@ -1722,6 +1711,7 @@ router.post("/v1/public/payment-links/:token/payments", async (req, res) => {
   const orderIdHeader = req.header("Idempotency-Key");
    const paymentLinkIdempotencyKey = orderIdHeader && orderIdHeader.length <= 128 ? orderIdHeader : crypto.randomUUID();
   const orderId = `paylink_${link.id}_${paymentLinkIdempotencyKey}`;
+  const mulapayReference = createMulapayReference("PAY");
   const existing = await db.query.transactions.findFirst({ where: eq(transactions.providerOrderId, orderId) });
   if (existing) {
     res.status(200).json({ ok: true, message: "Cette demande de paiement existe déjà.", reference: existing.reference, status: existing.status, paymentUrl: existing.paymentUrl, expiresAt: existing.expiresAt?.toISOString() ?? null, fee: existing.fee, netAmount: existing.netAmount, platformFee: existing.platformFee, merchantAmount: existing.merchantAmount });
@@ -1792,16 +1782,17 @@ router.post("/v1/public/payment-links/:token/payments", async (req, res) => {
         // Le crédit du ledger intervient après confirmation fournisseur vérifiée.
         status: "Pending",
         amount: input.amount,
-        netAmount: normalizedProvider.netAmount,
+        netAmount: mulapayAmount.merchantAmount,
         paymentUrl: normalizedProvider.paymentUrl,
         expiresAt: normalizedProvider.expiresAt,
-        fee: normalizedProvider.fee,
+        fee: mulapayAmount.platformFee,
         platformFee: mulapayAmount.platformFee,
         merchantAmount: mulapayAmount.merchantAmount,
         currency: ownerWallet.currency,
         country: ownerWallet.country,
         counterparty: `Paiement par lien · ${link.productName}`,
-        reference: normalizedProvider.reference,
+        reference: mulapayReference,
+        providerReference: normalizedProvider.reference,
         providerOrderId: orderId,
         providerTransactionId: normalizedProvider.transactionId,
       });
@@ -1813,7 +1804,7 @@ router.post("/v1/public/payment-links/:token/payments", async (req, res) => {
         read: false,
       });
     });
-    res.status(201).json({ ok: true, message: normalizedProvider.paymentUrl ? "Ouvrez le lien de paiement pour confirmer." : "Confirmez le paiement sur votre téléphone.", reference: normalizedProvider.reference, status: "Pending", paymentUrl: normalizedProvider.paymentUrl, expiresAt: normalizedProvider.expiresAt?.toISOString() ?? null, fee: normalizedProvider.fee, netAmount: normalizedProvider.netAmount, platformFee: mulapayAmount.platformFee, merchantAmount: mulapayAmount.merchantAmount });
+    res.status(201).json({ ok: true, message: normalizedProvider.paymentUrl ? "Ouvrez le lien de paiement pour confirmer." : "Confirmez le paiement sur votre téléphone.", reference: mulapayReference, status: "Pending", paymentUrl: normalizedProvider.paymentUrl, expiresAt: normalizedProvider.expiresAt?.toISOString() ?? null, fee: mulapayAmount.platformFee, netAmount: mulapayAmount.merchantAmount, platformFee: mulapayAmount.platformFee, merchantAmount: mulapayAmount.merchantAmount });
   } catch (error) {
     if (error instanceof AshtechPayOtpRequiredError) {
       res.status(400).json({ error: "Le code OTP opérateur est requis pour continuer.", code: "OTP_REQUIRED", otpRequired: true });
@@ -1841,7 +1832,10 @@ router.get("/v1/public/payment-links/:token/payments/:reference", async (req, re
   await expireAndReconcilePending(link.userId);
   const transaction = await db.query.transactions.findFirst({
     where: and(
-      eq(transactions.reference, req.params.reference),
+      or(
+        eq(transactions.reference, req.params.reference),
+        eq(transactions.providerReference, req.params.reference),
+      ),
       eq(transactions.userId, link.userId),
       eq(transactions.type, "Payment"),
       like(transactions.providerOrderId, `paylink_${link.id}_%`),
@@ -2003,6 +1997,7 @@ router.post("/v1/deposits", async (req, res) => {
   }
   const settings = await getPlatformSettings();
   const mulapayAmount = calculateMulapayNetAmount(validatedAmount, Number(settings.feePercentage));
+  const mulapayReference = createMulapayReference("DEP");
   const providerSelection = await resolvePaymentProvider(countryCode, input.operator);
   if (!providerSelection) {
     res.status(503).json({ error: "Aucun routage de dépôt actif n’est configuré pour ce pays et cet opérateur." });
@@ -2097,19 +2092,20 @@ router.post("/v1/deposits", async (req, res) => {
         walletId: wallet.id,
         type: "Deposit",
         paymentProvider: providerSelection.provider,
-        // Le crédit du ledger intervient uniquement après le webhook signé.
+        // Le crédit du ledger intervient après confirmation fournisseur vérifiée.
         status: "Pending",
         amount: validatedAmount,
-        netAmount: normalizedProvider.netAmount ?? null,
+        netAmount: mulapayAmount.merchantAmount,
         platformFee: mulapayAmount.platformFee,
         merchantAmount: mulapayAmount.merchantAmount,
         paymentUrl: normalizedProvider.paymentUrl,
         expiresAt: normalizedProvider.expiresAt,
-        fee: normalizedProvider.fee == null ? null : Math.round(normalizedProvider.fee),
+        fee: mulapayAmount.platformFee,
         currency: wallet.currency,
         country: wallet.country,
         counterparty: `Dépôt Mobile Money · ${input.operator}`,
-        reference: normalizedProvider.reference,
+        reference: mulapayReference,
+        providerReference: normalizedProvider.reference,
         providerOrderId: orderId,
         providerTransactionId: normalizedProvider.transactionId,
       });
@@ -2124,12 +2120,12 @@ router.post("/v1/deposits", async (req, res) => {
     res.status(201).json({
       ok: true,
       message: normalizedProvider.paymentUrl ? "Ouvrez le lien Wave pour confirmer le paiement." : "Confirmez le paiement sur votre téléphone.",
-      reference: normalizedProvider.reference,
+      reference: mulapayReference,
       status: "Pending",
       paymentUrl: normalizedProvider.paymentUrl,
       expiresAt: normalizedProvider.expiresAt?.toISOString() ?? null,
-      fee: normalizedProvider.fee,
-      netAmount: normalizedProvider.netAmount,
+      fee: mulapayAmount.platformFee,
+      netAmount: mulapayAmount.merchantAmount,
       platformFee: mulapayAmount.platformFee,
       merchantAmount: mulapayAmount.merchantAmount,
     });
@@ -2154,7 +2150,14 @@ router.get("/v1/deposits/:reference", async (req, res) => {
   const user = await ensureUser(req);
   await expireAndReconcilePending(user.id);
   const transaction = await db.query.transactions.findFirst({
-    where: and(eq(transactions.reference, req.params.reference), eq(transactions.userId, user.id), eq(transactions.type, "Deposit")),
+    where: and(
+      or(
+        eq(transactions.reference, req.params.reference),
+        eq(transactions.providerReference, req.params.reference),
+      ),
+      eq(transactions.userId, user.id),
+      eq(transactions.type, "Deposit"),
+    ),
   });
   if (!transaction) {
     res.status(404).json({ error: "Dépôt introuvable." });
@@ -2182,7 +2185,10 @@ router.get("/v1/withdrawals/:reference", async (req, res) => {
   if (!requireVerifiedKyc(user, res, "les retraits")) return;
   const transaction = await db.query.transactions.findFirst({
     where: and(
-      eq(transactions.reference, req.params.reference),
+      or(
+        eq(transactions.reference, req.params.reference),
+        eq(transactions.providerReference, req.params.reference),
+      ),
       eq(transactions.userId, user.id),
       eq(transactions.type, "Withdrawal"),
     ),
@@ -2207,7 +2213,14 @@ router.get("/v1/payments/:reference", async (req, res) => {
   const user = await ensureUser(req);
   await expireAndReconcilePending(user.id);
   const transaction = await db.query.transactions.findFirst({
-    where: and(eq(transactions.reference, req.params.reference), eq(transactions.userId, user.id), eq(transactions.type, "Payment")),
+    where: and(
+      or(
+        eq(transactions.reference, req.params.reference),
+        eq(transactions.providerReference, req.params.reference),
+      ),
+      eq(transactions.userId, user.id),
+      eq(transactions.type, "Payment"),
+    ),
   });
   if (!transaction) {
     res.status(404).json({ error: "Paiement introuvable." });
@@ -2313,8 +2326,10 @@ router.post("/v1/withdrawals", async (req, res) => {
     return;
   }
 
-  const estimatedFee = estimateDrimPayPayoutFee(requestedAmount);
+  const settings = await getPlatformSettings();
+  const estimatedFee = calculateMulapayNetAmount(requestedAmount, Number(settings.feePercentage)).platformFee;
   const estimatedTotal = requestedAmount + estimatedFee;
+  const mulapayReference = createMulapayReference("WD");
   let localTransaction: typeof transactions.$inferSelect | undefined;
   try {
     if (!isDrimPayConfigured()) {
@@ -2343,7 +2358,8 @@ router.post("/v1/withdrawals", async (req, res) => {
         currency: wallet.currency,
         country: wallet.country,
         counterparty: `Retrait Mobile Money · ${requestedOperator}`,
-        reference: orderId,
+        reference: mulapayReference,
+        providerReference: null,
         providerOrderId: orderId,
         fee: estimatedFee,
         netAmount: requestedAmount,
@@ -2369,35 +2385,24 @@ router.post("/v1/withdrawals", async (req, res) => {
       description: `Retrait Mulapay · ${wallet.country}`,
       metadata: { mulapay_user_id: user.id, mulapay_wallet_id: wallet.id },
     });
-    const providerTotal = provider.total_debited;
-    if (
-      provider.amount !== requestedAmount ||
-      providerTotal !== provider.amount + provider.fee ||
-      providerTotal <= 0
-    ) {
+    if (provider.amount !== requestedAmount || provider.total_debited <= 0) {
       throw new DrimPayError("La réponse payout DrimPay est incohérente. Le retrait reste en attente de vérification.", 502, "INVALID_PAYOUT_RESPONSE");
     }
 
     await db.transaction(async (tx) => {
-      await tx.update(wallets)
-        .set({ pending: sql`${wallets.pending} + ${providerTotal - estimatedTotal}` })
-        .where(eq(wallets.id, wallet.id));
       await tx.update(transactions).set({
-        reference: provider.reference,
-        fee: provider.fee,
-        netAmount: provider.amount,
-        merchantAmount: provider.amount,
+        providerReference: provider.reference,
       }).where(eq(transactions.id, localTransaction!.id));
     });
     res.status(201).json({
       ok: true,
       message: "Retrait en cours de traitement. Le wallet sera débité après confirmation Mulapay.",
-      reference: provider.reference,
+      reference: mulapayReference,
       status: "Pending",
-      amount: provider.amount,
-      currency: provider.currency,
-      fee: provider.fee,
-      totalDebited: providerTotal,
+      amount: requestedAmount,
+      currency: wallet.currency,
+      fee: estimatedFee,
+      totalDebited: estimatedTotal,
     });
   } catch (error) {
     if (localTransaction && (error instanceof DrimPayError ? error.statusCode < 500 : false)) {

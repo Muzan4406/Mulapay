@@ -461,7 +461,7 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
   const selectedWallet = wallets.find(wallet => wallet.id === walletId) ?? walletForCountry(country) ?? wallets[0];
   const availableBalance = selectedWallet ? Math.max(0, selectedWallet.balance - selectedWallet.pending) : 0;
   const operationAmount = Number(amount) || 0;
-  const operationFee = isDeposit ? calculateFee(operationAmount, feePercentage) : Math.ceil(operationAmount * 3.5 / 100);
+  const operationFee = calculateFee(operationAmount, feePercentage);
   const operationDebitAmount = operationAmount + operationFee;
 
   useEffect(() => {
@@ -1628,7 +1628,7 @@ function Transactions() {
 }
 
 function Transfer() {
-  const { wallets, transfer } = useStore();
+  const { wallets, transfer, feePercentage } = useStore();
   const [amount, setAmount] = useState('');
   const [country, setCountry] = useState(wallets[0]?.country ?? mobileMoneyCountryOptions[0].country);
   const [operator, setOperator] = useState('');
@@ -1638,7 +1638,7 @@ function Transfer() {
   const selectedWallet = walletForCountry(country);
   const availableBalance = selectedWallet ? Math.max(0, selectedWallet.balance - selectedWallet.pending) : 0;
   const transferAmount = Number(amount) || 0;
-  const transferFee = Math.ceil(transferAmount * 3.5 / 100);
+  const transferFee = calculateFee(transferAmount, feePercentage);
   const recipientAmount = transferAmount;
   const debitAmount = transferAmount + transferFee;
   const canSubmit = transferAmount > 0 && phone.length > 0 && Boolean(selectedWallet) && operator.length > 0;

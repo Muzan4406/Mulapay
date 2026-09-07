@@ -73,6 +73,7 @@ export const transactions = pgTable(
     paymentProvider: text("payment_provider").notNull().default("DRIMPAY"),
     counterparty: text("counterparty").notNull(),
     reference: text("reference").notNull().unique(),
+    providerReference: text("provider_reference"),
     providerOrderId: text("provider_order_id").unique(),
     providerTransactionId: text("provider_transaction_id"),
     netAmount: integer("net_amount"),
