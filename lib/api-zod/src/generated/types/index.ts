@@ -25,7 +25,6 @@ export * from './idempotencyKeyParameter';
 export * from './kycInput';
 export * from './kycVerification';
 export * from './moneyOperationInput';
-export * from './moneyOperationInputFeePayer';
 export * from './moneyOperationInputMethod';
 export * from './notFoundResponse';
 export * from './notification';

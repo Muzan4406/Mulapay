@@ -11,6 +11,8 @@ export interface HealthStatus {
 
 export interface Error {
   error: string;
+  code?: string;
+  otpRequired?: boolean;
 }
 
 export interface Profile {
@@ -219,18 +221,17 @@ export interface OperationResult {
   /** @nullable */
   reference?: string | null;
   status?: string;
+  amount?: number;
+  currency?: string;
   /** @nullable */
   paymentUrl?: string | null;
-  expiresAt?: string;
+  /** @nullable */
+  expiresAt?: string | null;
   fee?: number;
   netAmount?: number;
   platformFee?: number;
   merchantAmount?: number;
-  /** @nullable */
-  providerStatus?: string | null;
-  otpRequired?: boolean;
-  /** @nullable */
-  ussdCode?: string | null;
+  totalDebited?: number;
 }
 
 export type PaymentStatusStatus = typeof PaymentStatusStatus[keyof typeof PaymentStatusStatus];
@@ -250,8 +251,6 @@ export interface PaymentStatus {
   ok: boolean;
   reference: string;
   status: PaymentStatusStatus;
-  /** @nullable */
-  providerStatus?: string | null;
   amount: number;
   currency: string;
   /** @nullable */
@@ -276,14 +275,18 @@ export type TransferInputFeePayer = typeof TransferInputFeePayer[keyof typeof Tr
 
 export const TransferInputFeePayer = {
   sender: 'sender',
-  recipient: 'recipient',
 } as const;
 
 export interface TransferInput {
-  /** @exclusiveMinimum 0 */
+  /**
+     * Must be an integer.
+     * @maximum 10000000
+     * @exclusiveMinimum 0
+     */
   amount: number;
   currency: string;
-  country?: string;
+  /** @minLength 2 */
+  country: string;
   /** @minLength 2 */
   counterparty: string;
   note?: string;
@@ -293,7 +296,10 @@ export interface TransferInput {
 export interface ExchangeInput {
   source: string;
   destination: string;
-  /** @exclusiveMinimum 0 */
+  /**
+     * Must be an integer.
+     * @exclusiveMinimum 0
+     */
   amount: number;
 }
 
@@ -348,6 +354,7 @@ export interface PaymentLinkInput {
      */
   amountMax: number;
   customerFields: PaymentLinkInputCustomerFieldsItem[];
+  /** ISO 8601 expiration timestamp. */
   expiresAt: string;
   /**
      * @minimum 1
@@ -385,24 +392,21 @@ export const MoneyOperationInputMethod = {
   mobile_money: 'mobile_money',
 } as const;
 
-export type MoneyOperationInputFeePayer = typeof MoneyOperationInputFeePayer[keyof typeof MoneyOperationInputFeePayer];
-
-
-export const MoneyOperationInputFeePayer = {
-  sender: 'sender',
-  recipient: 'recipient',
-} as const;
-
 export interface MoneyOperationInput {
   walletId: string;
-  /** @exclusiveMinimum 0 */
+  /**
+     * Must be an integer.
+     * @maximum 10000000
+     * @exclusiveMinimum 0
+     */
   amount: number;
-  method?: MoneyOperationInputMethod;
-  country?: string;
-  operator?: string;
-  phone?: string;
-  operatorOtp?: string;
-  feePayer?: MoneyOperationInputFeePayer;
+  method: MoneyOperationInputMethod;
+  /** @minLength 2 */
+  country: string;
+  /** @minLength 2 */
+  operator: string;
+  /** @pattern ^\+[1-9][0-9]{7,14}$ */
+  phone: string;
 }
 
 export type DepositInputMethod = typeof DepositInputMethod[keyof typeof DepositInputMethod];
@@ -414,10 +418,15 @@ export const DepositInputMethod = {
 
 export interface DepositInput {
   walletId: string;
-  /** @exclusiveMinimum 0 */
+  /**
+     * Must be an integer.
+     * @exclusiveMinimum 0
+     */
   amount: number;
   method: DepositInputMethod;
+  /** @minLength 2 */
   country: string;
+  /** @minLength 2 */
   operator: string;
   /** @pattern ^\+[1-9][0-9]{7,14}$ */
   phone: string;

@@ -12,16 +12,15 @@ export interface OperationResult {
   /** @nullable */
   reference?: string | null;
   status?: string;
+  amount?: number;
+  currency?: string;
   /** @nullable */
   paymentUrl?: string | null;
-  expiresAt?: Date;
+  /** @nullable */
+  expiresAt?: Date | null;
   fee?: number;
   netAmount?: number;
   platformFee?: number;
   merchantAmount?: number;
-  /** @nullable */
-  providerStatus?: string | null;
-  otpRequired?: boolean;
-  /** @nullable */
-  ussdCode?: string | null;
+  totalDebited?: number;
 }

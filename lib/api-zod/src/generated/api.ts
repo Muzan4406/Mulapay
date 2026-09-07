@@ -112,19 +112,30 @@ export const GetBootstrapResponse = zod.object({
 /**
  * @summary Sends funds to another Mulapay user
  */
+export const createTransferHeaderIdempotencyKeyMax = 128;
+
+
+
+export const CreateTransferHeader = zod.object({
+  "Idempotency-Key": zod.string().min(1).max(createTransferHeaderIdempotencyKeyMax).optional().describe('Stable unique key for one payment attempt. Reuse it only when safely retrying the same request.')
+})
+
 export const createTransferBodyAmountExclusiveMin = 0;
+export const createTransferBodyAmountMax = 10000000;
+
+export const createTransferBodyCountryMin = 2;
 
 export const createTransferBodyCounterpartyMin = 2;
 
 
 
 export const CreateTransferBody = zod.object({
-  "amount": zod.number().gt(createTransferBodyAmountExclusiveMin),
+  "amount": zod.number().gt(createTransferBodyAmountExclusiveMin).max(createTransferBodyAmountMax).describe('Must be an integer.'),
   "currency": zod.string(),
-  "country": zod.string().optional(),
+  "country": zod.string().min(createTransferBodyCountryMin),
   "counterparty": zod.string().min(createTransferBodyCounterpartyMin),
   "note": zod.string().optional(),
-  "feePayer": zod.enum(['sender', 'recipient'])
+  "feePayer": zod.enum(['sender'])
 })
 
 export const CreateTransferResponse = zod.object({
@@ -132,15 +143,15 @@ export const CreateTransferResponse = zod.object({
   "message": zod.string(),
   "reference": zod.string().nullish(),
   "status": zod.string().optional(),
+  "amount": zod.number().optional(),
+  "currency": zod.string().optional(),
   "paymentUrl": zod.string().nullish(),
-  "expiresAt": zod.coerce.date().optional(),
+  "expiresAt": zod.coerce.date().nullish(),
   "fee": zod.number().optional(),
   "netAmount": zod.number().optional(),
   "platformFee": zod.number().optional(),
   "merchantAmount": zod.number().optional(),
-  "providerStatus": zod.string().nullish(),
-  "otpRequired": zod.boolean().optional(),
-  "ussdCode": zod.string().nullish()
+  "totalDebited": zod.number().optional()
 })
 
 
@@ -154,7 +165,7 @@ export const createExchangeBodyAmountExclusiveMin = 0;
 export const CreateExchangeBody = zod.object({
   "source": zod.string(),
   "destination": zod.string(),
-  "amount": zod.number().gt(createExchangeBodyAmountExclusiveMin)
+  "amount": zod.number().gt(createExchangeBodyAmountExclusiveMin).describe('Must be an integer.')
 })
 
 export const CreateExchangeResponse = zod.object({
@@ -162,15 +173,15 @@ export const CreateExchangeResponse = zod.object({
   "message": zod.string(),
   "reference": zod.string().nullish(),
   "status": zod.string().optional(),
+  "amount": zod.number().optional(),
+  "currency": zod.string().optional(),
   "paymentUrl": zod.string().nullish(),
-  "expiresAt": zod.coerce.date().optional(),
+  "expiresAt": zod.coerce.date().nullish(),
   "fee": zod.number().optional(),
   "netAmount": zod.number().optional(),
   "platformFee": zod.number().optional(),
   "merchantAmount": zod.number().optional(),
-  "providerStatus": zod.string().nullish(),
-  "otpRequired": zod.boolean().optional(),
-  "ussdCode": zod.string().nullish()
+  "totalDebited": zod.number().optional()
 })
 
 
@@ -191,15 +202,15 @@ export const DecideExchangeResponse = zod.object({
   "message": zod.string(),
   "reference": zod.string().nullish(),
   "status": zod.string().optional(),
+  "amount": zod.number().optional(),
+  "currency": zod.string().optional(),
   "paymentUrl": zod.string().nullish(),
-  "expiresAt": zod.coerce.date().optional(),
+  "expiresAt": zod.coerce.date().nullish(),
   "fee": zod.number().optional(),
   "netAmount": zod.number().optional(),
   "platformFee": zod.number().optional(),
   "merchantAmount": zod.number().optional(),
-  "providerStatus": zod.string().nullish(),
-  "otpRequired": zod.boolean().optional(),
-  "ussdCode": zod.string().nullish()
+  "totalDebited": zod.number().optional()
 })
 
 
@@ -229,7 +240,7 @@ export const CreatePaymentLinkBody = zod.object({
   "amountMin": zod.number().min(createPaymentLinkBodyAmountMinMin).max(createPaymentLinkBodyAmountMinMax),
   "amountMax": zod.number().min(createPaymentLinkBodyAmountMaxMin).max(createPaymentLinkBodyAmountMaxMax),
   "customerFields": zod.array(zod.enum(['full_name', 'country', 'operator', 'phone', 'email'])),
-  "expiresAt": zod.string(),
+  "expiresAt": zod.string().describe('ISO 8601 expiration timestamp.'),
   "maxPayments": zod.number().min(1).nullable(),
   "afterPaymentAction": zod.enum(['CONFIRMATION', 'REDIRECT']),
   "redirectUrl": zod.string().nullable(),
@@ -363,15 +374,15 @@ export const CreatePublicPaymentResponse = zod.object({
   "message": zod.string(),
   "reference": zod.string().nullish(),
   "status": zod.string().optional(),
+  "amount": zod.number().optional(),
+  "currency": zod.string().optional(),
   "paymentUrl": zod.string().nullish(),
-  "expiresAt": zod.coerce.date().optional(),
+  "expiresAt": zod.coerce.date().nullish(),
   "fee": zod.number().optional(),
   "netAmount": zod.number().optional(),
   "platformFee": zod.number().optional(),
   "merchantAmount": zod.number().optional(),
-  "providerStatus": zod.string().nullish(),
-  "otpRequired": zod.boolean().optional(),
-  "ussdCode": zod.string().nullish()
+  "totalDebited": zod.number().optional()
 })
 
 
@@ -387,7 +398,6 @@ export const GetPublicPaymentResponse = zod.object({
   "ok": zod.boolean(),
   "reference": zod.string(),
   "status": zod.enum(['Pending', 'Processing', 'Completed', 'Failed', 'Expired', 'Cancelled', 'Reversed']),
-  "providerStatus": zod.string().nullish(),
   "amount": zod.number(),
   "currency": zod.string(),
   "fee": zod.number().nullish(),
@@ -431,7 +441,7 @@ export const UpdatePaymentLinkBody = zod.object({
   "amountMin": zod.number().min(updatePaymentLinkBodyAmountMinMin).max(updatePaymentLinkBodyAmountMinMax),
   "amountMax": zod.number().min(updatePaymentLinkBodyAmountMaxMin).max(updatePaymentLinkBodyAmountMaxMax),
   "customerFields": zod.array(zod.enum(['full_name', 'country', 'operator', 'phone', 'email'])),
-  "expiresAt": zod.string(),
+  "expiresAt": zod.string().describe('ISO 8601 expiration timestamp.'),
   "maxPayments": zod.number().min(1).nullable(),
   "afterPaymentAction": zod.enum(['CONFIRMATION', 'REDIRECT']),
   "redirectUrl": zod.string().nullable(),
@@ -477,15 +487,15 @@ export const DeletePaymentLinkResponse = zod.object({
   "message": zod.string(),
   "reference": zod.string().nullish(),
   "status": zod.string().optional(),
+  "amount": zod.number().optional(),
+  "currency": zod.string().optional(),
   "paymentUrl": zod.string().nullish(),
-  "expiresAt": zod.coerce.date().optional(),
+  "expiresAt": zod.coerce.date().nullish(),
   "fee": zod.number().optional(),
   "netAmount": zod.number().optional(),
   "platformFee": zod.number().optional(),
   "merchantAmount": zod.number().optional(),
-  "providerStatus": zod.string().nullish(),
-  "otpRequired": zod.boolean().optional(),
-  "ussdCode": zod.string().nullish()
+  "totalDebited": zod.number().optional()
 })
 
 
@@ -502,15 +512,19 @@ export const CreateDepositHeader = zod.object({
 
 export const createDepositBodyAmountExclusiveMin = 0;
 
+export const createDepositBodyCountryMin = 2;
+
+export const createDepositBodyOperatorMin = 2;
+
 export const createDepositBodyPhoneRegExp = new RegExp('^\\+[1-9][0-9]{7,14}$');
 
 
 export const CreateDepositBody = zod.object({
   "walletId": zod.string(),
-  "amount": zod.number().gt(createDepositBodyAmountExclusiveMin),
+  "amount": zod.number().gt(createDepositBodyAmountExclusiveMin).describe('Must be an integer.'),
   "method": zod.enum(['mobile_money']),
-  "country": zod.string(),
-  "operator": zod.string(),
+  "country": zod.string().min(createDepositBodyCountryMin),
+  "operator": zod.string().min(createDepositBodyOperatorMin),
   "phone": zod.string().regex(createDepositBodyPhoneRegExp),
   "operatorOtp": zod.string().optional()
 })
@@ -520,15 +534,15 @@ export const CreateDepositResponse = zod.object({
   "message": zod.string(),
   "reference": zod.string().nullish(),
   "status": zod.string().optional(),
+  "amount": zod.number().optional(),
+  "currency": zod.string().optional(),
   "paymentUrl": zod.string().nullish(),
-  "expiresAt": zod.coerce.date().optional(),
+  "expiresAt": zod.coerce.date().nullish(),
   "fee": zod.number().optional(),
   "netAmount": zod.number().optional(),
   "platformFee": zod.number().optional(),
   "merchantAmount": zod.number().optional(),
-  "providerStatus": zod.string().nullish(),
-  "otpRequired": zod.boolean().optional(),
-  "ussdCode": zod.string().nullish()
+  "totalDebited": zod.number().optional()
 })
 
 
@@ -543,7 +557,6 @@ export const GetDepositResponse = zod.object({
   "ok": zod.boolean(),
   "reference": zod.string(),
   "status": zod.enum(['Pending', 'Processing', 'Completed', 'Failed', 'Expired', 'Cancelled', 'Reversed']),
-  "providerStatus": zod.string().nullish(),
   "amount": zod.number(),
   "currency": zod.string(),
   "fee": zod.number().nullish(),
@@ -560,19 +573,31 @@ export const GetDepositResponse = zod.object({
 /**
  * @summary Starts a provider-backed withdrawal
  */
-export const createWithdrawalBodyAmountExclusiveMin = 0;
+export const createWithdrawalHeaderIdempotencyKeyMax = 128;
 
+
+
+export const CreateWithdrawalHeader = zod.object({
+  "Idempotency-Key": zod.string().min(1).max(createWithdrawalHeaderIdempotencyKeyMax).optional().describe('Stable unique key for one payment attempt. Reuse it only when safely retrying the same request.')
+})
+
+export const createWithdrawalBodyAmountExclusiveMin = 0;
+export const createWithdrawalBodyAmountMax = 10000000;
+
+export const createWithdrawalBodyCountryMin = 2;
+
+export const createWithdrawalBodyOperatorMin = 2;
+
+export const createWithdrawalBodyPhoneRegExp = new RegExp('^\\+[1-9][0-9]{7,14}$');
 
 
 export const CreateWithdrawalBody = zod.object({
   "walletId": zod.string(),
-  "amount": zod.number().gt(createWithdrawalBodyAmountExclusiveMin),
-  "method": zod.enum(['mobile_money']).optional(),
-  "country": zod.string().optional(),
-  "operator": zod.string().optional(),
-  "phone": zod.string().optional(),
-  "operatorOtp": zod.string().optional(),
-  "feePayer": zod.enum(['sender', 'recipient']).optional()
+  "amount": zod.number().gt(createWithdrawalBodyAmountExclusiveMin).max(createWithdrawalBodyAmountMax).describe('Must be an integer.'),
+  "method": zod.enum(['mobile_money']),
+  "country": zod.string().min(createWithdrawalBodyCountryMin),
+  "operator": zod.string().min(createWithdrawalBodyOperatorMin),
+  "phone": zod.string().regex(createWithdrawalBodyPhoneRegExp)
 })
 
 export const CreateWithdrawalResponse = zod.object({
@@ -580,15 +605,15 @@ export const CreateWithdrawalResponse = zod.object({
   "message": zod.string(),
   "reference": zod.string().nullish(),
   "status": zod.string().optional(),
+  "amount": zod.number().optional(),
+  "currency": zod.string().optional(),
   "paymentUrl": zod.string().nullish(),
-  "expiresAt": zod.coerce.date().optional(),
+  "expiresAt": zod.coerce.date().nullish(),
   "fee": zod.number().optional(),
   "netAmount": zod.number().optional(),
   "platformFee": zod.number().optional(),
   "merchantAmount": zod.number().optional(),
-  "providerStatus": zod.string().nullish(),
-  "otpRequired": zod.boolean().optional(),
-  "ussdCode": zod.string().nullish()
+  "totalDebited": zod.number().optional()
 })
 
 
@@ -604,15 +629,15 @@ export const MarkNotificationReadResponse = zod.object({
   "message": zod.string(),
   "reference": zod.string().nullish(),
   "status": zod.string().optional(),
+  "amount": zod.number().optional(),
+  "currency": zod.string().optional(),
   "paymentUrl": zod.string().nullish(),
-  "expiresAt": zod.coerce.date().optional(),
+  "expiresAt": zod.coerce.date().nullish(),
   "fee": zod.number().optional(),
   "netAmount": zod.number().optional(),
   "platformFee": zod.number().optional(),
   "merchantAmount": zod.number().optional(),
-  "providerStatus": zod.string().nullish(),
-  "otpRequired": zod.boolean().optional(),
-  "ussdCode": zod.string().nullish()
+  "totalDebited": zod.number().optional()
 })
 
 
@@ -627,7 +652,6 @@ export const GetWithdrawalResponse = zod.object({
   "ok": zod.boolean(),
   "reference": zod.string(),
   "status": zod.enum(['Pending', 'Processing', 'Completed', 'Failed', 'Expired', 'Cancelled', 'Reversed']),
-  "providerStatus": zod.string().nullish(),
   "amount": zod.number(),
   "currency": zod.string(),
   "fee": zod.number().nullish(),
@@ -652,7 +676,6 @@ export const GetPaymentResponse = zod.object({
   "ok": zod.boolean(),
   "reference": zod.string(),
   "status": zod.enum(['Pending', 'Processing', 'Completed', 'Failed', 'Expired', 'Cancelled', 'Reversed']),
-  "providerStatus": zod.string().nullish(),
   "amount": zod.number(),
   "currency": zod.string(),
   "fee": zod.number().nullish(),
@@ -818,15 +841,15 @@ export const DecideKycResponse = zod.object({
   "message": zod.string(),
   "reference": zod.string().nullish(),
   "status": zod.string().optional(),
+  "amount": zod.number().optional(),
+  "currency": zod.string().optional(),
   "paymentUrl": zod.string().nullish(),
-  "expiresAt": zod.coerce.date().optional(),
+  "expiresAt": zod.coerce.date().nullish(),
   "fee": zod.number().optional(),
   "netAmount": zod.number().optional(),
   "platformFee": zod.number().optional(),
   "merchantAmount": zod.number().optional(),
-  "providerStatus": zod.string().nullish(),
-  "otpRequired": zod.boolean().optional(),
-  "ussdCode": zod.string().nullish()
+  "totalDebited": zod.number().optional()
 })
 
 

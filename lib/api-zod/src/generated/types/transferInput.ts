@@ -8,10 +8,15 @@
 import type { TransferInputFeePayer } from './transferInputFeePayer';
 
 export interface TransferInput {
-  /** @exclusiveMinimum 0 */
+  /**
+     * Must be an integer.
+     * @maximum 10000000
+     * @exclusiveMinimum 0
+     */
   amount: number;
   currency: string;
-  country?: string;
+  /** @minLength 2 */
+  country: string;
   /** @minLength 2 */
   counterparty: string;
   note?: string;

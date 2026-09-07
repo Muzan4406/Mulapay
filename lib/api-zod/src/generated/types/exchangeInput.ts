@@ -9,6 +9,9 @@
 export interface ExchangeInput {
   source: string;
   destination: string;
-  /** @exclusiveMinimum 0 */
+  /**
+     * Must be an integer.
+     * @exclusiveMinimum 0
+     */
   amount: number;
 }

@@ -11,5 +11,4 @@ export type TransferInputFeePayer = typeof TransferInputFeePayer[keyof typeof Tr
 
 export const TransferInputFeePayer = {
   sender: 'sender',
-  recipient: 'recipient',
 } as const;

@@ -11,8 +11,6 @@ export interface PaymentStatus {
   ok: boolean;
   reference: string;
   status: PaymentStatusStatus;
-  /** @nullable */
-  providerStatus?: string | null;
   amount: number;
   currency: string;
   /** @nullable */

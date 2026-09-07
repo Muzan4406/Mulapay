@@ -54,14 +54,14 @@ type ApiKey = { id: string; name: string; keyPrefix: string; scopes: string[]; l
 type AdminKycCase = { id: string; userId: string; name: string; country: string; status: string; documents: string[]; submittedAt: string };
 type AdminSummary = { kycAwaiting: number; exchangeQueue: number; volume: number; successRate: number };
 type PaymentProviderId = 'DRIMPAY' | 'ASHTECHPAY';
-type DepositTracking = { reference: string; status: string; providerStatus?: string | null; amount: number; currency: string; fee: number | null; netAmount: number | null; platformFee: number | null; merchantAmount: number | null; paymentUrl: string | null };
+type DepositTracking = { reference: string; status: string; amount: number; currency: string; fee: number | null; netAmount: number | null; platformFee: number | null; merchantAmount: number | null; paymentUrl: string | null };
 type WithdrawalTracking = { reference: string; status: string; amount: number; currency: string; fee: number | null; totalDebited: number | null };
-type PublicPaymentResult = { reference: string; status: string; providerStatus?: string | null; operator?: string; message?: string; amount?: number; currency?: string; fee?: number | null; netAmount?: number | null; platformFee?: number | null; merchantAmount?: number | null; paymentUrl?: string | null; expiresAt?: string | null };
+type PublicPaymentResult = { reference: string; status: string; operator?: string; message?: string; amount?: number; currency?: string; fee?: number | null; netAmount?: number | null; platformFee?: number | null; merchantAmount?: number | null; paymentUrl?: string | null; expiresAt?: string | null };
 type Store = {
   profile: { id: string; firstName: string; lastName: string; email: string; role: string; country: string; kycStatus: string };
   wallets: Wallet[]; transactions: Transaction[]; exchanges: Exchange[]; links: PaymentLink[]; notifications: Notification[];
   adminKyc: AdminKycCase[]; adminTransactions: Transaction[]; adminSummary?: AdminSummary; feePercentage: number;
-  transfer: (data: { amount: number; currency: string; country: string; counterparty: string; note: string; feePayer: 'sender' | 'recipient' }) => void;
+  transfer: (data: { amount: number; currency: string; country: string; counterparty: string; note: string; feePayer: 'sender' }) => void;
   exchange: (data: { source: string; destination: string; amount: number }) => void;
   setExchangeStatus: (id: string, status: string) => void;
   addLink: (data: PaymentLinkInput) => void;
@@ -205,8 +205,8 @@ const mobileMoneyCountryOptions = [
 
 const landingFeatures = [
   { icon: ArrowDownLeft, eyebrow: '01', title: 'Dépôt', copy: 'Ajoutez de l’argent facilement avec les moyens de paiement disponibles.' },
-  { icon: ArrowUpRight, eyebrow: '02', title: 'Retrait', copy: 'Envoyez vos fonds vers un wallet Mobile Money via le payout DrimPay.' },
-  { icon: Send, eyebrow: '03', title: 'Transfert', copy: 'Envoyez de l’argent vers un numéro Mobile Money via le payout DrimPay.' },
+  { icon: ArrowUpRight, eyebrow: '02', title: 'Retrait', copy: 'Envoyez vos fonds vers un wallet Mobile Money avec le routage Mulapay.' },
+  { icon: Send, eyebrow: '03', title: 'Transfert', copy: 'Envoyez de l’argent vers un numéro Mobile Money avec le routage Mulapay.' },
   { icon: RefreshCw, eyebrow: '04', title: 'Échange', copy: 'Les conversions entre pays seront disponibles après activation du règlement réel.' },
   { icon: Link2, eyebrow: '05', title: 'Payment Links', copy: 'Créez un lien simple pour recevoir des paiements à distance.' },
   { icon: QrCode, eyebrow: '06', title: 'QR Code', copy: 'Recevez des paiements en présentiel avec votre QR code Mulapay.' },
@@ -450,7 +450,6 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
         setDepositTracking(current => current ? {
           ...current,
           status: payload.status?.toLowerCase() === 'success' ? 'Completed' : payload.status ?? current.status,
-          providerStatus: payload.providerStatus ?? current.providerStatus,
           fee: typeof payload.fee === 'number' ? payload.fee : current.fee,
           netAmount: typeof payload.netAmount === 'number' ? payload.netAmount : current.netAmount,
           platformFee: typeof payload.platformFee === 'number' ? payload.platformFee : current.platformFee,
@@ -467,7 +466,7 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
       active = false;
       window.clearInterval(interval);
     };
-  }, [depositTracking?.reference, depositTracking?.status, depositTracking?.providerStatus, isDeposit]);
+  }, [depositTracking?.reference, depositTracking?.status, isDeposit]);
 
   useEffect(() => {
     if (isDeposit || !withdrawalTracking?.reference || depositStatusIsTerminal(withdrawalTracking.status)) return;
@@ -510,10 +509,10 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
   }, [withdrawalTracking?.reference, withdrawalTracking?.status, isDeposit]);
 
   useEffect(() => {
-    if (!isDeposit || !depositTracking?.reference || depositStatusIsTerminal(depositTracking.status) || depositTracking.providerStatus?.toLowerCase() === 'completed') return;
+    if (!isDeposit || !depositTracking?.reference || depositStatusIsTerminal(depositTracking.status)) return;
     let redirectTimer: number | undefined;
     const timeout = window.setTimeout(() => {
-      setDepositTracking(current => current && !depositStatusIsTerminal(current.status) && current.providerStatus?.toLowerCase() !== 'completed' ? { ...current, status: 'Failed' } : current);
+      setDepositTracking(current => current && !depositStatusIsTerminal(current.status) ? { ...current, status: 'Failed' } : current);
       toast('Dépôt non confirmé après 60 secondes. Retour au dashboard.');
       redirectTimer = window.setTimeout(() => setLocation('/app'), 800);
     }, 60000);
@@ -521,7 +520,7 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
       window.clearTimeout(timeout);
       if (redirectTimer) window.clearTimeout(redirectTimer);
     };
-  }, [depositTracking?.reference, depositTracking?.status, depositTracking?.providerStatus, isDeposit]);
+  }, [depositTracking?.reference, depositTracking?.status, isDeposit]);
 
   useEffect(() => {
     if (!isDeposit || !depositTracking?.reference || depositStatusIsTerminal(depositTracking.status)) return;
@@ -554,7 +553,6 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
         setDepositTracking({
           reference: payload.reference,
           status: payload.status ?? 'Pending',
-          providerStatus: payload.providerStatus ?? null,
           amount: Number(amount),
           currency: selectedWallet?.currency ?? 'XOF',
           fee: typeof payload.fee === 'number' ? payload.fee : null,
@@ -592,28 +590,27 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
     if (depositTracking) {
       const terminal = depositStatusIsTerminal(depositTracking.status);
       const completed = depositTracking.status.toLowerCase() === 'completed';
-      const providerConfirmed = depositTracking.providerStatus?.toLowerCase() === 'completed';
-      const failed = !providerConfirmed && ['failed', 'expired', 'cancelled', 'reversed'].includes(depositTracking.status.toLowerCase());
+      const failed = ['failed', 'expired', 'cancelled', 'reversed'].includes(depositTracking.status.toLowerCase());
       const depositNetAmount = depositTracking.merchantAmount ?? depositTracking.netAmount ?? depositTracking.amount;
       const progress = `${Math.max(0, Math.min(100, (depositSecondsLeft / 60) * 100))}%`;
       return <main className="page-wrap deposit-page">
         <div className={`card card-pad deposit-status-card ${completed ? 'is-complete' : failed ? 'is-failed' : ''}`} data-testid="deposit-status-card">
           {selectedOperator && <div className="deposit-status-provider"><img src={`${import.meta.env.BASE_URL}mobile-money/${selectedOperator.src}`} alt="" /><span><small>Opération Mobile Money</small><strong>{operator}</strong></span></div>}
           <div className="deposit-status-icon">{completed ? <CheckCircle2 size={26} /> : failed ? <CircleAlert size={26} /> : <RefreshCw size={26} className="loading-spin" />}</div>
-          <span className="deposit-status-kicker">{completed ? 'PAIEMENT CONFIRMÉ' : providerConfirmed ? 'PAIEMENT REÇU' : failed ? 'PAIEMENT NON CONFIRMÉ' : 'PAIEMENT EN COURS'}</span>
-          <h2>{completed ? 'Votre wallet est crédité' : providerConfirmed ? 'Confirmation sécurisée en cours' : failed ? 'La confirmation n’a pas abouti' : 'Validez sur votre téléphone'}</h2>
-          <p className="deposit-status-copy">{completed ? 'Le fournisseur a confirmé votre dépôt.' : providerConfirmed ? 'AshtechPay a confirmé le paiement. Mulapay attend encore la notification signée avant de créditer le wallet.' : failed ? 'Aucun crédit ne sera appliqué tant que le paiement n’est pas confirmé.' : 'Confirmez le paiement sur votre téléphone.'}</p>
+           <span className="deposit-status-kicker">{completed ? 'PAIEMENT CONFIRMÉ' : failed ? 'PAIEMENT NON CONFIRMÉ' : 'PAIEMENT EN COURS'}</span>
+           <h2>{completed ? 'Votre wallet est crédité' : failed ? 'La confirmation n’a pas abouti' : 'Validez sur votre téléphone'}</h2>
+           <p className="deposit-status-copy">{completed ? 'Mulapay a confirmé votre dépôt.' : failed ? 'Aucun crédit ne sera appliqué tant que le paiement n’est pas confirmé.' : 'Confirmez le paiement sur votre téléphone.'}</p>
           <div className="deposit-status-amount">
             <small>Net après frais Mulapay</small>
             <strong>{money(depositNetAmount, depositTracking.currency)}</strong>
             <span>Montant du paiement : {money(depositTracking.amount, depositTracking.currency)} · via {operator}</span>
           </div>
-          {!terminal && !providerConfirmed && <div className="deposit-status-progress">
+           {!terminal && <div className="deposit-status-progress">
             <div><span>Confirmation automatique</span><strong>{depositSecondsLeft}s</strong></div>
             <span className="deposit-status-progress-track"><span style={{ width: progress }} /></span>
           </div>}
           {depositTracking.paymentUrl && <a className="button button-primary button-wide" href={depositTracking.paymentUrl} target="_blank" rel="noreferrer">Ouvrir le paiement sécurisé <ChevronRight size={15} /></a>}
-          {!terminal && <div className="deposit-status-waiting"><RefreshCw size={14} className="loading-spin" /><span>{providerConfirmed ? 'Paiement reçu, finalisation sécurisée en cours.' : 'Statut vérifié automatiquement.'}</span></div>}
+           {!terminal && <div className="deposit-status-waiting"><RefreshCw size={14} className="loading-spin" /><span>Statut Mulapay vérifié automatiquement.</span></div>}
           {depositStatusError && <div className="notice notice-error"><CircleAlert size={15} /><span>{depositStatusError}</span></div>}
           {terminal && <button className="button button-ghost button-wide" type="button" onClick={() => { setDepositTracking(null); setPaymentUrl(''); setDepositStatusError(''); }}>Effectuer un autre dépôt</button>}
         </div>
@@ -678,12 +675,12 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
         {selectedOperator && <div className="deposit-status-provider"><img src={`${import.meta.env.BASE_URL}mobile-money/${selectedOperator.src}`} alt="" /><span><small>Retrait Mobile Money</small><strong>{operator}</strong></span></div>}
         <div className="deposit-status-icon">{completed ? <CheckCircle2 size={26} /> : failed ? <CircleAlert size={26} /> : <RefreshCw size={26} className="loading-spin" />}</div>
         <span className="deposit-status-kicker">{completed ? 'RETRAIT CONFIRMÉ' : failed ? 'RETRAIT NON CONFIRMÉ' : 'RETRAIT EN COURS'}</span>
-        <h2>{completed ? 'Les fonds ont été envoyés' : failed ? 'Le retrait n’a pas abouti' : 'Confirmation DrimPay en attente'}</h2>
-        <p className="deposit-status-copy">{completed ? 'DrimPay a confirmé le décaissement vers le numéro indiqué.' : failed ? 'La réservation du wallet a été libérée. Aucun débit définitif n’a été appliqué.' : 'Le wallet reste réservé jusqu’à la confirmation du fournisseur.'}</p>
+        <h2>{completed ? 'Les fonds ont été envoyés' : failed ? 'Le retrait n’a pas abouti' : 'Confirmation Mulapay en attente'}</h2>
+        <p className="deposit-status-copy">{completed ? 'Mulapay a confirmé le décaissement vers le numéro indiqué.' : failed ? 'La réservation du wallet a été libérée. Aucun débit définitif n’a été appliqué.' : 'Le wallet reste réservé jusqu’à la confirmation Mulapay.'}</p>
         <div className="deposit-status-amount">
           <small>Montant envoyé</small>
           <strong>{money(withdrawalTracking.amount, withdrawalTracking.currency)}</strong>
-          <span>Frais DrimPay : {withdrawalTracking.fee == null ? 'en attente' : money(withdrawalTracking.fee, withdrawalTracking.currency)} · Total débité : {withdrawalTracking.totalDebited == null ? 'en attente' : money(withdrawalTracking.totalDebited, withdrawalTracking.currency)}</span>
+          <span>Frais de retrait : {withdrawalTracking.fee == null ? 'en attente' : money(withdrawalTracking.fee, withdrawalTracking.currency)} · Total débité : {withdrawalTracking.totalDebited == null ? 'en attente' : money(withdrawalTracking.totalDebited, withdrawalTracking.currency)}</span>
         </div>
         {!terminal && <div className="deposit-status-waiting"><RefreshCw size={14} className="loading-spin" /><span>Statut vérifié automatiquement.</span></div>}
         {withdrawalStatusError && <div className="notice notice-error"><CircleAlert size={15} /><span>{withdrawalStatusError}</span></div>}
@@ -735,7 +732,7 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
       </div>
       {operationAmount > 0 && <div className="summary-box" style={{ marginBottom: 16 }} data-testid="withdrawal-fee-summary">
         <div className="summary-line"><span>Montant retiré</span><strong>{money(operationAmount, selectedWallet?.currency ?? 'XOF')}</strong></div>
-        <div className="summary-line"><span>Frais DrimPay (3,5 %)</span><strong>{money(operationFee, selectedWallet?.currency ?? 'XOF')}</strong></div>
+        <div className="summary-line"><span>Frais de retrait</span><strong>{money(operationFee, selectedWallet?.currency ?? 'XOF')}</strong></div>
         <div className="summary-line"><span>Montant reçu</span><strong>{money(operationAmount, selectedWallet?.currency ?? 'XOF')}</strong></div>
         <div className="summary-line total"><span>Total débité</span><strong>{money(operationDebitAmount, selectedWallet?.currency ?? 'XOF')}</strong></div>
       </div>}
@@ -1022,16 +1019,19 @@ function ApiPayinDocs() {
     ['coverage', 'Pays & opérateurs'],
     ['payment-links', 'Paiement par lien'],
     ['withdrawals', 'Retraits'],
+    ['transfers', 'Transferts'],
+    ['exchanges', 'Échanges'],
     ['notifications', 'Notifications'],
+    ['kyc', 'KYC'],
     ['settlement', 'Confirmation Mulapay'],
     ['troubleshooting', 'Dépannage'],
   ];
   const fields = [
     ['walletId', 'Identifiant du wallet Mulapay du pays concerné.', 'Requis'],
-    ['amount', 'Montant entier strictement positif dans la devise du wallet.', 'Requis'],
+    ['amount', 'Montant strictement positif ; l’API attend un montant entier dans la devise du wallet.', 'Requis'],
     ['method', 'Valeur attendue : mobile_money.', 'Requis'],
-    ['country', 'Pays du wallet : Togo, Bénin, Côte d’Ivoire, Burkina Faso, Sénégal ou Mali.', 'Requis'],
-    ['operator', 'Opérateur Mobile Money disponible pour le pays sélectionné.', 'Requis'],
+    ['country', 'Pays du wallet. Le pays doit être activé pour les dépôts sur votre compte ; le Niger est actuellement indisponible pour ce flux.', 'Requis'],
+    ['operator', 'Opérateur Mobile Money activé pour le pays sélectionné. La disponibilité dépend du routage Mulapay.', 'Requis'],
     ['phone', 'Numéro au format international, par exemple +22890000000.', 'Requis'],
     ['operatorOtp', 'Code de confirmation demandé dans certains parcours Mobile Money.', 'Conditionnel'],
   ];
@@ -1045,29 +1045,33 @@ function ApiPayinDocs() {
     ['Reversed', 'Remboursé', 'Un crédit précédemment effectué a été compensé.'],
   ];
   const responseFields = [
+    ['ok', 'Vaut true lorsque la demande a été acceptée par Mulapay.'],
+    ['message', 'Message métier lisible ; il ne remplace pas le suivi par référence.'],
     ['reference', 'Référence Mulapay à conserver pour le suivi.'],
     ['status', 'Statut métier Mulapay. Seul Completed confirme le règlement.'],
-    ['amount', 'Montant brut demandé au client ou au bénéficiaire.'],
-    ['fee', 'Frais associés à l’opération.'],
-    ['netAmount', 'Montant net après les frais de traitement.'],
-    ['platformFee', 'Frais Mulapay appliqués à l’opération.'],
-    ['merchantAmount', 'Montant destiné au wallet du marchand après les frais Mulapay.'],
-    ['paymentUrl', 'Lien de paiement à afficher lorsqu’un checkout hébergé est nécessaire, sinon null.'],
-    ['expiresAt', 'Date d’expiration ISO 8601 lorsqu’une opération possède une durée de validité.'],
+    ['amount', 'Montant de l’opération lorsqu’il est retourné par l’endpoint concerné.'],
+    ['currency', 'Devise de l’opération lorsqu’elle est retournée par l’endpoint concerné.'],
+    ['fee', 'Frais retournés par Mulapay pour l’opération.'],
+    ['netAmount', 'Montant net retourné par Mulapay après les frais applicables.'],
+    ['platformFee', 'Frais Mulapay retournés pour l’opération ; aucun taux n’est à recalculer côté partenaire.'],
+    ['merchantAmount', 'Montant destiné au wallet du marchand lorsqu’il est retourné.'],
+    ['totalDebited', 'Total débité pour un retrait ou un transfert, frais inclus.'],
+    ['paymentUrl', 'URL de paiement à afficher lorsqu’un checkout hébergé est nécessaire, sinon null.'],
+    ['expiresAt', 'Date d’expiration ISO 8601 lorsqu’une opération possède une durée de validité, sinon null.'],
   ];
   const errors = [
-    ['400', 'Requête invalide', 'Champ manquant, montant invalide, wallet incompatible, téléphone mal formé ou OTP requis.'],
+    ['400', 'Requête invalide', 'Champ manquant, montant invalide, wallet incompatible, téléphone mal formé, OTP requis ou service refusé.'],
     ['401', 'Non authentifié', 'Clé Mulapay absente, invalide ou révoquée.'],
-    ['404', 'Introuvable', 'Référence, dépôt, retrait ou paiement par lien inconnu.'],
-    ['409', 'Conflit d’idempotence', 'La même clé est déjà liée à une autre opération ou la ressource a déjà été traitée.'],
-    ['410', 'Lien expiré', 'Le lien public est désactivé, expiré ou a atteint sa limite de paiements.'],
-    ['503', 'Service indisponible', 'Le canal de paiement n’est pas disponible temporairement. Réessayez avec la même clé.'],
+    ['404', 'Introuvable', 'Référence, dépôt, retrait, paiement ou lien demandé inconnu.'],
+    ['409', 'Conflit', 'Ressource déjà traitée ou impossible à modifier dans son état actuel.'],
+    ['410', 'Lien indisponible', 'Réponse réservée aux routes publiques lorsqu’un lien est désactivé, expiré ou épuisé.'],
+    ['503', 'Service indisponible', 'Le canal de paiement n’est pas disponible temporairement. Réessayez avec la même clé lorsque l’opération est rejouable.'],
   ];
   const withdrawalFields = [
     ['walletId', 'Identifiant réel du wallet Mulapay à débiter.', 'Requis'],
-    ['amount', 'Montant entier positif dans la devise du wallet.', 'Requis'],
+    ['amount', 'Montant entier positif, plafonné à 10 000 000 dans la devise du wallet.', 'Requis'],
     ['country', 'Pays correspondant au wallet source.', 'Requis'],
-    ['operator', 'Opérateur Mobile Money du bénéficiaire.', 'Requis'],
+    ['operator', 'Opérateur Mobile Money activé pour le pays sélectionné.', 'Requis'],
     ['phone', 'Numéro du bénéficiaire au format international.', 'Requis'],
     ['method', 'Valeur attendue : mobile_money.', 'Requis'],
   ];
@@ -1098,26 +1102,52 @@ function ApiPayinDocs() {
 
         <section id="authentication" className="docs-section">
           <div className="docs-section-heading"><div><span className="docs-kicker">01 · Sécurité</span><h2>Authentification</h2><p>Les appels partenaires sont effectués depuis votre backend avec une clé API active.</p></div><LockKeyhole size={19} /></div>
-          <div className="docs-two-column"><div className="card card-pad"><h3>En-têtes obligatoires</h3><pre className="api-code">{`Authorization: Bearer mp_live_votre_cle
+          <div className="docs-two-column"><div className="card card-pad"><h3>En-têtes</h3><pre className="api-code">{`Authorization: Bearer mp_live_votre_cle
 Content-Type: application/json
-Idempotency-Key: commande-unique-123`}</pre><p className="docs-inline-note"><ShieldCheck size={14} /> Ne placez jamais cette clé dans le navigateur, une application mobile distribuée ou un dépôt public.</p></div><div className="card card-pad docs-callout-card"><span className="docs-callout-icon"><ShieldCheck size={16} /></span><h3>Clés à durée de vie contrôlée</h3><p>Créez une clé distincte par application. Vous pouvez la révoquer depuis l’espace API sans modifier les autres intégrations.</p><Link href="/app/api" className="docs-text-link">Gérer mes clés <ArrowRight size={14} /></Link></div></div>
+Idempotency-Key: commande-unique-123`}</pre><p className="docs-inline-note"><ShieldCheck size={14} /> <code>Authorization</code> est requis pour les routes partenaires. <code>Idempotency-Key</code> est recommandé pour les créations rejouables, avec une longueur maximale de 128 caractères.</p><p className="docs-inline-note">Ne placez jamais la clé dans le navigateur, une application mobile distribuée ou un dépôt public.</p></div><div className="card card-pad docs-callout-card"><span className="docs-callout-icon"><ShieldCheck size={16} /></span><h3>Clés à durée de vie contrôlée</h3><p>Créez une clé distincte par application. Vous pouvez la révoquer depuis l’espace API sans modifier les autres intégrations.</p><Link href="/app/api" className="docs-text-link">Gérer mes clés <ArrowRight size={14} /></Link></div></div>
+          <div className="docs-two-column"><div className="card card-pad"><h3>En-têtes</h3><pre className="api-code">{`Authorization: Bearer mp_live_votre_cle
+Content-Type: application/json
+Idempotency-Key: commande-unique-123`}</pre><p className="docs-inline-note"><ShieldCheck size={14} /> <code>Authorization</code> est requis pour les routes partenaires. <code>Idempotency-Key</code> est recommandé pour les créations rejouables, avec une longueur maximale de 128 caractères.</p><p className="docs-inline-note">Les clés possèdent des scopes. Une clé sans le scope demandé reçoit <code>403</code> avec <code>code: INSUFFICIENT_SCOPE</code>.</p><p className="docs-inline-note">Ne placez jamais la clé dans le navigateur, une application mobile distribuée ou un dépôt public.</p></div><div className="card card-pad docs-callout-card"><span className="docs-callout-icon"><ShieldCheck size={16} /></span><h3>Clés à durée de vie contrôlée</h3><p>Créez une clé distincte par application. Vous pouvez la révoquer depuis l’espace API sans modifier les autres intégrations.</p><Link href="/app/api" className="docs-text-link">Gérer mes clés <ArrowRight size={14} /></Link></div></div>
         </section>
 
         <section id="quickstart" className="docs-section">
           <div className="docs-section-heading"><div><span className="docs-kicker">02 · Démarrage</span><h2>Démarrage rapide</h2><p>Récupérez d’abord votre wallet Mulapay, puis initialisez le paiement depuis votre serveur.</p></div><span className="docs-muted-label">SERVER-TO-SERVER</span></div>
           <div className="docs-two-column docs-align-start">
             <div className="card card-pad"><h3>Avant le premier paiement</h3><div className="docs-status-list"><div><span className="docs-step-number">01</span><div><strong>Créer une clé</strong><p>Générez une clé API depuis l’espace partenaire et conservez-la uniquement dans votre backend.</p></div></div><div><span className="docs-step-number">02</span><div><strong>Récupérer vos wallets</strong><p>Appelez <code>GET /api/v1/bootstrap</code>, puis choisissez le wallet dont le pays correspond au paiement.</p></div></div><div><span className="docs-step-number">03</span><div><strong>Vérifier l’activation</strong><p>Le compte Mulapay doit disposer d’un wallet actif et d’un canal de paiement disponible pour le pays et l’opérateur choisis.</p></div></div></div></div>
-            <div className="card card-pad"><h3>Lire les wallets</h3><div className="docs-endpoint-bar"><span className="api-method api-method-muted">GET</span><code>/api/v1/bootstrap</code><span>État du compte Mulapay</span></div><pre className="api-code" style={{ marginTop: 16 }}>{`{
-  "wallets": [
-    {
-      "id": "uuid-du-wallet",
-      "country": "Togo",
-      "code": "TG",
-      "currency": "XOF",
-      "status": "Active"
-    }
-  ]
-}`}</pre><p className="docs-inline-note"><Info size={14} /> Utilisez la valeur réelle de <code>id</code> dans la requête de paiement. <code>wallet_togo</code> n’est qu’un exemple lisible.</p></div>
+             <div className="card card-pad"><h3>Lire l’espace Mulapay</h3><div className="docs-endpoint-bar"><span className="api-method api-method-muted">GET</span><code>/api/v1/bootstrap</code><span>État du compte Mulapay</span></div><pre className="api-code" style={{ marginTop: 16 }}>{`{
+  "profile": {
+    "id": "user_...",
+    "firstName": "Utilisateur",
+    "lastName": "Mulapay",
+    "email": "client@example.com",
+    "role": "USER",
+    "country": "Togo",
+    "kycStatus": "NON_VERIFIE"
+  },
+  "wallets": [{
+    "id": "uuid-du-wallet",
+    "country": "Togo",
+    "code": "TG",
+    "currency": "XOF",
+    "balance": 0,
+    "pending": 0,
+    "status": "Active"
+  }],
+  "transactions": [],
+  "exchanges": [],
+  "links": [],
+  "notifications": [],
+  "kyc": {
+    "id": "none",
+    "userId": "user_...",
+    "name": "Utilisateur Mulapay",
+    "country": "Togo",
+    "status": "NON_VERIFIE",
+    "documents": [],
+    "submittedAt": "2026-09-07T00:00:00.000Z"
+  },
+  "feePercentage": 1
+}`}</pre><p className="docs-inline-note"><Info size={14} /> Utilisez la valeur réelle de <code>wallets[].id</code>. Le bootstrap contient aussi l’état des transactions, échanges, liens, notifications, KYC et frais du compte.</p></div>
           </div>
           <div className="docs-endpoint-bar" style={{ marginTop: 18 }}><span className="api-method">POST</span><code>/api/v1/deposits</code><span>Créer un paiement Mulapay</span></div>
           <div className="docs-code-grid"><div><div className="docs-code-label">cURL</div><pre className="api-code">{`curl -X POST https://votre-domaine/api/v1/deposits \\
@@ -1131,7 +1161,15 @@ Idempotency-Key: commande-unique-123`}</pre><p className="docs-inline-note"><Shi
     "country": "Togo",
     "operator": "Mixx by Yas",
     "phone": "+22890000000"
-  }'`}</pre></div><div><div className="docs-code-label">JavaScript côté serveur</div><pre className="api-code">{`const response = await fetch(
+  }'`}</pre></div><div><div className="docs-code-label">JavaScript côté serveur</div><pre className="api-code">{`const payload = {
+  walletId: "uuid-du-wallet-recupere-avec-bootstrap",
+  amount: 10000,
+  method: "mobile_money",
+  country: "Togo",
+  operator: "Mixx by Yas",
+  phone: "+22890000000"
+};
+const response = await fetch(
   "https://votre-domaine/api/v1/deposits",
   {
     method: "POST",
@@ -1143,7 +1181,15 @@ Idempotency-Key: commande-unique-123`}</pre><p className="docs-inline-note"><Shi
     body: JSON.stringify(payload)
   }
 );`}</pre></div></div>
-          <div className="card card-pad" style={{ marginTop: 18 }}><h3>Exemples complémentaires</h3><div className="docs-code-grid" style={{ marginTop: 16 }}><div><div className="docs-code-label">PHP côté serveur</div><pre className="api-code">{`$ch = curl_init("https://votre-domaine/api/v1/deposits");
+           <div className="card card-pad" style={{ marginTop: 18 }}><h3>Exemples complémentaires</h3><div className="docs-code-grid" style={{ marginTop: 16 }}><div><div className="docs-code-label">PHP côté serveur</div><pre className="api-code">{`$payload = [
+  "walletId" => "uuid-du-wallet-recupere-avec-bootstrap",
+  "amount" => 10000,
+  "method" => "mobile_money",
+  "country" => "Togo",
+  "operator" => "Mixx by Yas",
+  "phone" => "+22890000000",
+];
+$ch = curl_init("https://votre-domaine/api/v1/deposits");
 curl_setopt_array($ch, [
   CURLOPT_POST => true,
   CURLOPT_HTTPHEADER => [
@@ -1155,7 +1201,16 @@ curl_setopt_array($ch, [
   CURLOPT_RETURNTRANSFER => true,
 ]);
 $response = curl_exec($ch);
-curl_close($ch);`}</pre></div><div><div className="docs-code-label">Python côté serveur</div><pre className="api-code">{`import requests
+          curl_close($ch);`}</pre></div><div><div className="docs-code-label">Python côté serveur</div><pre className="api-code">{`import requests
+
+payload = {
+    "walletId": "uuid-du-wallet-recupere-avec-bootstrap",
+    "amount": 10000,
+    "method": "mobile_money",
+    "country": "Togo",
+    "operator": "Mixx by Yas",
+    "phone": "+22890000000",
+}
 
 response = requests.post(
     "https://votre-domaine/api/v1/deposits",
@@ -1173,24 +1228,26 @@ data = response.json()`}</pre></div></div></div>
           <div className="docs-section-heading"><div><span className="docs-kicker">03 · Endpoint</span><h2>Créer un dépôt</h2><p>La création accepte la demande et réserve le montant en attente. Elle ne confirme pas encore le crédit définitif.</p></div></div>
           <div className="docs-two-column docs-align-start"><div className="card card-pad"><h3>Corps de la requête</h3><div className="docs-field-list">{fields.map(([name, description, requirement]) => <div key={name}><code>{name}</code><p>{description}</p><span className={requirement === 'Requis' ? 'docs-required' : 'docs-conditional'}>{requirement}</span></div>)}</div></div><div className="card card-pad"><h3>Réponse · 201 Created</h3><pre className="api-code">{`{
   "ok": true,
-   "reference": "MP-XXXXXXXX",
-   "status": "Pending",
+  "message": "Confirmez le paiement sur votre téléphone.",
+  "reference": "MP-XXXXXXXX",
+  "status": "Pending",
   "paymentUrl": null,
-  "expiresAt": "2026-09-05T12:05:00.000Z",
+  "expiresAt": null,
   "fee": 350,
-   "netAmount": 9650,
-   "platformFee": 100,
-    "merchantAmount": 9900
-}`}</pre><p className="docs-inline-note"><Info size={14} /> Si <code>paymentUrl</code> est renseigné, ouvrez-le depuis votre parcours serveur ou transmettez-le à votre interface sécurisée.</p></div></div>
+  "netAmount": 9650,
+  "platformFee": 100,
+  "merchantAmount": 9900
+}`}</pre><p className="docs-inline-note"><Info size={14} /> Si <code>paymentUrl</code> est renseigné, ouvrez-le depuis votre parcours serveur ou transmettez-le à votre interface sécurisée.</p><p className="docs-inline-note">Une nouvelle tentative avec la même clé d’idempotence renvoie <code>200 OK</code> et la demande existante.</p></div></div>
         </section>
 
         <section id="responses" className="docs-section">
-          <div className="docs-section-heading"><div><span className="docs-kicker">04 · Contrat</span><h2>Comprendre les réponses</h2><p>Les réponses Mulapay utilisent les mêmes champs métier pour les dépôts, paiements par lien et retraits.</p></div><FileCheck2 size={19} /></div>
-          <div className="docs-two-column docs-align-start">
-            <div className="card card-pad"><h3>Champs communs</h3><div className="docs-field-list">{responseFields.map(([name, description]) => <div key={name}><code>{name}</code><p>{description}</p></div>)}</div></div>
-            <div className="card card-pad"><h3>Création acceptée ≠ paiement confirmé</h3><p className="section-note" style={{ marginTop: 8 }}>Une réponse HTTP <code>201</code> signifie que la demande a été enregistrée. Le client doit encore confirmer sur son téléphone ou ouvrir le lien de paiement.</p><pre className="api-code" style={{ marginTop: 16 }}>{`HTTP/1.1 201 Created
+          <div className="docs-section-heading"><div><span className="docs-kicker">04 · Contrat</span><h2>Comprendre les réponses</h2><p>Les champs retournés dépendent de l’endpoint : un dépôt, un paiement public et un retrait n’ont pas exactement le même corps.</p></div><FileCheck2 size={19} /></div>
+           <div className="docs-two-column docs-align-start">
+             <div className="card card-pad"><h3>Champs de réponse</h3><div className="docs-field-list">{responseFields.map(([name, description]) => <div key={name}><code>{name}</code><p>{description}</p></div>)}</div></div>
+             <div className="card card-pad"><h3>Création acceptée ≠ paiement confirmé</h3><p className="section-note" style={{ marginTop: 8 }}>Une réponse HTTP <code>201</code> signifie que la demande a été enregistrée. Le client doit encore confirmer sur son téléphone ou ouvrir le lien de paiement.</p><pre className="api-code" style={{ marginTop: 16 }}>{`HTTP/1.1 201 Created
 {
   "ok": true,
+  "message": "Confirmez le paiement sur votre téléphone.",
   "reference": "MP-XXXXXXXX",
   "status": "Pending",
   "paymentUrl": null,
@@ -1253,23 +1310,66 @@ data = response.json()`}</pre></div></div></div>
            <div className="docs-two-column docs-align-start">
              <div className="card card-pad"><h3>Parcours client</h3><div className="docs-status-list"><div><span className="docs-step-number">01</span><div><strong>Afficher</strong><p><code>GET /api/v1/public/payment-links/:token</code> retourne uniquement les informations publiques du lien.</p></div></div><div><span className="docs-step-number">02</span><div><strong>Payer</strong><p><code>POST /api/v1/public/payment-links/:token/payments</code> démarre une collecte Mobile Money sans exposer votre clé.</p></div></div><div><span className="docs-step-number">03</span><div><strong>Suivre</strong><p>Utilisez <code>GET /api/v1/public/payment-links/:token/payments/:reference</code> pour afficher l’état au client.</p></div></div></div></div>
              <div className="card card-pad"><h3>Règles de sécurité</h3><p className="section-note" style={{ marginTop: 8 }}>Les routes publiques n’acceptent jamais de clé partenaire. Le token du lien ne donne accès qu’aux données du checkout et ne permet pas de lire le wallet du marchand.</p><div className="docs-mini-rule" style={{ marginTop: 16 }}><span className="docs-production-dot" /> Le statut final est confirmé par Mulapay</div><p className="section-note" style={{ marginTop: 14 }}>Un paiement initié ou un HTTP 201 ne constitue pas une confirmation de règlement.</p></div>
-           </div>
-            <div className="card card-pad" style={{ marginTop: 18 }}><h3>Créer un lien depuis votre backend</h3><p className="section-note" style={{ marginTop: 8 }}>Le lien se crée avec une clé Mulapay. Le token public peut ensuite être partagé avec votre client sans exposer cette clé.</p><div className="docs-code-grid" style={{ marginTop: 16 }}><div><div className="docs-code-label">POST /api/v1/payment-links</div><pre className="api-code">{`{
+             </div>
+             <div className="card card-pad" style={{ marginTop: 18 }}><h3>Créer un lien depuis votre backend</h3><p className="section-note" style={{ marginTop: 8 }}>Le lien se crée avec une clé Mulapay. Le token public peut ensuite être partagé avec votre client sans exposer cette clé.</p><div className="docs-code-grid" style={{ marginTop: 16 }}><div><div className="docs-code-label">POST /api/v1/payment-links</div><pre className="api-code">{`{
   "productName": "Commande #1001",
   "description": "Paiement de la commande",
   "amount": 10000,
   "currency": "XOF",
   "amountType": "FIXED",
+  "amountMin": 300,
+  "amountMax": 500000,
   "walletId": "uuid-du-wallet",
-  "customerFields": ["fullName", "email", "phone"],
-  "afterPaymentAction": "SHOW_RECEIPT",
-  "maxPayments": 1
+  "customerFields": ["full_name", "email", "phone"],
+  "expiresAt": "2026-12-31T23:59:59.000Z",
+  "maxPayments": 1,
+  "afterPaymentAction": "CONFIRMATION",
+  "redirectUrl": null,
+  "notifyApp": true,
+  "notifyEmail": false,
+  "notifyWebhook": false
 }`}</pre></div><div><div className="docs-code-label">Réponse · 201 Created</div><pre className="api-code">{`{
+  "id": "uuid-du-lien",
+  "slug": "https://votre-domaine/pay/0123abcd4567ef89",
   "reference": "MP-LINK-AB12CD34",
-  "slug": "https://votre-domaine/pay/...",
+  "productName": "Commande #1001",
+  "amount": 10000,
+  "currency": "XOF",
+  "description": "Paiement de la commande",
+  "walletId": "uuid-du-wallet",
+  "amountType": "FIXED",
+  "amountMin": 300,
+  "amountMax": 500000,
+  "customerFields": ["full_name", "email", "phone"],
   "status": "Active",
+  "expiresAt": "2026-12-31T23:59:59.000Z",
+  "maxPayments": 1,
+  "afterPaymentAction": "CONFIRMATION",
+  "redirectUrl": null,
+  "notifyApp": true,
+  "notifyEmail": false,
+  "notifyWebhook": false,
   "payments": 0
-}`}</pre></div></div><p className="docs-inline-note"><Info size={14} /> Pour un montant choisi par le client, utilisez <code>amountType: CUSTOMER_CHOOSES</code> avec un montant compris entre 300 et 500 000 dans la devise du lien.</p></div>
+}`}</pre></div></div><p className="docs-inline-note"><Info size={14} /> Même pour un lien <code>FIXED</code>, envoyez <code>amountMin</code> et <code>amountMax</code>. Pour un montant choisi par le client, utilisez <code>amountType: CUSTOMER_CHOOSES</code> avec un intervalle compris entre 300 et 500 000 dans la devise du lien.</p></div>
+             <div className="card card-pad" style={{ marginTop: 18 }}><h3>Payer le lien public</h3><p className="section-note" style={{ marginTop: 8 }}>Le client n’envoie pas de clé API. Le token du lien est dans l’URL publique ; la requête de paiement contient les informations client requises.</p><div className="docs-code-grid" style={{ marginTop: 16 }}><div><div className="docs-code-label">POST /api/v1/public/payment-links/:token/payments</div><pre className="api-code">{`{
+  "amount": 10000,
+  "fullName": "Awa Mensah",
+  "country": "Côte d’Ivoire",
+  "operator": "Wave",
+  "phone": "+2250700000000",
+  "email": "client@example.com"
+}`}</pre></div><div><div className="docs-code-label">Réponse · 201 Created</div><pre className="api-code">{`{
+  "ok": true,
+  "message": "Ouvrez le lien de paiement pour confirmer.",
+  "reference": "MP-XXXXXXXX",
+  "status": "Pending",
+  "paymentUrl": "https://...",
+  "expiresAt": null,
+  "fee": 350,
+  "netAmount": 9650,
+  "platformFee": 100,
+  "merchantAmount": 9900
+}`}</pre></div></div><p className="docs-inline-note"><Info size={14} /> Ajoutez <code>Idempotency-Key</code> pour rendre une nouvelle tentative réseau sûre. Pour Orange Money dans un pays soumis à OTP, ajoutez aussi <code>operatorOtp</code>.</p></div>
          </section>
 
           <section id="withdrawals" className="docs-section">
@@ -1286,26 +1386,102 @@ data = response.json()`}</pre></div></div></div>
 }`}</pre></div>
               <div className="card card-pad"><h3>Réponse et suivi</h3><pre className="api-code">{`{
   "ok": true,
+  "message": "Retrait en cours de traitement. Le wallet sera débité après confirmation Mulapay.",
   "reference": "MP-WD-XXXXXXXX",
   "status": "Pending",
   "amount": 10000,
   "currency": "XOF",
   "fee": 350,
   "totalDebited": 10350
-}`}</pre><p className="docs-inline-note" style={{ marginTop: 14 }}>Conservez <code>reference</code>, puis appelez <code>GET /api/v1/withdrawals/:reference</code>. Le wallet n’est débité définitivement qu’après confirmation du retrait.</p></div>
+}`}</pre><p className="docs-inline-note" style={{ marginTop: 14 }}>Conservez <code>reference</code>, puis appelez <code>GET /api/v1/withdrawals/:reference</code>. Le statut est un statut Mulapay ; ne lisez jamais un statut technique fournisseur.</p><p className="docs-inline-note">Pour un retry réseau du même retrait, réutilisez la même <code>Idempotency-Key</code>. Une reprise idempotente renvoie <code>200 OK</code>.</p></div>
             </div>
           </section>
 
+           <section id="transfers" className="docs-section">
+             <div className="docs-section-heading"><div><span className="docs-kicker">11 · Sorties</span><h2>Transferts</h2><p>Un transfert envoie des fonds vers un numéro Mobile Money. Le pays et la devise correspondent au wallet source.</p></div><Send size={19} /></div>
+             <div className="docs-endpoint-bar"><span className="api-method">POST</span><code>/api/v1/transfers</code><span>Créer un transfert</span></div>
+             <div className="docs-two-column docs-align-start" style={{ marginTop: 16 }}>
+               <div className="card card-pad"><h3>Corps de la requête</h3><pre className="api-code">{`{
+  "amount": 10000,
+  "currency": "XOF",
+  "country": "Côte d’Ivoire",
+  "counterparty": "+2250700000000 · Wave",
+  "note": "Commande #1001",
+  "feePayer": "sender"
+}`}</pre><p className="docs-inline-note">Le champ <code>counterparty</code> contient le numéro international, un séparateur <code>·</code> et le nom de l’opérateur.</p></div>
+               <div className="card card-pad"><h3>Réponse · 201 Created</h3><pre className="api-code">{`{
+  "ok": true,
+  "message": "Transfert en cours de traitement. Le wallet sera débité après confirmation Mulapay.",
+  "reference": "MP-TR-XXXXXXXX",
+  "status": "Pending",
+  "amount": 10000,
+  "currency": "XOF",
+  "fee": 350,
+  "totalDebited": 10350,
+  "netAmount": 10000
+}`}</pre><p className="docs-inline-note">Ajoutez <code>Idempotency-Key</code>. Un retry de la même demande peut répondre <code>200 OK</code> avec la référence existante.</p></div>
+             </div>
+           </section>
+
+           <section id="exchanges" className="docs-section">
+             <div className="docs-section-heading"><div><span className="docs-kicker">12 · Wallets</span><h2>Échanges entre wallets</h2><p>Demandez un échange entre deux wallets actifs du même compte. La demande reste en revue jusqu’à sa décision Mulapay.</p></div><ArrowRightLeft size={19} /></div>
+             <div className="docs-endpoint-bar"><span className="api-method">POST</span><code>/api/v1/exchanges</code><span>Créer une demande d’échange</span></div>
+             <div className="docs-two-column docs-align-start" style={{ marginTop: 16 }}>
+               <div className="card card-pad"><h3>Corps de la requête</h3><pre className="api-code">{`{
+  "source": "Togo",
+  "destination": "Bénin",
+  "amount": 10000
+}`}</pre><p className="docs-inline-note">Les deux wallets doivent être actifs et partager la même devise. Le montant doit être entier et positif.</p></div>
+               <div className="card card-pad"><h3>Réponse · 201 Created</h3><pre className="api-code">{`{
+  "ok": true,
+  "message": "Demande d’échange envoyée. Le montant net après frais est de 9900 XOF.",
+  "reference": "uuid-de-la-demande",
+  "status": "Pending review",
+  "fee": 100,
+  "netAmount": 9900
+}`}</pre><p className="docs-inline-note">Le taux et les frais retournés par Mulapay font foi. Ne recalculez pas un montant de règlement à partir d’un taux codé en dur.</p></div>
+             </div>
+           </section>
+
           <section id="notifications" className="docs-section">
-            <div className="docs-section-heading"><div><span className="docs-kicker">11 · Suivi serveur</span><h2>Notifications et webhooks</h2><p>Mulapay garde la confirmation dans son propre ledger et vous expose un suivi stable.</p></div><Bell size={19} /></div>
+             <div className="docs-section-heading"><div><span className="docs-kicker">13 · Suivi serveur</span><h2>Notifications et webhooks</h2><p>Mulapay garde la confirmation dans son propre ledger et vous expose un suivi stable.</p></div><Bell size={19} /></div>
             <div className="docs-two-column docs-align-start">
               <div className="card card-pad"><h3>Flux recommandé en v1</h3><div className="docs-status-list"><div><span className="docs-step-number">01</span><div><strong>Créer côté serveur</strong><p>Appelez l’endpoint Mulapay et stockez la <code>reference</code>.</p></div></div><div><span className="docs-step-number">02</span><div><strong>Interroger le statut</strong><p>Utilisez le endpoint de suivi depuis votre backend, jamais avec la clé dans le navigateur.</p></div></div><div><span className="docs-step-number">03</span><div><strong>Livrer sur Completed</strong><p>Déclenchez votre logique métier une seule fois lorsque le statut local devient <code>Completed</code>.</p></div></div></div></div>
               <div className="card card-pad docs-callout-card"><span className="docs-callout-icon"><ShieldCheck size={16} /></span><h3>Pas de webhook fournisseur à intégrer</h3><p>Les callbacks des réseaux de paiement sont reçus et vérifiés par Mulapay. Ils ne doivent pas être configurés dans votre application partenaire et ne font pas partie du contrat public.</p><div className="docs-mini-rule" style={{ marginTop: 16 }}><span className="docs-production-dot" /> Votre intégration suit uniquement Mulapay</div></div>
             </div>
+             <div className="card card-pad" style={{ marginTop: 18 }}><h3>Marquer une notification comme lue</h3><div className="docs-endpoint-bar" style={{ marginTop: 14 }}><span className="api-method api-method-muted">PATCH</span><code>/api/v1/notifications/:id/read</code><span>Authentification API requise</span></div><p className="docs-inline-note" style={{ marginTop: 14 }}>Les notifications sont lues dans <code>GET /api/v1/bootstrap</code>. Utilisez cet endpoint avec l’identifiant reçu pour mettre à jour <code>read</code>.</p><pre className="api-code" style={{ marginTop: 14 }}>{`{
+  "ok": true,
+  "message": "Notification marquée comme lue.",
+  "reference": null
+}`}</pre></div>
           </section>
 
+           <section id="kyc" className="docs-section">
+             <div className="docs-section-heading"><div><span className="docs-kicker">14 · Vérification</span><h2>KYC</h2><p>Soumettez les informations de vérification depuis votre backend et consultez le statut dans le bootstrap.</p></div><FileCheck2 size={19} /></div>
+             <div className="docs-endpoint-bar"><span className="api-method">POST</span><code>/api/v1/kyc</code><span>Soumettre un dossier KYC</span></div>
+             <div className="docs-two-column docs-align-start" style={{ marginTop: 16 }}>
+               <div className="card card-pad"><h3>Corps de la requête</h3><pre className="api-code">{`{
+  "country": "Togo",
+  "documents": [
+    "https://votre-domaine/documents/identite-recto"
+  ]
+}`}</pre><p className="docs-inline-note">Le tableau <code>documents</code> doit contenir au moins une référence de document acceptée par votre parcours KYC.</p></div>
+               <div className="card card-pad"><h3>Réponse · 201 Created</h3><pre className="api-code">{`{
+  "id": "kyc_...",
+  "userId": "user_...",
+  "name": "Utilisateur Mulapay",
+  "country": "Togo",
+  "status": "EN_ATTENTE",
+  "documents": [
+    "https://votre-domaine/documents/identite-recto"
+  ],
+  "submittedAt": "2026-09-07T10:00:00.000Z"
+}`}</pre><p className="docs-inline-note">Le résultat est une soumission en revue. Le statut final du KYC est visible via <code>GET /api/v1/bootstrap</code>.</p></div>
+             </div>
+           </section>
+
          <section id="settlement" className="docs-section">
-            <div className="docs-section-heading"><div><span className="docs-kicker">12 · Confirmation</span><h2>Confirmation Mulapay, frais & règlement</h2><p>Votre intégration utilise uniquement l’API Mulapay. La confirmation du paiement et le règlement du wallet sont gérés par Mulapay.</p></div><ShieldCheck size={19} /></div>
+             <div className="docs-section-heading"><div><span className="docs-kicker">15 · Confirmation</span><h2>Confirmation Mulapay, frais & règlement</h2><p>Votre intégration utilise uniquement l’API Mulapay. La confirmation du paiement et le règlement du wallet sont gérés par Mulapay.</p></div><ShieldCheck size={19} /></div>
            <div className="docs-two-column docs-align-start">
              <div className="card card-pad"><h3>Ce que signifient les montants</h3><div className="docs-field-list"><div><code>amount</code><p>Montant demandé au client.</p></div><div><code>fee</code><p>Frais de traitement associés à la demande.</p></div><div><code>platformFee</code><p>Frais Mulapay appliqués selon la configuration du compte.</p></div><div><code>merchantAmount</code><p>Montant destiné au wallet du marchand après les frais Mulapay.</p></div><div><code>netAmount</code><p>Montant net associé au paiement. Le statut <code>Completed</code> reste la confirmation de référence.</p></div></div></div>
               <div className="card card-pad docs-callout-card"><span className="docs-callout-icon"><Activity size={16} /></span><h3>Le parcours automatique</h3><p>Après la création, votre backend conserve la <code>reference</code>, interroge le suivi et attend le statut Mulapay <code>Completed</code>.</p><p style={{ marginTop: 12 }}>Ne déclenchez pas votre livraison métier sur un statut technique ou sur le HTTP 201 seul. Utilisez le statut local Mulapay.</p><pre className="api-code" style={{ marginTop: 16 }}>{`POST /api/v1/deposits
@@ -1316,13 +1492,13 @@ data = response.json()`}</pre></div></div></div>
          </section>
 
           <section id="troubleshooting" className="docs-section">
-            <div className="docs-section-heading"><div><span className="docs-kicker">13 · Assistance</span><h2>Dépannage rapide</h2><p>Les vérifications les plus utiles avant de contacter le support Mulapay.</p></div><CircleAlert size={19} /></div>
+             <div className="docs-section-heading"><div><span className="docs-kicker">16 · Assistance</span><h2>Dépannage rapide</h2><p>Les vérifications les plus utiles avant de contacter le support Mulapay.</p></div><CircleAlert size={19} /></div>
             <div className="card card-pad"><div className="docs-error-list">{errors.map(([code, title, description]) => <div key={code}><span className={`pill ${code === '503' ? 'pill-pending' : 'pill-danger'}`}>{code}</span><span><strong>{title}</strong> — {description}</span></div>)}</div><div className="docs-two-column docs-align-start" style={{ marginTop: 18 }}><div><h3>Checklist réseau</h3><p className="section-note" style={{ marginTop: 8 }}>Vérifiez que l’appel vient bien de votre serveur, que la clé commence par <code>mp_live_</code>, que le corps est en JSON et que la clé d’idempotence est stable.</p></div><div><h3>Checklist opération</h3><p className="section-note" style={{ marginTop: 8 }}>Vérifiez le wallet actif, le pays, la devise, l’opérateur et le format international du numéro avant de recréer une demande.</p></div></div></div>
           </section>
 
         <section className="docs-resources card">
           <div><span className="docs-kicker">Référence API</span><h2>Endpoints disponibles</h2><p>Les routes publiques actuellement exposées par Mulapay.</p></div>
-           <div className="docs-resource-list"><div><span className="api-method">POST</span><code>/api/v1/deposits</code><span>Créer un paiement automatique Mulapay</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/deposits/:reference</code><span>Consulter le statut Mulapay</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/payments/:reference</code><span>Consulter un paiement par lien</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/public/payment-links/:token</code><span>Lire un lien public Mulapay</span></div><div><span className="api-method api-method-muted">POST</span><code>/api/v1/public/payment-links/:token/payments</code><span>Démarrer un paiement public</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/bootstrap</code><span>Lire les wallets et transactions du compte</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/withdrawals/:reference</code><span>Consulter un retrait Mulapay</span></div><div><span className="api-method api-method-muted">POST</span><code>/api/v1/withdrawals</code><span>Créer un retrait Mulapay</span></div></div>
+            <div className="docs-resource-list"><div><span className="api-method">POST</span><code>/api/v1/deposits</code><span>Créer un dépôt</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/deposits/:reference</code><span>Suivre un dépôt</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/payments/:reference</code><span>Suivre un paiement par lien</span></div><div><span className="api-method">POST</span><code>/api/v1/withdrawals</code><span>Créer un retrait</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/withdrawals/:reference</code><span>Suivre un retrait</span></div><div><span className="api-method">POST</span><code>/api/v1/transfers</code><span>Créer un transfert</span></div><div><span className="api-method">POST</span><code>/api/v1/exchanges</code><span>Créer un échange entre wallets</span></div><div><span className="api-method">POST</span><code>/api/v1/payment-links</code><span>Créer un lien</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/payment-links</code><span>Lister ses liens</span></div><div><span className="api-method api-method-muted">PATCH</span><code>/api/v1/payment-links/:id</code><span>Modifier un lien</span></div><div><span className="api-method api-method-muted">DELETE</span><code>/api/v1/payment-links/:id</code><span>Supprimer un lien</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/bootstrap</code><span>Lire l’espace du compte et ses notifications</span></div><div><span className="api-method api-method-muted">PATCH</span><code>/api/v1/notifications/:id/read</code><span>Marquer une notification comme lue</span></div><div><span className="api-method">POST</span><code>/api/v1/kyc</code><span>Soumettre des informations KYC</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/public/payment-links/:token</code><span>Lire un lien public</span></div><div><span className="api-method api-method-muted">POST</span><code>/api/v1/public/payment-links/:token/payments</code><span>Créer un paiement public</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/public/payment-links/:token/payments/:reference</code><span>Suivre un paiement public</span></div></div>
           <div className="docs-bottom-cta"><div><strong>Prêt à connecter votre backend ?</strong><span>Créez une clé serveur et commencez avec le quickstart.</span></div><Link href="/app/api" className="button button-primary">Créer une clé API <ArrowRight size={15} /></Link></div>
         </section>
       </div>
@@ -1376,7 +1552,7 @@ function Transfer() {
     e.preventDefault();
     if (!amount || !phone || !selectedWallet || !operator) return;
     const recipientPhone = `${selectedCountry.dialCode}${phone.replace(/\D/g, '')}`;
-    transfer({ amount: transferAmount, currency: selectedWallet.currency, country: selectedWallet.country, counterparty: `${recipientPhone} · ${operator}`, note: 'Frais DrimPay à la charge de l’expéditeur', feePayer: 'sender' });
+    transfer({ amount: transferAmount, currency: selectedWallet.currency, country: selectedWallet.country, counterparty: `${recipientPhone} · ${operator}`, note: 'Frais de transfert à la charge de l’expéditeur', feePayer: 'sender' });
     setAmount('');
     setPhone('');
   };
@@ -1424,7 +1600,7 @@ function Transfer() {
       </div>
       {transferAmount > 0 && <div className="summary-box" style={{ marginBottom: 16 }} data-testid="transfer-fee-summary">
         <div className="summary-line"><span>Montant saisi</span><strong>{money(transferAmount, selectedWallet?.currency ?? 'XOF')}</strong></div>
-        <div className="summary-line"><span>Frais DrimPay (3,5%)</span><strong>{money(transferFee, selectedWallet?.currency ?? 'XOF')}</strong></div>
+        <div className="summary-line"><span>Frais de transfert</span><strong>{money(transferFee, selectedWallet?.currency ?? 'XOF')}</strong></div>
         <div className="summary-line"><span>Montant reçu</span><strong>{money(recipientAmount, selectedWallet?.currency ?? 'XOF')}</strong></div>
         <div className="summary-line total"><span>Total débité</span><strong>{money(debitAmount, selectedWallet?.currency ?? 'XOF')}</strong></div>
       </div>}
@@ -1811,7 +1987,6 @@ function PublicPaymentPage() {
         setPaymentResult(current => current ? {
           ...current,
           status: payload.status ?? current.status,
-          providerStatus: payload.providerStatus ?? current.providerStatus,
           amount: typeof payload.amount === 'number' ? payload.amount : current.amount,
           currency: payload.currency ?? current.currency,
           fee: typeof payload.fee === 'number' ? payload.fee : current.fee,
@@ -1834,7 +2009,7 @@ function PublicPaymentPage() {
   }, [paymentResult?.reference, paymentResult?.status, token]);
 
   useEffect(() => {
-    if (!paymentResult?.reference || depositStatusIsTerminal(paymentResult.status) || paymentResult.providerStatus?.toLowerCase() === 'completed') return;
+    if (!paymentResult?.reference || depositStatusIsTerminal(paymentResult.status)) return;
     const interval = window.setInterval(() => {
       setPaymentSecondsLeft(current => Math.max(0, current - 1));
     }, 1000);
@@ -1842,11 +2017,11 @@ function PublicPaymentPage() {
   }, [paymentResult?.reference, paymentResult?.status]);
 
   useEffect(() => {
-    if (!paymentResult?.reference || depositStatusIsTerminal(paymentResult.status) || paymentResult.providerStatus?.toLowerCase() === 'completed') return;
+    if (!paymentResult?.reference || depositStatusIsTerminal(paymentResult.status)) return;
     let redirectTimer: number | undefined;
     const timeout = window.setTimeout(() => {
-      setPaymentResult(current => current && !depositStatusIsTerminal(current.status) && current.providerStatus?.toLowerCase() !== 'completed' ? { ...current, status: 'Failed', message: 'Le paiement n’a pas été confirmé après 60 secondes.' } : current);
-      redirectTimer = window.setTimeout(() => setPaymentStatusError('La confirmation comptable prend plus de temps que prévu. Le statut fournisseur est conservé.'), 800);
+       setPaymentResult(current => current && !depositStatusIsTerminal(current.status) ? { ...current, status: 'Failed', message: 'Le paiement n’a pas été confirmé après 60 secondes.' } : current);
+       redirectTimer = window.setTimeout(() => setPaymentStatusError('La confirmation Mulapay prend plus de temps que prévu.'), 800);
     }, 60000);
     return () => {
       window.clearTimeout(timeout);
@@ -1906,7 +2081,6 @@ function PublicPaymentPage() {
       setPaymentResult({
         reference: payload.reference,
         status: payload.status ?? 'Pending',
-        providerStatus: payload.providerStatus ?? null,
         operator: customerOperator,
         message: payload.message,
         amount: selectedAmount,
@@ -1924,9 +2098,8 @@ function PublicPaymentPage() {
       setPaymentSubmitting(false);
     }
   };
-  const paymentProviderConfirmed = paymentResult?.providerStatus?.toLowerCase() === 'completed';
   const paymentCompleted = paymentResult ? ['completed', 'success'].includes(paymentResult.status.toLowerCase()) : false;
-  const paymentFailed = paymentResult ? !paymentProviderConfirmed && (['failed', 'expired', 'cancelled', 'reversed'].includes(paymentResult.status.toLowerCase()) || ['failed', 'expired', 'cancelled', 'reversed'].includes(paymentResult.providerStatus?.toLowerCase() ?? '')) : false;
+  const paymentFailed = paymentResult ? ['failed', 'expired', 'cancelled', 'reversed'].includes(paymentResult.status.toLowerCase()) : false;
   const paymentOperator = paymentResult?.operator ?? customerOperator;
   const paymentOperatorOption = selectedCustomerCountry.operators.find(option => option.name === paymentOperator);
   const paymentAmountLabel = money(paymentResult?.merchantAmount ?? paymentResult?.amount ?? selectedAmount, paymentResult?.currency ?? link.currency);
@@ -1943,13 +2116,13 @@ function PublicPaymentPage() {
           {paymentResult ? <div className={`public-payment-result ${paymentCompleted ? 'is-complete' : paymentFailed ? 'is-failed' : ''}`} aria-live="polite">
             <div className="public-payment-provider">{paymentOperatorOption ? <img src={`${import.meta.env.BASE_URL}mobile-money/${paymentOperatorOption.src}`} alt="" /> : <span className="public-payment-provider-fallback"><WalletCards size={18} /></span>}<span><small>Opération Mobile Money</small><strong>{paymentOperator}</strong></span></div>
             <span className="public-payment-result-icon">{paymentCompleted ? <CheckCircle2 size={22} /> : paymentFailed ? <CircleAlert size={22} /> : <RefreshCw size={22} className="loading-spin" />}</span>
-            <span className="eyebrow">{paymentCompleted ? 'Paiement confirmé' : paymentProviderConfirmed ? 'Paiement reçu' : paymentFailed ? 'Paiement non confirmé' : 'Paiement en cours'}</span>
-            <h2>{paymentCompleted ? 'Votre paiement est confirmé' : paymentProviderConfirmed ? 'Confirmation sécurisée en cours' : paymentFailed ? 'Le paiement n’a pas abouti' : 'Validez sur votre téléphone'}</h2>
-            <p>{paymentCompleted ? `Le paiement de ${paymentGrossAmountLabel} a été confirmé par le service de paiement.` : paymentProviderConfirmed ? 'AshtechPay a confirmé le paiement. Mulapay attend encore la notification signée pour finaliser le crédit sécurisé.' : paymentFailed ? 'Le service de paiement n’a pas confirmé cette opération dans le délai prévu.' : paymentResult.message ?? 'Ouvrez votre application Mobile Money et validez la demande. Mulapay vérifie automatiquement la confirmation.'}</p>
+             <span className="eyebrow">{paymentCompleted ? 'Paiement confirmé' : paymentFailed ? 'Paiement non confirmé' : 'Paiement en cours'}</span>
+             <h2>{paymentCompleted ? 'Votre paiement est confirmé' : paymentFailed ? 'Le paiement n’a pas abouti' : 'Validez sur votre téléphone'}</h2>
+             <p>{paymentCompleted ? `Le paiement de ${paymentGrossAmountLabel} a été confirmé par Mulapay.` : paymentFailed ? 'Mulapay n’a pas confirmé cette opération dans le délai prévu.' : paymentResult.message ?? 'Ouvrez votre application Mobile Money et validez la demande. Mulapay vérifie automatiquement la confirmation.'}</p>
             <div className="public-payment-amount"><small>Net après frais Mulapay</small><strong>{paymentAmountLabel}</strong><span>Montant du paiement : {paymentGrossAmountLabel} · via {paymentOperator}</span></div>
             {!paymentCompleted && !paymentFailed && <div className="public-payment-progress"><div><span>Confirmation automatique</span><strong>{paymentSecondsLeft}s</strong></div><span className="public-payment-progress-track"><span style={{ width: `${Math.round((paymentSecondsLeft / 60) * 100)}%` }} /></span></div>}
             {!paymentCompleted && !paymentFailed && paymentResult.paymentUrl && <a className="button button-primary button-wide" href={paymentResult.paymentUrl} target="_blank" rel="noreferrer">Ouvrir le paiement sécurisé <ChevronRight size={15} /></a>}
-            {!paymentCompleted && !paymentFailed && <div className="public-payment-waiting"><RefreshCw size={15} className="loading-spin" /> {paymentProviderConfirmed ? 'Paiement reçu, finalisation sécurisée en cours.' : 'Statut vérifié automatiquement.'}</div>}
+             {!paymentCompleted && !paymentFailed && <div className="public-payment-waiting"><RefreshCw size={15} className="loading-spin" /> Statut Mulapay vérifié automatiquement.</div>}
             {paymentStatusError && <div className="form-error public-payment-error"><CircleAlert size={14} /> {paymentStatusError}</div>}
             {paymentFailed && <button className="button button-ghost button-wide" type="button" onClick={() => { setPaymentResult(null); setPaymentStatusError(''); setPaymentError(''); setPaymentSecondsLeft(60); }}>Réessayer le paiement</button>}
           </div> : <>

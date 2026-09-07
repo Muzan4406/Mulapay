@@ -55,7 +55,6 @@ import {
   ashtechPayCurrencyForCountry,
   ashtechPayPhoneForCountry,
   ashtechPayWebhookUrl,
-  getAshtechTransaction,
   initiateAshtechPayin,
   isAshtechPayOperatorSupported,
   isAshtechPayConfigured,
@@ -486,7 +485,6 @@ async function submitDrimPayOutgoing(input: {
       currency: existing.currency,
       fee: existing.fee ?? 0,
       totalDebited: existing.amount + (existing.fee ?? 0),
-      providerStatus: existing.status,
     };
   }
 
@@ -569,7 +567,6 @@ async function submitDrimPayOutgoing(input: {
       currency: provider.currency,
       fee: provider.fee,
       totalDebited: providerTotal,
-      providerStatus: provider.status,
     };
   } catch (error) {
     if (localTransaction && (error instanceof DrimPayError ? error.statusCode < 500 : false)) {
@@ -699,7 +696,7 @@ async function handleAshtechPayWebhook(req: Request, res: Response) {
 router.post("/v1/webhooks/drimpay", handleDrimPayWebhook);
 router.post("/v1/webhooks/ashtechpay", handleAshtechPayWebhook);
 
-type MulapayRequest = Request & { mulapayUserId?: string; mulapayAuthMode?: "clerk" | "api_key" };
+type MulapayRequest = Request & { mulapayUserId?: string; mulapayAuthMode?: "clerk" | "api_key"; mulapayScopes?: string[] };
 
 function apiKeyFromRequest(req: Request) {
   const bearer = req.header("Authorization");
@@ -717,9 +714,25 @@ async function resolveApiKeyUserId(req: Request) {
   const stored = await db.query.apiKeys.findFirst({
     where: and(eq(apiKeys.keyHash, hashApiKey(rawKey)), isNull(apiKeys.revokedAt)),
   });
-  if (!stored) return null;
+   if (!stored) return null;
   await db.update(apiKeys).set({ lastUsedAt: new Date() }).where(eq(apiKeys.id, stored.id));
-  return stored.userId;
+   return { userId: stored.userId, scopes: stored.scopes };
+}
+
+function requiredApiScope(req: Request) {
+  if (req.method === "GET" && req.path === "/v1/bootstrap") return "wallets:read";
+  if (req.method === "GET" && (req.path.startsWith("/v1/deposits/") || req.path.startsWith("/v1/payments/") || req.path.startsWith("/v1/withdrawals/"))) return "transactions:read";
+  if (req.method === "GET" && req.path === "/v1/payment-links") return "payment_links:read";
+  if (req.method === "POST" && req.path === "/v1/deposits") return "deposits:write";
+  if (req.method === "POST" && req.path === "/v1/withdrawals") return "withdrawals:write";
+  if (req.method === "POST" && req.path === "/v1/transfers") return "transfers:write";
+  if (req.method === "POST" && req.path === "/v1/exchanges") return "exchanges:write";
+  if (req.method === "POST" && req.path === "/v1/payment-links") return "payment_links:write";
+  if (req.method === "PATCH" && req.path.startsWith("/v1/payment-links/")) return "payment_links:write";
+  if (req.method === "DELETE" && req.path.startsWith("/v1/payment-links/")) return "payment_links:write";
+  if (req.method === "PATCH" && req.path.startsWith("/v1/notifications/")) return "wallets:write";
+  if (req.method === "POST" && req.path === "/v1/kyc") return "kyc:write";
+  return null;
 }
 
 router.use(async (req, res, next) => {
@@ -737,9 +750,15 @@ router.use(async (req, res, next) => {
     next();
     return;
   }
-  const apiUserId = await resolveApiKeyUserId(req);
-  if (apiUserId) {
-    (req as MulapayRequest).mulapayUserId = apiUserId;
+   const apiKey = await resolveApiKeyUserId(req);
+   if (apiKey) {
+     const requiredScope = requiredApiScope(req);
+     if (requiredScope && !apiKey.scopes.includes(requiredScope)) {
+       res.status(403).json({ error: `Cette clé API n’a pas le scope requis : ${requiredScope}.`, code: "INSUFFICIENT_SCOPE" });
+       return;
+     }
+     (req as MulapayRequest).mulapayUserId = apiKey.userId;
+     (req as MulapayRequest).mulapayScopes = apiKey.scopes;
     (req as MulapayRequest).mulapayAuthMode = "api_key";
     next();
     return;
@@ -807,7 +826,18 @@ async function ensureClerkUser(req: Request) {
   return ensureUser(req);
 }
 
-const DEFAULT_API_KEY_SCOPES = ["wallets:read", "transactions:read", "deposits:write"];
+const DEFAULT_API_KEY_SCOPES = [
+  "wallets:read",
+  "wallets:write",
+  "transactions:read",
+  "deposits:write",
+  "withdrawals:write",
+  "transfers:write",
+  "exchanges:write",
+  "payment_links:read",
+  "payment_links:write",
+  "kyc:write",
+];
 
 router.get("/v1/api-keys", async (req, res) => {
   const user = await ensureClerkUser(req);
@@ -1134,7 +1164,6 @@ router.post("/v1/exchanges", async (req, res) => {
       status: "Pending review",
       fee: exchangeAmount.platformFee,
       netAmount: created.receivedAmount,
-      provider: null,
     }));
   } catch (error) {
     if (error instanceof Error && error.message === "EXCHANGE_INSUFFICIENT_FUNDS") {
@@ -1264,7 +1293,6 @@ router.patch("/v1/exchanges/:id/decision", requireAdmin, async (req, res) => {
       reference: result.exchange.id,
       status: approved ? "Completed" : "Rejected",
       netAmount: result.exchange.receivedAmount,
-      provider: null,
     }));
   } catch (error) {
     if (error instanceof Error && error.message === "EXCHANGE_WALLET_UNAVAILABLE") {
@@ -1449,7 +1477,7 @@ router.post("/v1/public/payment-links/:token/payments", async (req, res) => {
     return;
   }
   const orderIdHeader = req.header("Idempotency-Key");
-  const paymentLinkIdempotencyKey = orderIdHeader && orderIdHeader.length <= 64 ? orderIdHeader : crypto.randomUUID();
+   const paymentLinkIdempotencyKey = orderIdHeader && orderIdHeader.length <= 128 ? orderIdHeader : crypto.randomUUID();
   const orderId = `paylink_${link.id}_${paymentLinkIdempotencyKey}`;
   const existing = await db.query.transactions.findFirst({ where: eq(transactions.providerOrderId, orderId) });
   if (existing) {
@@ -1464,7 +1492,6 @@ router.post("/v1/public/payment-links/:token/payments", async (req, res) => {
       netAmount: number;
       paymentUrl: string | null;
       expiresAt: Date | null;
-      providerStatus: string;
       transactionId: string | null;
     };
     if (providerSelection.provider === "ASHTECHPAY") {
@@ -1483,7 +1510,6 @@ router.post("/v1/public/payment-links/:token/payments", async (req, res) => {
       normalizedProvider = {
         reference: provider.reference,
         status: ashtechStatusToTransactionStatus(provider.status),
-        providerStatus: provider.status,
         fee: Math.round(provider.fee_amount),
         netAmount: provider.credited_amount,
         paymentUrl: provider.flow === "wave" ? provider.wave_url ?? null : null,
@@ -1506,7 +1532,6 @@ router.post("/v1/public/payment-links/:token/payments", async (req, res) => {
       normalizedProvider = {
         reference: provider.reference,
         status: providerStatusToTransactionStatus(provider.status),
-        providerStatus: provider.status,
         fee: provider.fee,
         netAmount: provider.net_amount,
         paymentUrl: provider.payment_url ?? null,
@@ -1542,7 +1567,7 @@ router.post("/v1/public/payment-links/:token/payments", async (req, res) => {
     res.status(201).json({ ok: true, message: normalizedProvider.paymentUrl ? "Ouvrez le lien de paiement pour confirmer." : "Confirmez le paiement sur votre téléphone.", reference: normalizedProvider.reference, status: "Pending", paymentUrl: normalizedProvider.paymentUrl, expiresAt: normalizedProvider.expiresAt?.toISOString() ?? null, fee: normalizedProvider.fee, netAmount: normalizedProvider.netAmount, platformFee: mulapayAmount.platformFee, merchantAmount: mulapayAmount.merchantAmount });
   } catch (error) {
     if (error instanceof AshtechPayOtpRequiredError) {
-      res.status(400).json({ error: error.message, code: error.code, otpRequired: true, reference: error.reference, ussdCode: error.ussdCode });
+      res.status(400).json({ error: "Le code OTP opérateur est requis pour continuer.", code: "OTP_REQUIRED", otpRequired: true });
       return;
     }
     if (error instanceof DrimPayError || error instanceof AshtechPayError) {
@@ -1577,15 +1602,6 @@ router.get("/v1/public/payment-links/:token/payments/:reference", async (req, re
     res.status(404).json({ error: "Paiement introuvable." });
     return;
   }
-  let providerStatus: string | null = null;
-  if (transaction.paymentProvider === "ASHTECHPAY" && transaction.status !== "Completed" && transaction.providerTransactionId) {
-    try {
-      const provider = await getAshtechTransaction(transaction.providerTransactionId);
-      providerStatus = ashtechStatusToTransactionStatus(provider.status);
-    } catch {
-      providerStatus = null;
-    }
-  }
   res.json({
     ok: true,
     reference: transaction.reference,
@@ -1598,7 +1614,6 @@ router.get("/v1/public/payment-links/:token/payments/:reference", async (req, re
     merchantAmount: transaction.merchantAmount,
     paymentUrl: transaction.paymentUrl,
     expiresAt: transaction.expiresAt?.toISOString() ?? null,
-    providerStatus,
     createdAt: transaction.createdAt.toISOString(),
   });
 });
@@ -1695,7 +1710,6 @@ router.post("/v1/deposits", async (req, res) => {
     operator?: string;
     phone?: string;
     operatorOtp?: string;
-    providerReference?: string;
   };
   const amount = input.amount;
   if (!input.walletId || typeof amount !== "number" || !Number.isInteger(amount) || amount <= 0 || input.method !== "mobile_money" || !input.country || !input.operator || !input.phone) {
@@ -1728,7 +1742,13 @@ router.post("/v1/deposits", async (req, res) => {
   const providerSelection = await resolvePaymentProvider(countryCode, input.operator);
   const orderIdHeader = req.header("Idempotency-Key");
   const orderId = orderIdHeader && orderIdHeader.length <= 128 ? orderIdHeader : `order_${crypto.randomUUID()}`;
-  const existing = await db.query.transactions.findFirst({ where: eq(transactions.providerOrderId, orderId) });
+    const existing = await db.query.transactions.findFirst({
+      where: and(
+        eq(transactions.providerOrderId, orderId),
+        eq(transactions.userId, user.id),
+        eq(transactions.type, "Deposit"),
+      ),
+    });
   if (existing) {
     res.status(200).json({
       ok: true,
@@ -1751,7 +1771,6 @@ router.post("/v1/deposits", async (req, res) => {
     let normalizedProvider: {
       reference: string;
       status: string;
-      providerStatus: string;
       fee: number;
       netAmount: number;
       paymentUrl: string | null;
@@ -1767,14 +1786,13 @@ router.post("/v1/deposits", async (req, res) => {
         countryCode,
         operator: providerSelection.operator,
         phone: ashtechPayPhoneForCountry(input.phone, countryCode),
-        reference: input.providerReference ?? orderId,
+         reference: orderId,
         notifyUrl: ashtechPayWebhookUrl(),
         otp: input.operatorOtp,
       });
       normalizedProvider = {
         reference: provider.reference,
         status: ashtechStatusToTransactionStatus(provider.status),
-        providerStatus: provider.status,
           fee: Math.round(provider.fee_amount),
         netAmount: provider.credited_amount,
         paymentUrl: provider.flow === "wave" ? provider.wave_url ?? null : null,
@@ -1797,7 +1815,6 @@ router.post("/v1/deposits", async (req, res) => {
       normalizedProvider = {
         reference: provider.reference,
         status: providerStatusToTransactionStatus(provider.status),
-        providerStatus: provider.status,
         fee: Math.round(provider.fee),
         netAmount: provider.net_amount,
         paymentUrl: provider.payment_url ?? null,
@@ -1844,16 +1861,13 @@ router.post("/v1/deposits", async (req, res) => {
       netAmount: normalizedProvider.netAmount,
       platformFee: mulapayAmount.platformFee,
       merchantAmount: mulapayAmount.merchantAmount,
-      providerStatus: normalizedProvider.providerStatus,
     });
   } catch (error) {
     if (error instanceof AshtechPayOtpRequiredError) {
       res.status(400).json({
-        error: error.message,
-        code: error.code,
+        error: "Le code OTP opérateur est requis pour continuer.",
+        code: "OTP_REQUIRED",
         otpRequired: true,
-        reference: error.reference,
-        ussdCode: error.ussdCode,
       });
       return;
     }
@@ -1875,20 +1889,10 @@ router.get("/v1/deposits/:reference", async (req, res) => {
     res.status(404).json({ error: "Dépôt introuvable." });
     return;
   }
-  let providerStatus: string | null = null;
-  if (transaction.paymentProvider === "ASHTECHPAY" && transaction.status !== "Completed" && transaction.providerTransactionId) {
-    try {
-      const provider = await getAshtechTransaction(transaction.providerTransactionId);
-      providerStatus = ashtechStatusToTransactionStatus(provider.status);
-    } catch {
-      providerStatus = null;
-    }
-  }
   res.json({
     ok: true,
     reference: transaction.reference,
     status: transaction.status,
-    providerStatus,
     amount: transaction.amount,
     currency: transaction.currency,
     fee: transaction.fee,
@@ -2098,7 +2102,7 @@ router.post("/v1/withdrawals", async (req, res) => {
       ok: true,
       message: "Retrait en cours de traitement. Le wallet sera débité après confirmation Mulapay.",
       reference: provider.reference,
-      status: provider.status,
+      status: "Pending",
       amount: provider.amount,
       currency: provider.currency,
       fee: provider.fee,

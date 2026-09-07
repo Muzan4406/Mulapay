@@ -9,10 +9,15 @@ import type { DepositInputMethod } from './depositInputMethod';
 
 export interface DepositInput {
   walletId: string;
-  /** @exclusiveMinimum 0 */
+  /**
+     * Must be an integer.
+     * @exclusiveMinimum 0
+     */
   amount: number;
   method: DepositInputMethod;
+  /** @minLength 2 */
   country: string;
+  /** @minLength 2 */
   operator: string;
   /** @pattern ^\+[1-9][0-9]{7,14}$ */
   phone: string;

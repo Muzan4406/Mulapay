@@ -33,6 +33,7 @@ export interface PaymentLinkInput {
      */
   amountMax: number;
   customerFields: PaymentLinkInputCustomerFieldsItem[];
+  /** ISO 8601 expiration timestamp. */
   expiresAt: string;
   /**
      * @minimum 1

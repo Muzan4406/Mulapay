@@ -5,17 +5,21 @@
  * Mulapay wallet, ledger, KYC and operations API
  * OpenAPI spec version: 0.2.0
  */
-import type { MoneyOperationInputFeePayer } from './moneyOperationInputFeePayer';
 import type { MoneyOperationInputMethod } from './moneyOperationInputMethod';
 
 export interface MoneyOperationInput {
   walletId: string;
-  /** @exclusiveMinimum 0 */
+  /**
+     * Must be an integer.
+     * @maximum 10000000
+     * @exclusiveMinimum 0
+     */
   amount: number;
-  method?: MoneyOperationInputMethod;
-  country?: string;
-  operator?: string;
-  phone?: string;
-  operatorOtp?: string;
-  feePayer?: MoneyOperationInputFeePayer;
+  method: MoneyOperationInputMethod;
+  /** @minLength 2 */
+  country: string;
+  /** @minLength 2 */
+  operator: string;
+  /** @pattern ^\+[1-9][0-9]{7,14}$ */
+  phone: string;
 }
