@@ -2123,10 +2123,15 @@ function SignInPage() {
   const [submitting, setSubmitting] = useState(false);
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    const normalizedIdentifier = identifier.trim();
+    if (!normalizedIdentifier.includes('@')) {
+      setError('Utilisez l’adresse e-mail utilisée lors de l’inscription. La connexion par numéro de téléphone n’est pas activée.');
+      return;
+    }
     setError('');
     setSubmitting(true);
     try {
-      const created = await (signIn as any).create({ identifier });
+      const created = await (signIn as any).create({ identifier: normalizedIdentifier });
       if (created.error) throw created.error;
       const completed = await (signIn as any).password({ password });
       if (completed.error) throw completed.error;
@@ -2143,7 +2148,7 @@ function SignInPage() {
       setSubmitting(false);
     }
   };
-  return <AuthFrame eyebrow="Espace membre" title="Se connecter" subtitle="Accédez à vos wallets, vos opérations et votre historique Mulapay." footer={<><span>Pas encore de compte ?</span><Link href="/sign-up">Créer un compte</Link></>}><form className="auth-form" onSubmit={submit}>{error && <div className="auth-error">{error}</div>}<label>Adresse e-mail ou numéro de téléphone<input value={identifier} onChange={event => setIdentifier(event.target.value)} placeholder="vous@exemple.com ou +228…" autoComplete="username" required /></label><label>Mot de passe<PasswordInput value={password} onChange={setPassword} placeholder="Votre mot de passe" autoComplete="current-password" show={showPassword} onToggle={() => setShowPassword(value => !value)} /></label><Link href="/forgot-password" className="auth-forgot">Mot de passe oublié ?</Link><button className="button button-primary auth-submit" type="submit" disabled={submitting}>{submitting ? 'Connexion…' : 'Se connecter'} <ChevronRight size={15} /></button></form></AuthFrame>;
+  return <AuthFrame eyebrow="Espace membre" title="Se connecter" subtitle="Accédez à vos wallets, vos opérations et votre historique Mulapay." footer={<><span>Pas encore de compte ?</span><Link href="/sign-up">Créer un compte</Link></>}><form className="auth-form" onSubmit={submit}>{error && <div className="auth-error">{error}</div>}<label>Adresse e-mail<input type="email" value={identifier} onChange={event => setIdentifier(event.target.value)} placeholder="vous@exemple.com" autoComplete="username" autoCapitalize="none" required /></label><label>Mot de passe<PasswordInput value={password} onChange={setPassword} placeholder="Votre mot de passe" autoComplete="current-password" show={showPassword} onToggle={() => setShowPassword(value => !value)} /></label><Link href="/forgot-password" className="auth-forgot">Mot de passe oublié ?</Link><button className="button button-primary auth-submit" type="submit" disabled={submitting}>{submitting ? 'Connexion…' : 'Se connecter'} <ChevronRight size={15} /></button></form></AuthFrame>;
 }
 
 function SignUpPage() {
