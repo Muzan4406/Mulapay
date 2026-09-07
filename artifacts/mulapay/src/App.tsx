@@ -84,6 +84,17 @@ function money(value: number, currency = 'XOF') {
   return new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(value) + ` ${currency}`;
 }
 
+function downloadCsv(filename: string, headers: string[], rows: string[][]) {
+  const escape = (value: string) => `"${value.replaceAll('"', '""')}"`;
+  const csv = `\uFEFF${[headers, ...rows].map(row => row.map(escape).join(';')).join('\n')}`;
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
 function calculateFee(amount: number, percentage: number) {
   return Math.round(amount * percentage / 100);
 }
@@ -229,7 +240,7 @@ const landingFeatures = [
   { icon: ArrowDownLeft, eyebrow: '01', title: 'Dépôt', copy: 'Ajoutez de l’argent facilement avec les moyens de paiement disponibles.' },
   { icon: ArrowUpRight, eyebrow: '02', title: 'Retrait', copy: 'Envoyez vos fonds vers un wallet Mobile Money avec le routage Mulapay.' },
   { icon: Send, eyebrow: '03', title: 'Transfert', copy: 'Envoyez de l’argent vers un numéro Mobile Money avec le routage Mulapay.' },
-  { icon: RefreshCw, eyebrow: '04', title: 'Échange', copy: 'Les conversions entre pays seront disponibles après activation du règlement réel.' },
+  { icon: RefreshCw, eyebrow: '04', title: 'Échange', copy: 'Convertissez vos soldes entre wallets selon les règles de conformité Mulapay.' },
   { icon: Link2, eyebrow: '05', title: 'Payment Links', copy: 'Créez un lien simple pour recevoir des paiements à distance.' },
   { icon: QrCode, eyebrow: '06', title: 'QR Code', copy: 'Recevez des paiements en présentiel avec votre QR code Mulapay.' },
 ];
@@ -311,7 +322,7 @@ function Landing() {
         <div className="wallet-showcase">
           <div className="wallet-showcase-head"><div><span className="showcase-label">votre solde</span><strong>— <small>FCFA</small></strong></div><span className="wallet-showcase-menu"><MoreHorizontal size={17} /></span></div>
           <div className="showcase-wallet-list"><div><span className="showcase-country tg">TG</span><span><strong>Togo</strong><small>Wallet disponible</small></span><b>— <small>FCFA</small></b></div><div><span className="showcase-country bj">BJ</span><span><strong>Bénin</strong><small>Wallet disponible</small></span><b>— <small>FCFA</small></b></div><div><span className="showcase-country ci">CI</span><span><strong>Côte d’Ivoire</strong><small>Wallet disponible</small></span><b>— <small>FCFA</small></b></div></div>
-          <div className="exchange-showcase"><div><span className="exchange-label">échange</span><strong>Disponible après activation</strong></div><span className="exchange-action">Bientôt <ChevronRight size={14} /></span></div>
+          <div className="exchange-showcase"><div><span className="exchange-label">échange</span><strong>Entre vos wallets actifs</strong></div><span className="exchange-action">Voir l’espace <ChevronRight size={14} /></span></div>
         </div>
       </section>
       <section className="landing-section landing-features" id="fonctionnalites">
@@ -382,12 +393,11 @@ function Shell({ children, admin = false, onNotifications }: { children: ReactNo
       <Link href={admin ? '/admin' : '/app'}><Logo light /></Link>
       <div className="side-label">{admin ? 'Bureau des opérations' : 'Votre Mulapay'}</div>
       <nav className="nav-list">{nav.map(item => { const Icon = item.icon; const testId = `link-nav-${item.label.toLowerCase().replaceAll(' ', '-')}`; return item.kycRequired && !kycVerified ? <button key={item.href} type="button" className="nav-link nav-link-locked" onClick={() => setLocation('/app/kyc')} data-testid={testId} aria-label={`${item.label} — vérification KYC requise`}>{item.image ? <img className="nav-image" src={dashboardIcon(item.image)} alt="" /> : <Icon className="nav-icon" />}<span>{item.label}</span><LockKeyhole size={13} /></button> : <Link key={item.href} href={item.href} className={`nav-link ${location === item.href ? 'active' : ''}`} data-testid={testId}>{item.image ? <img className="nav-image" src={dashboardIcon(item.image)} alt="" /> : <Icon className="nav-icon" />}<span>{item.label}</span></Link>; })}</nav>
-      {!admin && <><div className="side-label" style={{ marginTop: 30 }}>Compte</div><nav className="nav-list">{!kycVerified ? <><button type="button" className="nav-link nav-link-locked" onClick={() => setLocation('/app/kyc')} data-testid="link-nav-api" aria-label="API partenaire — vérification KYC requise"><img className="nav-image" src={dashboardIcon('api.png')} alt="" /><span>API partenaire</span><LockKeyhole size={13} /></button><button type="button" className="nav-link nav-link-locked" onClick={() => setLocation('/app/kyc')} data-testid="link-nav-api-docs" aria-label="Documentation API Payin — vérification KYC requise"><img className="nav-image" src={dashboardIcon('documents.png')} alt="" /><span>Documentation API Payin</span><LockKeyhole size={13} /></button></> : <><Link href="/app/api" className={`nav-link ${location === '/app/api' ? 'active' : ''}`} data-testid="link-nav-api"><img className="nav-image" src={dashboardIcon('api.png')} alt="" /><span>API partenaire</span></Link><Link href="/app/api-docs" className={`nav-link ${location === '/app/api-docs' ? 'active' : ''}`} data-testid="link-nav-api-docs"><img className="nav-image" src={dashboardIcon('documents.png')} alt="" /><span>Documentation API Payin</span></Link></>}<Link href="/app/notifications" className={`nav-link ${location === '/app/notifications' ? 'active' : ''}`} data-testid="link-nav-notifications"><img className="nav-image" src={dashboardIcon('notifications.png')} alt="" /><span>Notifications</span></Link><Link href="/app/kyc" className={`nav-link ${location === '/app/kyc' ? 'active' : ''}`} data-testid="link-nav-verification"><img className="nav-image" src={dashboardIcon('kyc.png')} alt="" /><span>Vérification KYC</span></Link><Link href="/app/security" className={`nav-link ${location === '/app/security' ? 'active' : ''}`} data-testid="link-nav-security"><img className="nav-image" src={dashboardIcon('security.png')} alt="" /><span>Sécurité</span></Link><Link href="/app/settings" className={`nav-link ${location === '/app/settings' ? 'active' : ''}`} data-testid="link-nav-settings"><img className="nav-image" src={dashboardIcon('profile.png')} alt="" /><span>Profil</span></Link><Link href="/app/support" className={`nav-link ${location === '/app/support' ? 'active' : ''}`} data-testid="link-nav-support"><img className="nav-image" src={dashboardIcon('support.png')} alt="" /><span>Support</span></Link></nav></>}
-      <div className="side-footer"><div className="demo-chip"><span className="demo-dot" /><span><strong style={{ color: 'hsl(160 42% 64%)' }}>Compte sécurisé</strong><br />Vos opérations sont persistées et auditées.</span></div></div>
+      {!admin && <><div className="side-label" style={{ marginTop: 30 }}>Compte</div><nav className="nav-list">{!kycVerified ? <><button type="button" className="nav-link nav-link-locked" onClick={() => setLocation('/app/kyc')} data-testid="link-nav-api" aria-label="API partenaire — vérification KYC requise"><img className="nav-image" src={dashboardIcon('api.png')} alt="" /><span>API partenaire</span><LockKeyhole size={13} /></button><button type="button" className="nav-link nav-link-locked" onClick={() => setLocation('/app/kyc')} data-testid="link-nav-api-docs" aria-label="Documentation API Payin — vérification KYC requise"><img className="nav-image" src={dashboardIcon('documents.png')} alt="" /><span>Documentation API Payin</span><LockKeyhole size={13} /></button></> : <><Link href="/app/api" className={`nav-link ${location === '/app/api' ? 'active' : ''}`} data-testid="link-nav-api"><img className="nav-image" src={dashboardIcon('api.png')} alt="" /><span>API partenaire</span></Link><Link href="/app/api-docs" className={`nav-link ${location === '/app/api-docs' ? 'active' : ''}`} data-testid="link-nav-api-docs"><img className="nav-image" src={dashboardIcon('documents.png')} alt="" /><span>Documentation API Payin</span></Link></>}<Link href="/app/notifications" className={`nav-link ${location === '/app/notifications' ? 'active' : ''}`} data-testid="link-nav-notifications"><img className="nav-image" src={dashboardIcon('notifications.png')} alt="" /><span>Notifications</span></Link><Link href="/app/kyc" className={`nav-link ${location === '/app/kyc' ? 'active' : ''}`} data-testid="link-nav-verification"><img className="nav-image" src={dashboardIcon('kyc.png')} alt="" /><span>Vérification KYC</span></Link><Link href="/app/security" className={`nav-link ${location === '/app/security' ? 'active' : ''}`} data-testid="link-nav-security"><img className="nav-image" src={dashboardIcon('security.png')} alt="" /><span>Sécurité</span></Link><Link href="/app/settings" className={`nav-link ${location === '/app/settings' ? 'active' : ''}`} data-testid="link-nav-settings"><img className="nav-image" src={dashboardIcon('profile.png')} alt="" /><span>Profil</span></Link></nav></>}
     </aside>
     {mobileMenuOpen && <button className="mobile-menu-backdrop" aria-label="Fermer le menu" onClick={() => setMobileMenuOpen(false)} />}
     <div className="main-pane">
-      <div className={`mobile-top ${admin ? 'admin-mobile-top' : 'user-mobile-top'}`}><button className="icon-button mobile-menu-toggle" aria-label={mobileMenuOpen ? 'Fermer le menu' : 'Ouvrir le menu'} aria-expanded={mobileMenuOpen} aria-controls="mobile-navigation" onClick={() => setMobileMenuOpen(open => !open)} data-testid="button-mobile-menu"><Menu size={19} /></button><div className="mobile-menu-actions"><button className="icon-button" onClick={() => setLocation(admin ? '/app' : '/admin')} data-testid="button-switch-area"><ArrowRightLeft size={16} /></button></div></div>
+      <div className={`mobile-top ${admin ? 'admin-mobile-top' : 'user-mobile-top'}`}><button className="icon-button mobile-menu-toggle" aria-label={mobileMenuOpen ? 'Fermer le menu' : 'Ouvrir le menu'} aria-expanded={mobileMenuOpen} aria-controls="mobile-navigation" onClick={() => setMobileMenuOpen(open => !open)} data-testid="button-mobile-menu"><Menu size={19} /></button>{admin && <div className="mobile-menu-actions"><button className="icon-button" onClick={() => setLocation('/app')} data-testid="button-switch-area"><ArrowRightLeft size={16} /></button></div>}</div>
        {admin && <div className="admin-bar"><span><CircleAlert size={13} style={{ verticalAlign: 'middle', marginRight: 6 }} />Vue opérations · chaque action sensible est journalisée.</span><Link href="/app">Retour à l’espace utilisateur</Link></div>}
        <header className="topbar"><div className="topbar-leading"><button className="back-button" onClick={goBack} title="Retour à la page précédente" aria-label="Retour à la page précédente" data-testid="button-back"><ArrowLeft size={16} /><span>Retour</span></button><div className="crumb">{admin ? 'Opérations / ' : 'Espace / '}{current}</div></div><div className="top-actions"><button className="icon-button" title={unread > 0 ? `${unread} notification${unread > 1 ? 's' : ''} à lire` : 'Notifications'} aria-label={unread > 0 ? `${unread} notifications à lire` : 'Notifications'} onClick={onNotifications} data-testid="button-notifications"><Bell size={16} />{unread > 0 && <span className="notification-count">{unread > 9 ? '9+' : unread}</span>}</button><div className="avatar" data-testid="text-user-avatar">{useStore().profile.firstName.slice(0, 1)}{useStore().profile.lastName.slice(0, 1)}</div></div></header>
       {children}
@@ -534,15 +544,11 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
 
   useEffect(() => {
     if (!isDeposit || !depositTracking?.reference || depositStatusIsTerminal(depositTracking.status)) return;
-    let redirectTimer: number | undefined;
     const timeout = window.setTimeout(() => {
-      setDepositTracking(current => current && !depositStatusIsTerminal(current.status) ? { ...current, status: 'Failed' } : current);
-      toast('Dépôt non confirmé après 60 secondes. Retour au dashboard.');
-      redirectTimer = window.setTimeout(() => setLocation('/app'), 800);
+      setDepositStatusError('Le dépôt est toujours en attente de confirmation. Le suivi continue en arrière-plan.');
     }, 60000);
     return () => {
       window.clearTimeout(timeout);
-      if (redirectTimer) window.clearTimeout(redirectTimer);
     };
   }, [depositTracking?.reference, depositTracking?.status, isDeposit]);
 
@@ -782,7 +788,8 @@ function QrPage() {
   return <main className="page-wrap"><PageIntro eyebrow="Réception rapide" title="QR Code" subtitle="Un QR code ne contient aucun secret. Il pointe vers une page de paiement sécurisée." /><div className="card card-pad qr-wrap">{link ? <><QRCodeSVG value={link.slug} size={220} level="M" includeMargin data-testid="qr-payment-link" /><div className="qr-caption">{link.slug}</div></> : <div className="empty-state"><QrCode size={25} /><strong>Aucun lien actif</strong><p>Créez un lien de paiement pour générer un QR code réel.</p></div>}</div></main>;
 }
 
-const Payments = NotFound;
+const Payments = PaymentLinks;
+const Support = NotFound;
 
 function ApiAccess() {
   const { toast } = useStore();
@@ -1595,17 +1602,29 @@ function Security() {
   return <main className="page-wrap"><PageIntro eyebrow="Protection du compte" title="Sécurité" subtitle="Clerk gère l’authentification, les sessions et les facteurs de sécurité." /><div className="card card-pad"><div className="activity-row"><div className="activity-main"><div className="activity-icon"><ShieldCheck size={15} /></div><div><div className="activity-name">Authentification sécurisée</div><div className="activity-meta">Connexion, OTP, récupération et sessions sont gérés par Clerk.</div></div></div><Link href="/sign-in" className="button button-ghost button-sm">Gérer</Link></div><div className="activity-row"><div className="activity-main"><div className="activity-icon"><LogOut size={15} /></div><div><div className="activity-name">Déconnexion globale</div><div className="activity-meta">Révoquer la session actuelle et revenir à l’accueil.</div></div></div><button className="button button-danger button-sm" onClick={signOut}>Se déconnecter</button></div></div></main>;
 }
 
-function Support() {
-  return <main className="page-wrap"><PageIntro eyebrow="Assistance" title="Support" subtitle="Décrivez votre problème avec une référence de transaction pour accélérer le traitement." /><div className="card card-pad"><div className="field"><label>Sujet</label><input placeholder="Ex. dépôt en attente" /></div><div className="field"><label>Référence de transaction</label><input placeholder="MP-..." /></div><div className="field"><label>Message</label><textarea rows={5} placeholder="Décrivez votre demande" /></div><button className="button button-primary" onClick={() => alert('Votre demande sera envoyée au support après activation du canal de support.')}>Envoyer la demande</button></div></main>;
-}
-
-function Transactions() {
+function TransactionsLegacy() {
   const { transactions, toast } = useStore();
   const [filter, setFilter] = useState('All');
   const [query, setQuery] = useState('');
   const filtered = transactions.filter(t => (filter === 'All' || t.type === filter) && `${t.counterparty} ${t.reference} ${t.country}`.toLowerCase().includes(query.toLowerCase()));
   const filterOptions = [['All', 'Toutes'], ['Received', 'Reçues'], ['Sent', 'Envoyées'], ['Exchange', 'Échanges'], ['Deposit', 'Dépôts'], ['Withdrawal', 'Retraits'], ['Payment', 'Paiements']];
   return <main className="page-wrap"><PageIntro eyebrow="Une trace claire" title="Transactions" subtitle="Consultez uniquement les mouvements confirmés ou en cours issus des services réels." action={<button className="button button-ghost" onClick={() => toast('L’export sera disponible après activation des permissions de téléchargement.')} data-testid="button-export-transactions"><Download size={15} /> Exporter en CSV</button>} /><div className="card table-card"><div className="table-toolbar"><div><div className="filter-set">{filterOptions.map(([value, label]) => <button key={value} onClick={() => setFilter(value)} className={`filter-button ${filter === value ? 'active' : ''}`} data-testid={`button-filter-${value.toLowerCase()}`}>{label}</button>)}</div></div><div className="input-prefix" style={{ width: 190 }}><Search size={14} style={{ position: 'absolute', left: 12, top: 11, color: 'hsl(203 18% 46%)' }} /><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Rechercher une référence" style={{ width: '100%', border: '1px solid hsl(38 28% 85%)', background: 'hsl(42 44% 99%)', borderRadius: 9, padding: '9px 10px 9px 32px', fontSize: 11, outline: 0 }} data-testid="input-search-transactions" /></div></div><div className="table-scroll"><table className="data-table"><thead><tr><th>Mouvement</th><th>Wallet</th><th>Référence</th><th>Date</th><th style={{ textAlign: 'right' }}>Montant</th><th>Statut</th></tr></thead><tbody>{filtered.map(t => { const operator = transactionOperator(t.counterparty); const operatorLogo = operatorLogoUrl(operator); const positive = transactionIsIncoming(t); return <tr key={t.id} data-testid={`row-table-transaction-${t.id}`}><td><div className="transaction-party"><span className="transaction-logo"><img src={operatorLogo ?? transactionServiceLogo(t.counterparty)} alt={operator ?? ''} /></span><span><div className="transaction-party-name">{counterpartyLabel(t.counterparty)}</div><div className="activity-meta">{movementLabel(t.type)}{operator && <span className="transaction-operator">{operator}</span>}</div></span></div></td><td><div className="transaction-wallet"><img className="transaction-country-logo" src={countryFlagUrl(t.country)} alt={`Drapeau ${t.country}`} /><span>{countryLabel(t.country)}<small>{t.currency}</small></span></div></td><td><div className="transaction-reference"><code>{t.reference}</code></div></td><td>{transactionDateLabel(t.createdAt)}</td><td className={`transaction-amount ${positive ? 'positive' : 'negative'}`}>{positive ? '+' : '-'}{new Intl.NumberFormat('fr-FR').format(t.amount)} {t.currency}</td><td><span className={`pill ${t.status === 'Completed' ? 'pill-success' : 'pill-pending'}`}>{statusLabel(t.status)}</span></td></tr>; })}</tbody></table>{filtered.length === 0 && <div className="empty-state"><ListFilter size={25} /><strong>Aucun mouvement réel</strong><p>Les transactions apparaîtront ici après confirmation du service de paiement.</p></div>}</div></div></main>;
+}
+
+function Transactions() {
+  const { transactions } = useStore();
+  const [filter, setFilter] = useState('All');
+  const [query, setQuery] = useState('');
+  const filterOptions = [['All', 'Toutes'], ['Received', 'Reçues'], ['Sent', 'Envoyées'], ['Exchange', 'Échanges'], ['Deposit', 'Dépôts'], ['Withdrawal', 'Retraits'], ['Payment', 'Paiements']];
+  const filtered = transactions.filter(item => (filter === 'All' || item.type === filter) && `${item.counterparty} ${item.reference} ${item.country}`.toLowerCase().includes(query.toLowerCase()));
+  const exportRows = filtered.map(item => [item.reference, item.counterparty, item.country, movementLabel(item.type), String(item.amount), item.currency, statusLabel(item.status), item.createdAt]);
+  return <main className="page-wrap">
+    <PageIntro eyebrow="Une trace claire" title="Transactions" subtitle="Consultez les mouvements enregistrés sur vos wallets." action={<button className="button button-ghost" onClick={() => downloadCsv('mulapay-transactions.csv', ['Référence', 'Contrepartie', 'Pays', 'Type', 'Montant', 'Devise', 'Statut', 'Date'], exportRows)} data-testid="button-export-transactions"><Download size={15} /> Exporter en CSV</button>} />
+    <div className="card table-card">
+      <div className="table-toolbar"><div className="filter-set">{filterOptions.map(([value, label]) => <button key={value} onClick={() => setFilter(value)} className={`filter-button ${filter === value ? 'active' : ''}`}>{label}</button>)}</div><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Rechercher une référence" /></div>
+      <div className="table-scroll"><table className="data-table"><thead><tr><th>Référence</th><th>Contrepartie</th><th>Marché</th><th>Type</th><th>Montant</th><th>Statut</th></tr></thead><tbody>{filtered.map(item => <tr key={item.id}><td><code>{item.reference}</code></td><td>{counterpartyLabel(item.counterparty)}</td><td>{countryLabel(item.country)} · {item.currency}</td><td>{movementLabel(item.type)}</td><td>{money(item.amount, item.currency)}</td><td><span className={`pill ${item.status === 'Completed' ? 'pill-success' : 'pill-pending'}`}>{statusLabel(item.status)}</span></td></tr>)}</tbody></table>{filtered.length === 0 && <div className="empty-state"><ListFilter size={25} /><strong>Aucun mouvement</strong><p>Les transactions apparaîtront ici après confirmation.</p></div>}</div>
+    </div>
+  </main>;
 }
 
 function Transfer() {
@@ -2121,7 +2140,7 @@ function PublicPaymentPage() {
   const selectedCustomerCountry = mobileMoneyCountryOptions.find(option => option.country === customerCountry) ?? mobileMoneyCountryOptions[0];
    // Les informations de paiement sont toujours obligatoires pour une transaction réelle,
    // même si un ancien lien a été créé avec une configuration de champs incomplète.
-   const hasField = (_name: string) => true;
+   const hasField = (name: string) => link.customerFields?.includes(name as NonNullable<PaymentLink['customerFields']>[number]) ?? true;
   const updateCustomerValue = (name: string, value: string) => setCustomerValues(values => ({ ...values, [name]: value }));
   const fixedAmount = link.amountType === 'FIXED' ? money(link.amount, link.currency) : 'Montant libre';
   const paymentMinAmount = link.amountMin ?? PUBLIC_PAYMENT_MIN_AMOUNT;
@@ -2271,17 +2290,18 @@ function RealKyc() {
         const response = await fetch('/api/v1/kyc/uploads/request-url', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
         });
-        const payload = await response.json() as { uploadURL?: string; objectPath?: string; error?: string };
-        if (!response.ok || !payload.uploadURL || !payload.objectPath) throw new Error(payload.error ?? 'L’image n’a pas pu être préparée.');
-        const upload = await fetch(payload.uploadURL, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } });
-        if (!upload.ok) throw new Error('L’image n’a pas pu être envoyée vers le stockage privé.');
+        const payload = await response.json() as { uploadURL?: string; objectPath?: string; error?: string; code?: string };
+        if (!response.ok || !payload.uploadURL || !payload.objectPath) throw new Error(payload.error ?? 'Le stockage privé est indisponible. Réessayez plus tard.');
+        const upload = await fetch(payload.uploadURL, { method: 'PUT', body: file, credentials: 'omit', headers: { 'Content-Type': file.type } });
+        if (!upload.ok) throw new Error(`L’image n’a pas été enregistrée (HTTP ${upload.status}). Changez l’image et réessayez.`);
         setFiles(current => current[field]?.preview === preview
           ? { ...current, [field]: { name: file.name, preview, uploading: false, upload: { kind, objectPath: payload.objectPath!, fileName: file.name, contentType: file.type as KycDocument['contentType'], size: file.size } } }
           : current);
       } catch (error) {
-        setFiles(current => current[field]?.preview === preview ? { ...current, [field]: { name: file.name, preview, uploading: false } } : current);
+        setFiles(current => current[field]?.preview === preview ? { ...current, [field]: { name: file.name, preview, uploading: false, error: error instanceof Error ? error.message : 'Échec de l’enregistrement de cette image.' } } : current);
         toast(error instanceof Error ? error.message : 'L’image n’a pas pu être envoyée.');
       }
     })();
@@ -2298,7 +2318,8 @@ function RealKyc() {
       return;
     }
     if (step === 2 && (!documentNumber.trim() || !documentExpiry || !documentReady)) {
-      toast('Ajoutez le numéro, la date d’expiration et les trois photos demandées.');
+      const missing = [!documentNumber.trim() ? 'le numéro de carte' : '', !documentExpiry ? 'la date d’expiration' : '', !files.front?.upload ? 'le recto' : '', !files.back?.upload ? 'le verso' : '', !files.face?.upload ? 'la photo avec la carte' : ''].filter(Boolean);
+      toast(`Complétez : ${missing.join(', ')}.`);
       return;
     }
     setStep(current => Math.min(current + 1, 3));
@@ -2356,7 +2377,6 @@ function RealKyc() {
         {step === 2 && <div className="kyc-document-step">
            <div className="kyc-fields-grid"><div className="field"><label htmlFor="kyc-document-number">Numéro de la carte d’identité <span className="required-mark">*</span></label><input id="kyc-document-number" value={documentNumber} onChange={event => setDocumentNumber(event.target.value)} placeholder="Entrez le numéro de votre carte" /></div><div className="field"><label htmlFor="kyc-document-expiry">Date d’expiration de la carte <span className="required-mark">*</span></label><input id="kyc-document-expiry" type="date" value={documentExpiry} onChange={event => setDocumentExpiry(event.target.value)} /><small className="field-hint">Format : JJ/MM/AAAA</small></div></div>
            <div className="kyc-upload-grid"><KycUploadCard label="Recto de la carte" description="Importer une image lisible" value={files.front} onChange={selectFile('front')} /><KycUploadCard label="Verso de la carte" description="Importer une image lisible" value={files.back} onChange={selectFile('back')} /><KycUploadCard label="Photo avec la carte en main" description="Importer une image où votre visage et la carte sont visibles" value={files.face} onChange={selectFile('face')} /></div>
-           <div className="notice" style={{ marginTop: 16 }}><ShieldCheck size={14} /><span>Assurez-vous que les documents sont lisibles et que votre visage est clairement visible sur la photo avec la carte. La décision reste humaine.</span></div>
         </div>}
           {step === 3 && <div className="kyc-review-step"><div className="kyc-review-icon"><RefreshCw size={24} /></div><strong>Revue manuelle Mulapay</strong><p>Votre dossier comprend vos informations, les deux faces de la carte et votre photo avec la carte en main.</p><div className="kyc-review-checks"><span><Check size={13} /> Informations personnelles</span><span><Check size={13} /> Photo du recto</span><span><Check size={13} /> Photo du verso</span><span><Check size={13} /> Photo avec la carte en main</span></div></div>}
           <div className="kyc-form-actions">{step > 1 && <button className="button button-ghost" type="button" onClick={() => setStep(current => current - 1)}><ArrowLeft size={15} /> Retour</button>}<span />{step < 3 ? <button className="button button-primary" type="button" onClick={nextStep}>Continuer <ChevronRight size={15} /></button> : <button className="button button-primary" type="button" onClick={submit}><UploadCloud size={15} /> Envoyer pour revue manuelle</button>}</div>
@@ -2365,13 +2385,13 @@ function RealKyc() {
   </main>;
 }
 
-function KycUploadCard({ label, description, value, onChange, capture }: { label: string; description: string; value?: KycFileState; onChange: (event: ChangeEvent<HTMLInputElement>) => void; capture?: 'user' | 'environment' }) {
+function KycUploadCard({ label, description, value, onChange }: { label: string; description: string; value?: KycFileState; onChange: (event: ChangeEvent<HTMLInputElement>) => void }) {
   return <label className={`kyc-upload-card ${value ? 'has-file' : ''}`}>
-    <input type="file" accept="image/*" capture={capture} onChange={onChange} />
+    <input type="file" accept="image/*" onChange={onChange} />
     {value ? <img className="kyc-upload-preview" src={value.preview} alt={`Aperçu — ${label}`} /> : <span className="kyc-upload-icon"><UploadCloud size={20} /></span>}
     <strong>{value ? value.name : label}</strong>
-    <small>{value?.uploading ? 'Envoi sécurisé en cours…' : value?.upload ? 'Image enregistrée dans le stockage privé' : value ? 'Échec de l’envoi, réessayez' : description}</small>
-    <span className="kyc-upload-action">{value ? 'Changer l’image' : 'Prendre une photo ou importer une image'}</span>
+     <small className={value?.error ? 'kyc-upload-error' : ''}>{value?.uploading ? 'Enregistrement sécurisé en cours…' : value?.upload ? 'Image enregistrée dans le stockage privé' : value?.error ?? description}</small>
+     <span className="kyc-upload-action">{value ? 'Changer l’image' : 'Importer une image'}</span>
   </label>;
 }
 
@@ -2577,7 +2597,6 @@ function AdminKycReview() {
           <div><strong>{document.label}</strong><span>{stored ? `${stored.fileName} · ${(stored.size / 1024 / 1024).toFixed(1)} Mo` : 'Non fournie'}</span>{source && <a href={source} target="_blank" rel="noreferrer" className="kyc-admin-open-link">Ouvrir en grand</a>}</div>
         </div>;
       })}</div>
-      <div className="notice" style={{ marginTop: 18 }}><LockKeyhole size={14} /><span>Les images sont servies uniquement à un administrateur authentifié depuis le stockage privé ; aucun fichier n’est exposé publiquement.</span></div>
       {selectedIsWaiting && <div className="kyc-admin-decision">
         <div className="field"><label htmlFor="kyc-rejection-reason">Motif du rejet <span className="required-mark">* uniquement en cas de rejet</span></label><textarea id="kyc-rejection-reason" value={rejectionReason} onChange={event => setRejectionReason(event.target.value)} placeholder="Expliquez les éléments à corriger ou le motif du rejet." rows={3} /></div>
         <div className="case-actions"><button className="button button-primary" type="button" onClick={() => decide('VERIFIED')}><Check size={15} /> Approuver</button><button className="button button-danger" type="button" onClick={() => decide('REFUSED')}><X size={15} /> Rejeter</button></div>
@@ -2592,10 +2611,20 @@ function AdminExchanges() {
   return <main className="page-wrap"><PageIntro eyebrow="Opérations / liquidité" title="File des échanges" subtitle="Approuvez ou refusez les demandes entre wallets. Une décision met à jour la timeline du client." /><div className="notice"><Info size={15} /><span>Les validations admin appliquent les limites, le solde source et les contrôles conformité côté serveur.</span></div><div className="card card-pad" style={{ marginTop: 22 }}><div className="section-head"><div><h2 className="section-title">À examiner</h2><p className="section-note">{pending.length} demande(s) prête(s) pour décision</p></div><span className="pill pill-pending"><Clock3 size={12} style={{ marginRight: 5 }} /> Revue manuelle</span></div>{pending.map(ex => <div className="case-row" key={ex.id} data-testid={`row-admin-exchange-${ex.id}`}><div className="case-person"><div className="person-initial"><ArrowRightLeft size={15} /></div><div><div className="case-name">{ex.source} <ChevronRight size={12} style={{ verticalAlign: 'middle' }} /> {ex.destination}</div><div className="case-meta">{ex.requestedAt} · demandé {money(ex.amount)} · frais admin {money(ex.fee)} · reçu {money(ex.receivedAmount)} · taux {ex.rate.toFixed(4)}</div></div></div><div className="case-actions"><button className="button button-primary button-sm" onClick={() => { setExchangeStatus(ex.id, 'Completed'); toast('Échange approuvé et wallets mis à jour.'); }} data-testid={`button-approve-exchange-${ex.id}`}><Check size={13} /> Approuver</button><button className="button button-danger button-sm" onClick={() => { setExchangeStatus(ex.id, 'Rejected'); toast('Échange refusé et réservation libérée.'); }} data-testid={`button-reject-exchange-${ex.id}`}><X size={13} /> Refuser</button></div></div>)}{pending.length === 0 && <div className="empty-state"><CheckCircle2 size={25} /><strong>Aucun échange en attente</strong><p>La file est à jour.</p></div>}</div><div className="card table-card"><div className="table-toolbar"><div><h2 className="section-title">Historique des décisions</h2></div></div><div className="table-scroll"><table className="data-table"><thead><tr><th>Parcours</th><th>Demandé</th><th>Reçu</th><th>Demandé le</th><th>Statut</th></tr></thead><tbody>{exchanges.map(ex => <tr key={ex.id}><td>{ex.source} <ChevronRight size={11} style={{ verticalAlign: 'middle' }} /> {ex.destination}</td><td>{money(ex.amount)}</td><td>{money(ex.receivedAmount)}</td><td>{ex.requestedAt}</td><td><span className={`pill ${ex.status === 'Completed' ? 'pill-success' : ex.status === 'Rejected' ? 'pill-danger' : 'pill-pending'}`}>{statusLabel(ex.status)}</span></td></tr>)}</tbody></table></div></div></main>;
 }
 
-function AdminTransactions() {
+function AdminTransactionsLegacy() {
   const { adminTransactions: transactions, toast } = useStore(); const [query, setQuery] = useState('');
   const filtered = transactions.filter(t => `${t.reference} ${t.counterparty} ${t.country}`.toLowerCase().includes(query.toLowerCase()));
   return <main className="page-wrap"><PageIntro eyebrow="Opérations / ledger" title="Toutes les transactions" subtitle="Une vue réseau des mouvements enregistrés sur chaque marché actif." action={<button className="button button-ghost" onClick={() => toast('L’export sera disponible après activation des permissions de téléchargement.')} data-testid="button-admin-export"><Download size={15} /> Exporter le ledger</button>} /><div className="card table-card"><div className="table-toolbar"><div className="eyebrow"><ListFilter size={13} style={{ verticalAlign: 'middle', marginRight: 6 }} /> {filtered.length} mouvement(s) visible(s)</div><div className="input-prefix" style={{ width: 220 }}><Search size={14} style={{ position: 'absolute', left: 12, top: 11, color: 'hsl(203 18% 46%)' }} /><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Rechercher dans le ledger" style={{ width: '100%', border: '1px solid hsl(38 28% 85%)', background: 'hsl(42 44% 99%)', borderRadius: 9, padding: '9px 10px 9px 32px', fontSize: 11, outline: 0 }} data-testid="input-admin-search" /></div></div><div className="table-scroll"><table className="data-table"><thead><tr><th>Référence</th><th>Contrepartie</th><th>Marché</th><th>Type</th><th>Montant</th><th>Statut</th></tr></thead><tbody>{filtered.map(t => <tr key={t.id} data-testid={`row-admin-transaction-${t.id}`}><td style={{ fontFamily: 'var(--font-mono)', fontSize: 10 }}>{t.reference}</td><td style={{ fontWeight: 700 }}>{t.counterparty}</td><td>{countryLabel(t.country)} · {t.currency}</td><td>{movementLabel(t.type)}</td><td style={{ fontFamily: 'var(--font-mono)' }}>{money(t.amount, t.currency)}</td><td><span className={`pill ${t.status === 'Completed' ? 'pill-success' : 'pill-pending'}`}>{statusLabel(t.status)}</span></td></tr>)}</tbody></table></div></div></main>;
+}
+
+function AdminTransactions() {
+  const { adminTransactions } = useStore();
+  const [query, setQuery] = useState('');
+  const filtered = adminTransactions.filter(item => `${item.reference} ${item.counterparty} ${item.country}`.toLowerCase().includes(query.toLowerCase()));
+  return <main className="page-wrap">
+    <PageIntro eyebrow="Opérations / ledger" title="Toutes les transactions" subtitle="Une vue des mouvements enregistrés sur chaque marché actif." action={<button className="button button-ghost" onClick={() => downloadCsv('mulapay-ledger.csv', ['Référence', 'Contrepartie', 'Pays', 'Type', 'Montant', 'Devise', 'Statut', 'Date'], filtered.map(item => [item.reference, item.counterparty, item.country, movementLabel(item.type), String(item.amount), item.currency, statusLabel(item.status), item.createdAt]))} data-testid="button-admin-export"><Download size={15} /> Exporter le ledger</button>} />
+    <div className="card table-card"><div className="table-toolbar"><div className="eyebrow"><ListFilter size={13} style={{ verticalAlign: 'middle', marginRight: 6 }} /> {filtered.length} mouvement(s) visible(s)</div><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Rechercher dans le ledger" /></div><div className="table-scroll"><table className="data-table"><thead><tr><th>Référence</th><th>Contrepartie</th><th>Marché</th><th>Type</th><th>Montant</th><th>Statut</th></tr></thead><tbody>{filtered.map(item => <tr key={item.id} data-testid={`row-admin-transaction-${item.id}`}><td><code>{item.reference}</code></td><td>{item.counterparty}</td><td>{countryLabel(item.country)} · {item.currency}</td><td>{movementLabel(item.type)}</td><td>{money(item.amount, item.currency)}</td><td><span className={`pill ${item.status === 'Completed' ? 'pill-success' : 'pill-pending'}`}>{statusLabel(item.status)}</span></td></tr>)}</tbody></table></div></div>
+  </main>;
 }
 
 function Notifications({ onClose }: { onClose: () => void }) {
@@ -2620,6 +2649,10 @@ function Notifications({ onClose }: { onClose: () => void }) {
 function KycRequiredPage({ feature }: { feature: string }) {
   const [, setLocation] = useLocation();
   return <main className="page-wrap"><PageIntro eyebrow="Accès protégé" title={`${feature} réservé aux comptes vérifiés`} subtitle="La vérification KYC protège vos fonds et les partenaires qui utilisent Mulapay." /><div className="card card-pad kyc-access-card"><div className="kyc-access-icon"><LockKeyhole size={24} /></div><div><h2 className="section-title">Terminez votre vérification d’identité</h2><p className="section-note">Après validation de votre dossier, les retraits, l’API partenaire et sa documentation seront automatiquement disponibles.</p><button className="button button-primary" onClick={() => setLocation('/app/kyc')} data-testid="button-start-kyc-access"><FileCheck2 size={15} /> Ouvrir la vérification KYC</button></div></div></main>;
+}
+
+function ApiUnavailablePage({ onRetry }: { onRetry: () => void }) {
+  return <main className="page-wrap"><div className="card card-pad api-unavailable"><CircleAlert size={28} /><div><h1 className="section-title">Mulapay est momentanément indisponible</h1><p className="section-note">Les données réelles de votre compte n’ont pas pu être chargées. Aucun solde ou statut de démonstration n’est affiché.</p><button className="button button-primary" type="button" onClick={onRetry}>Réessayer</button></div></div></main>;
 }
 
 function RoutedApp() {
@@ -2673,6 +2706,7 @@ function RoutedApp() {
   };
   if (!isLoaded || bootstrapQuery.isLoading) return <MulapayLoadingScreen />;
   if (!isSignedIn) return <Redirect to="/" />;
+  if (bootstrapQuery.isError || !data) return <ApiUnavailablePage onRetry={() => void bootstrapQuery.refetch()} />;
   const admin = location.startsWith('/admin') && data?.profile.role === 'ADMIN';
   if (location.startsWith('/admin') && !admin) return <Redirect to="/app" />;
   const Kyc = RealKyc;
@@ -2985,4 +3019,4 @@ function App() {
 
 export default App;
 
-type KycFileState = { name: string; preview: string; uploading: boolean; upload?: KycDocument };
+type KycFileState = { name: string; preview: string; uploading: boolean; upload?: KycDocument; error?: string };

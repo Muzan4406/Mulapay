@@ -183,7 +183,8 @@ async function resolvePaymentProvider(countryCode: string, operator: string) {
       eq(paymentProviderRoutes.enabled, true),
     ),
   });
-  const provider = (route?.provider ?? "DRIMPAY") as PaymentProvider;
+  if (!route) return null;
+  const provider = route.provider as PaymentProvider;
   if (provider !== "DRIMPAY" && provider !== "ASHTECHPAY") throw new Error("PAYMENT_PROVIDER_INVALID");
   return { provider, operator: route?.providerOperator ?? operator };
 }
@@ -220,8 +221,17 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
     res.status(400).json({ error: "Notification de confirmation incomplète." });
     return;
   }
+  const eventId = req.header("X-DrimPay-Event-Id")?.trim() || createHash("sha256").update(rawBody).digest("hex");
 
   const result = await db.transaction(async (tx) => {
+    const [event] = await tx.insert(paymentProviderWebhookEvents).values({
+      id: crypto.randomUUID(),
+      provider: "DRIMPAY",
+      eventId,
+    }).onConflictDoNothing({
+      target: [paymentProviderWebhookEvents.provider, paymentProviderWebhookEvents.eventId],
+    }).returning();
+    if (!event) return { found: true, duplicate: true };
     const transaction = await tx.query.transactions.findFirst({
       where: and(
         eq(transactions.paymentProvider, "DRIMPAY"),
@@ -235,7 +245,7 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
     const nextStatus = providerStatusToTransactionStatus(payload.status!);
     const currentIsTerminal = ["Completed", "Failed", "Expired", "Cancelled", "Reversed"].includes(transaction.status);
     if (currentIsTerminal && transaction.status !== "Completed" && nextStatus !== "Reversed") {
-      return { found: true };
+     return { found: true, duplicate: false };
     }
 
     if (transaction.type === "Withdrawal" || transaction.type === "Transfer") {
@@ -439,7 +449,7 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
     res.status(422).json({ error: "Le webhook DrimPay ne correspond pas au wallet, à l’opérateur ou au montant de la transaction." });
     return;
   }
-  res.status(200).json({ received: true, event: payload.event ?? null });
+  res.status(200).json({ received: true, duplicate: "duplicate" in result ? result.duplicate : false, event: payload.event ?? null });
 }
 
 function ashtechStatusToTransactionStatus(status: string) {
@@ -1195,13 +1205,22 @@ router.post("/v1/transfers", async (req, res) => {
     res.status(400).json({ error: "Le wallet source ne correspond pas au pays ou à la devise du transfert." });
     return;
   }
+  const providerSelection = await resolvePaymentProvider(countryCode, operator);
+  if (!providerSelection) {
+    res.status(503).json({ error: "Aucun routage de transfert actif n’est configuré pour ce pays et cet opérateur." });
+    return;
+  }
+  if (providerSelection.provider !== "DRIMPAY") {
+    res.status(503).json({ error: "Le fournisseur configuré ne prend pas encore en charge les transferts sortants." });
+    return;
+  }
   try {
     const result = await submitDrimPayOutgoing({
       userId: user.id,
       wallet,
       amount: input.amount,
       countryCode,
-      operator: operatorSlug,
+      operator: providerSelection.operator,
       phone: recipientMatch[1],
       idempotencyKey: req.header("Idempotency-Key"),
       kind: "Transfer",
@@ -1629,6 +1648,10 @@ router.post("/v1/public/payment-links/:token/payments", async (req, res) => {
   const settings = await getPlatformSettings();
   const mulapayAmount = calculateMulapayNetAmount(input.amount, Number(settings.feePercentage));
   const providerSelection = await resolvePaymentProvider(countryCode, input.operator);
+  if (!providerSelection) {
+    res.status(503).json({ error: "Aucun routage de paiement actif n’est configuré pour ce pays et cet opérateur." });
+    return;
+  }
   if (input.operator === "Orange Money" && ORANGE_OTP_COUNTRIES.has(countryCode) && !input.operatorOtp) {
     res.status(400).json({ error: "Le code OTP Orange Money est requis pour ce pays." });
     return;
@@ -1918,6 +1941,10 @@ router.post("/v1/deposits", async (req, res) => {
   const settings = await getPlatformSettings();
   const mulapayAmount = calculateMulapayNetAmount(validatedAmount, Number(settings.feePercentage));
   const providerSelection = await resolvePaymentProvider(countryCode, input.operator);
+  if (!providerSelection) {
+    res.status(503).json({ error: "Aucun routage de dépôt actif n’est configuré pour ce pays et cet opérateur." });
+    return;
+  }
   const orderIdHeader = req.header("Idempotency-Key");
   const orderId = orderIdHeader && orderIdHeader.length <= 128 ? orderIdHeader : `order_${crypto.randomUUID()}`;
     const existing = await db.query.transactions.findFirst({
@@ -2194,6 +2221,15 @@ router.post("/v1/withdrawals", async (req, res) => {
     res.status(400).json({ error: "Le wallet sélectionné ne correspond pas au pays du retrait." });
     return;
   }
+  const providerSelection = await resolvePaymentProvider(countryCode, input.operator);
+  if (!providerSelection) {
+    res.status(503).json({ error: "Aucun routage de retrait actif n’est configuré pour ce pays et cet opérateur." });
+    return;
+  }
+  if (providerSelection.provider !== "DRIMPAY") {
+    res.status(503).json({ error: "Le fournisseur configuré ne prend pas encore en charge les retraits sortants." });
+    return;
+  }
 
   const rawIdempotencyKey = req.header("Idempotency-Key");
   const orderId = rawIdempotencyKey && rawIdempotencyKey.length <= 128
@@ -2265,7 +2301,7 @@ router.post("/v1/withdrawals", async (req, res) => {
       amount: requestedAmount,
       currency: wallet.currency,
       countryCode,
-      operator: requestedOperator,
+      operator: providerSelection.operator,
       phone: requestedPhone,
       orderId,
       webhookUrl,
@@ -2346,13 +2382,20 @@ router.post("/v1/kyc/uploads/request-url", async (req, res) => {
     res.status(400).json({ error: "La taille du fichier doit être un entier." });
     return;
   }
-  const uploadURL = await objectStorageService.getObjectEntityUploadURL();
-  const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
-  res.json(RequestKycUploadUrlResponse.parse({
-    uploadURL,
-    objectPath,
-    metadata: input,
-  }));
+  try {
+    const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+    const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
+    res.json(RequestKycUploadUrlResponse.parse({
+      uploadURL,
+      objectPath,
+      metadata: input,
+    }));
+  } catch {
+    res.status(503).json({
+      error: "Le stockage privé des documents est momentanément indisponible. Votre dossier n’a pas été envoyé.",
+      code: "OBJECT_STORAGE_UNAVAILABLE",
+    });
+  }
 });
 
 router.post("/v1/kyc", async (req, res) => {
@@ -2363,6 +2406,22 @@ router.post("/v1/kyc", async (req, res) => {
     res.status(400).json({
       error: "Le dossier KYC est incomplet ou contient un document expiré.",
       code: "INCOMPLETE_KYC",
+    });
+    return;
+  }
+  try {
+    await Promise.all(documents.map((document) => objectStorageService.getObjectEntityFile(document.objectPath)));
+  } catch (error) {
+    if (error instanceof ObjectNotFoundError) {
+      res.status(422).json({
+        error: "Au moins un document KYC n’a pas été enregistré dans le stockage privé. Réimportez les images concernées.",
+        code: "KYC_DOCUMENT_NOT_FOUND",
+      });
+      return;
+    }
+    res.status(503).json({
+      error: "Le stockage privé des documents est momentanément indisponible. Le dossier n’a pas été enregistré.",
+      code: "OBJECT_STORAGE_UNAVAILABLE",
     });
     return;
   }
