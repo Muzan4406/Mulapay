@@ -441,9 +441,8 @@ function respondWithPaymentProviderError(res: Response, error: DrimPayError | As
   const minimumAmountMatch = error.message.match(/minimum allowed.*?\bis\s+(\d+)\s+([A-Z]+)/i);
   if (minimumAmountMatch) {
     res.status(400).json({
-      error: `Le montant minimum accepté par ${provider === "ASHTECHPAY" ? "AshtechPay" : "le fournisseur"} est de ${minimumAmountMatch[1]} ${minimumAmountMatch[2]}.`,
+      error: `Le montant minimum accepté par le service de paiement est de ${minimumAmountMatch[1]} ${minimumAmountMatch[2]}.`,
       code: "PAYMENT_AMOUNT_TOO_LOW",
-      provider,
     });
     return;
   }
@@ -451,7 +450,6 @@ function respondWithPaymentProviderError(res: Response, error: DrimPayError | As
   res.status(error.statusCode).json({
     error: isConfigurationError ? "Le service de paiement n’est pas encore configuré." : error.statusCode >= 500 ? "Le service de paiement est temporairement indisponible." : error.message,
     code: isConfigurationError ? "PAYMENT_SERVICE_NOT_CONFIGURED" : "PAYMENT_SERVICE_ERROR",
-    provider,
   });
 }
 
@@ -1042,7 +1040,7 @@ router.post("/v1/transfers", async (req, res) => {
       ok: true,
       message: result.existing
         ? "Cette demande de transfert existe déjà."
-        : "Transfert en cours de traitement. Le wallet sera débité après confirmation DrimPay.",
+        : "Transfert en cours de traitement. Le wallet sera débité après confirmation Mulapay.",
       reference: result.reference,
       status: result.status,
       amount: result.amount,
@@ -1050,7 +1048,6 @@ router.post("/v1/transfers", async (req, res) => {
       fee: result.fee,
       totalDebited: result.totalDebited,
       netAmount: result.amount,
-      provider: "DRIMPAY",
     });
   } catch (error) {
     if (error instanceof DrimPayError) {
@@ -1542,10 +1539,10 @@ router.post("/v1/public/payment-links/:token/payments", async (req, res) => {
         providerTransactionId: normalizedProvider.transactionId,
       });
     });
-    res.status(201).json({ ok: true, message: normalizedProvider.paymentUrl ? "Ouvrez le lien de paiement pour confirmer." : "Confirmez le paiement sur votre téléphone.", reference: normalizedProvider.reference, status: "Pending", paymentUrl: normalizedProvider.paymentUrl, expiresAt: normalizedProvider.expiresAt?.toISOString() ?? null, fee: normalizedProvider.fee, netAmount: normalizedProvider.netAmount, platformFee: mulapayAmount.platformFee, merchantAmount: mulapayAmount.merchantAmount, provider: providerSelection.provider });
+    res.status(201).json({ ok: true, message: normalizedProvider.paymentUrl ? "Ouvrez le lien de paiement pour confirmer." : "Confirmez le paiement sur votre téléphone.", reference: normalizedProvider.reference, status: "Pending", paymentUrl: normalizedProvider.paymentUrl, expiresAt: normalizedProvider.expiresAt?.toISOString() ?? null, fee: normalizedProvider.fee, netAmount: normalizedProvider.netAmount, platformFee: mulapayAmount.platformFee, merchantAmount: mulapayAmount.merchantAmount });
   } catch (error) {
     if (error instanceof AshtechPayOtpRequiredError) {
-      res.status(400).json({ error: error.message, code: error.code, otpRequired: true, reference: error.reference, ussdCode: error.ussdCode, provider: "ASHTECHPAY" });
+      res.status(400).json({ error: error.message, code: error.code, otpRequired: true, reference: error.reference, ussdCode: error.ussdCode });
       return;
     }
     if (error instanceof DrimPayError || error instanceof AshtechPayError) {
@@ -1848,7 +1845,6 @@ router.post("/v1/deposits", async (req, res) => {
       platformFee: mulapayAmount.platformFee,
       merchantAmount: mulapayAmount.merchantAmount,
       providerStatus: normalizedProvider.providerStatus,
-      provider: providerSelection.provider,
     });
   } catch (error) {
     if (error instanceof AshtechPayOtpRequiredError) {
@@ -1858,7 +1854,6 @@ router.post("/v1/deposits", async (req, res) => {
         otpRequired: true,
         reference: error.reference,
         ussdCode: error.ussdCode,
-        provider: "ASHTECHPAY",
       });
       return;
     }
@@ -2101,14 +2096,13 @@ router.post("/v1/withdrawals", async (req, res) => {
     });
     res.status(201).json({
       ok: true,
-      message: "Retrait en cours de traitement. Le wallet sera débité après confirmation DrimPay.",
+      message: "Retrait en cours de traitement. Le wallet sera débité après confirmation Mulapay.",
       reference: provider.reference,
       status: provider.status,
       amount: provider.amount,
       currency: provider.currency,
       fee: provider.fee,
       totalDebited: providerTotal,
-      provider: "DRIMPAY",
     });
   } catch (error) {
     if (localTransaction && (error instanceof DrimPayError ? error.statusCode < 500 : false)) {

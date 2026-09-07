@@ -11,6 +11,8 @@ tags:
   - name: wallet
   - name: operations
   - name: admin
+  - name: payin
+  - name: public
 paths:
   /healthz:
     get:
@@ -723,7 +725,6 @@ components:
         netAmount: { type: number }
         platformFee: { type: number }
         merchantAmount: { type: number }
-        provider: { type: ["string", "null"] }
         providerStatus: { type: ["string", "null"] }
         otpRequired: { type: boolean }
         ussdCode: { type: ["string", "null"] }
@@ -806,7 +807,6 @@ components:
         operator: { type: string }
         phone: { type: string }
         operatorOtp: { type: string }
-        providerReference: { type: string }
         feePayer: { type: string, enum: [sender, recipient] }
     DepositInput:
       type: object
@@ -819,7 +819,6 @@ components:
         operator: { type: string }
         phone: { type: string, pattern: "^\\+[1-9][0-9]{7,14}$" }
         operatorOtp: { type: string }
-        providerReference: { type: string }
     KycInput:
       type: object
       required: [country, documents]

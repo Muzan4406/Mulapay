@@ -227,8 +227,6 @@ export interface OperationResult {
   platformFee?: number;
   merchantAmount?: number;
   /** @nullable */
-  provider?: string | null;
-  /** @nullable */
   providerStatus?: string | null;
   otpRequired?: boolean;
   /** @nullable */
@@ -404,7 +402,6 @@ export interface MoneyOperationInput {
   operator?: string;
   phone?: string;
   operatorOtp?: string;
-  providerReference?: string;
   feePayer?: MoneyOperationInputFeePayer;
 }
 
@@ -425,7 +422,6 @@ export interface DepositInput {
   /** @pattern ^\+[1-9][0-9]{7,14}$ */
   phone: string;
   operatorOtp?: string;
-  providerReference?: string;
 }
 
 export interface KycInput {

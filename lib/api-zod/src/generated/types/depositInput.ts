@@ -17,5 +17,4 @@ export interface DepositInput {
   /** @pattern ^\+[1-9][0-9]{7,14}$ */
   phone: string;
   operatorOtp?: string;
-  providerReference?: string;
 }

@@ -1019,7 +1019,7 @@ function ApiPayinDocs() {
     ['statuses', 'Statuts & erreurs'],
     ['coverage', 'Pays & opérateurs'],
     ['payment-links', 'Paiement par lien'],
-    ['settlement', 'Confirmation & webhooks'],
+    ['settlement', 'Confirmation Mulapay'],
   ];
   const fields = [
     ['walletId', 'Identifiant du wallet Mulapay du pays concerné.', 'Requis'],
@@ -1028,13 +1028,12 @@ function ApiPayinDocs() {
     ['country', 'Pays du wallet : Togo, Bénin, Côte d’Ivoire, Burkina Faso, Sénégal ou Mali.', 'Requis'],
     ['operator', 'Opérateur Mobile Money disponible pour le pays sélectionné.', 'Requis'],
     ['phone', 'Numéro au format international, par exemple +22890000000.', 'Requis'],
-    ['operatorOtp', 'Code OTP si l’opérateur ou le pays le demande.', 'Conditionnel'],
-    ['providerReference', 'Référence fournisseur facultative pour certains parcours AshtechPay.', 'Optionnel'],
+    ['operatorOtp', 'Code de confirmation demandé dans certains parcours Mobile Money.', 'Conditionnel'],
   ];
   const statuses = [
     ['Pending', 'En attente', 'La demande locale est créée, mais aucun crédit n’est encore comptabilisé.'],
-    ['Processing', 'En traitement', 'Le fournisseur traite la demande.'],
-    ['Completed', 'Effectué', 'Le webhook signé a confirmé le paiement et le ledger a été crédité.'],
+    ['Processing', 'En traitement', 'La demande est en cours de confirmation par le réseau de paiement.'],
+    ['Completed', 'Effectué', 'Mulapay a confirmé le paiement et crédité le wallet.'],
     ['Failed', 'Échoué', 'La demande est terminée sans crédit.'],
     ['Expired', 'Expiré', 'La demande a dépassé sa durée de validité.'],
     ['Cancelled', 'Annulé', 'La demande a été annulée sans crédit.'],
@@ -1051,12 +1050,12 @@ function ApiPayinDocs() {
       <div className="docs-content">
         <div className="docs-topline"><span className="eyebrow">Documentation partenaire</span><div className="docs-topline-actions"><span className="pill pill-success">Production</span><button className="button button-ghost button-sm docs-print-button" onClick={() => window.print()} data-testid="button-export-docs-pdf"><Download size={14} /> Exporter en PDF</button><Link href="/app/api" className="button button-ghost button-sm"><Settings2 size={14} /> Gérer mes clés</Link></div></div>
         <header className="docs-header">
-          <div><h1 className="page-title">Documentation API Payin</h1><p className="page-subtitle">Tout ce qu’il faut pour accepter des paiements Mobile Money avec Mulapay : créer une demande, suivre son statut et rapprocher le résultat dans votre système.</p></div>
+          <div><h1 className="page-title">Documentation API de paiement Mulapay</h1><p className="page-subtitle">Intégrez les paiements automatiques dans votre application : créez une demande, suivez son statut et confirmez le résultat depuis votre backend.</p></div>
           <div className="docs-version">API <strong>v1</strong><span>•</span> Dernière version</div>
         </header>
 
         <section id="overview" className="docs-hero card">
-          <div className="docs-hero-copy"><span className="docs-kicker">Commencer en quelques minutes</span><h2>Une intégration claire, de la demande à la confirmation.</h2><p>Votre serveur crée un dépôt avec une clé Mulapay. La réponse fournit une référence unique, puis votre application suit l’opération jusqu’à son statut final.</p><div className="docs-hero-actions"><a href="#quickstart" className="button button-primary">Démarrer l’intégration <ArrowRight size={15} /></a><a href="#create-deposit" className="button button-ghost">Voir l’exemple</a></div></div>
+          <div className="docs-hero-copy"><span className="docs-kicker">Paiements automatiques</span><h2>Une intégration claire, de la demande à la confirmation.</h2><p>Votre serveur appelle l’API Mulapay avec une clé sécurisée. Mulapay fournit une référence unique et vous permet de suivre l’opération jusqu’à son statut final.</p><div className="docs-hero-actions"><a href="#quickstart" className="button button-primary">Démarrer l’intégration <ArrowRight size={15} /></a><a href="#create-deposit" className="button button-ghost">Voir l’exemple</a></div></div>
           <div className="docs-hero-visual"><div className="docs-hero-orbit" /><img src={dashboardIcon('documents.png')} alt="" className="docs-hero-illustration" /><div className="docs-hero-status"><span className="docs-production-dot" /> API opérationnelle</div></div>
         </section>
 
@@ -1106,14 +1105,13 @@ Idempotency-Key: commande-unique-123`}</pre><p className="docs-inline-note"><Shi
   "ok": true,
   "reference": "DP-XXXXXXXX",
    "status": "Pending",
-   "providerStatus": "pending",
+    "providerStatus": "processing",
   "paymentUrl": null,
   "expiresAt": "2026-09-05T12:05:00.000Z",
   "fee": 350,
    "netAmount": 9650,
    "platformFee": 100,
-   "merchantAmount": 9900,
-   "provider": "DRIMPAY"
+    "merchantAmount": 9900
 }`}</pre><p className="docs-inline-note"><Info size={14} /> Si <code>paymentUrl</code> est renseigné, ouvrez-le depuis votre parcours serveur ou transmettez-le à votre interface sécurisée.</p></div></div>
         </section>
 
@@ -1124,7 +1122,7 @@ Idempotency-Key: commande-unique-123`}</pre><p className="docs-inline-note"><Shi
   "ok": true,
   "reference": "DP-XXXXXXXX",
    "status": "Completed",
-   "providerStatus": "success",
+    "providerStatus": "completed",
   "amount": 10000,
   "currency": "XOF",
   "fee": 350,
@@ -1134,7 +1132,7 @@ Idempotency-Key: commande-unique-123`}</pre><p className="docs-inline-note"><Shi
   "paymentUrl": null,
   "expiresAt": null,
   "createdAt": "2026-09-05T11:45:00.000Z"
- }`}</pre></div><div className="card card-pad docs-callout-card"><span className="docs-callout-icon"><Activity size={16} /></span><h3>Quand créditer votre service ?</h3><p>Ne livrez jamais votre produit et ne créditez jamais votre propre compte après le seul statut HTTP 201. Attendez <code>Completed</code> et rapprochez la référence.</p><div className="docs-mini-rule"><span className="docs-production-dot" /> Statut final requis : <strong>Completed</strong></div></div></div>
+  }`}</pre></div><div className="card card-pad docs-callout-card"><span className="docs-callout-icon"><Activity size={16} /></span><h3>Quand confirmer votre commande ?</h3><p>Ne livrez jamais votre produit après le seul statut HTTP 201. Interrogez le suivi depuis votre backend et attendez le statut Mulapay <code>Completed</code>.</p><div className="docs-mini-rule"><span className="docs-production-dot" /> Statut Mulapay requis : <strong>Completed</strong></div></div></div>
         </section>
 
         <section id="statuses" className="docs-section">
@@ -1151,23 +1149,24 @@ Idempotency-Key: commande-unique-123`}</pre><p className="docs-inline-note"><Shi
            <div className="docs-section-heading"><div><span className="docs-kicker">07 · Checkout</span><h2>Paiement par lien</h2><p>Pour un checkout hébergé, créez un lien depuis l’espace Mulapay puis partagez uniquement son URL publique.</p></div><Link2 size={19} /></div>
            <div className="docs-two-column docs-align-start">
              <div className="card card-pad"><h3>Parcours client</h3><div className="docs-status-list"><div><span className="docs-step-number">01</span><div><strong>Afficher</strong><p><code>GET /api/v1/public/payment-links/:token</code> retourne uniquement les informations publiques du lien.</p></div></div><div><span className="docs-step-number">02</span><div><strong>Payer</strong><p><code>POST /api/v1/public/payment-links/:token/payments</code> démarre une collecte Mobile Money sans exposer votre clé.</p></div></div><div><span className="docs-step-number">03</span><div><strong>Suivre</strong><p>Utilisez <code>GET /api/v1/public/payment-links/:token/payments/:reference</code> pour afficher l’état au client.</p></div></div></div></div>
-             <div className="card card-pad"><h3>Règles de sécurité</h3><p className="section-note" style={{ marginTop: 8 }}>Les routes publiques n’acceptent jamais de clé partenaire. Le token du lien ne donne accès qu’aux données du checkout et ne permet pas de lire le wallet du marchand.</p><div className="docs-mini-rule" style={{ marginTop: 16 }}><span className="docs-production-dot" /> Le crédit marchand attend le webhook signé</div><p className="section-note" style={{ marginTop: 14 }}>Un paiement initié ou un HTTP 201 ne constitue pas une confirmation de règlement.</p></div>
+             <div className="card card-pad"><h3>Règles de sécurité</h3><p className="section-note" style={{ marginTop: 8 }}>Les routes publiques n’acceptent jamais de clé partenaire. Le token du lien ne donne accès qu’aux données du checkout et ne permet pas de lire le wallet du marchand.</p><div className="docs-mini-rule" style={{ marginTop: 16 }}><span className="docs-production-dot" /> Le statut final est confirmé par Mulapay</div><p className="section-note" style={{ marginTop: 14 }}>Un paiement initié ou un HTTP 201 ne constitue pas une confirmation de règlement.</p></div>
            </div>
          </section>
 
          <section id="settlement" className="docs-section">
-           <div className="docs-section-heading"><div><span className="docs-kicker">08 · Règlement</span><h2>Confirmation, frais & webhooks</h2><p>Mulapay sépare l’initiation fournisseur du règlement comptable local.</p></div><ShieldCheck size={19} /></div>
+           <div className="docs-section-heading"><div><span className="docs-kicker">08 · Confirmation</span><h2>Confirmation Mulapay, frais & règlement</h2><p>Votre intégration utilise uniquement l’API Mulapay. La confirmation du paiement et le règlement du wallet sont gérés par Mulapay.</p></div><ShieldCheck size={19} /></div>
            <div className="docs-two-column docs-align-start">
-             <div className="card card-pad"><h3>Ce que signifient les montants</h3><div className="docs-field-list"><div><code>amount</code><p>Montant demandé au client.</p></div><div><code>fee</code><p>Frais retournés par le fournisseur, lorsqu’ils sont disponibles.</p></div><div><code>platformFee</code><p>Frais Mulapay appliqués selon la configuration administrative.</p></div><div><code>merchantAmount</code><p>Montant destiné au wallet du marchand après frais Mulapay.</p></div><div><code>netAmount</code><p>Montant net confirmé ou annoncé par le fournisseur ; il ne remplace pas la confirmation signée.</p></div></div></div>
-             <div className="card card-pad docs-callout-card"><span className="docs-callout-icon"><Activity size={16} /></span><h3>La règle de règlement</h3><p>Mulapay reçoit les webhooks fournisseurs sur ses endpoints internes, vérifie leur signature et leur idempotence, puis crédite le ledger une seule fois.</p><p style={{ marginTop: 12 }}>Ne déclenchez pas votre livraison métier sur <code>providerStatus</code> seul. Utilisez le statut local <code>Completed</code> obtenu par le suivi et rapprochez toujours <code>reference</code>.</p><pre className="api-code" style={{ marginTop: 16 }}>{`POST /api/v1/webhooks/drimpay
-  Signature vérifiée par Mulapay
-  Effet : ledger crédité une seule fois`}</pre></div>
+             <div className="card card-pad"><h3>Ce que signifient les montants</h3><div className="docs-field-list"><div><code>amount</code><p>Montant demandé au client.</p></div><div><code>fee</code><p>Frais de traitement associés à la demande.</p></div><div><code>platformFee</code><p>Frais Mulapay appliqués selon la configuration du compte.</p></div><div><code>merchantAmount</code><p>Montant destiné au wallet du marchand après les frais Mulapay.</p></div><div><code>netAmount</code><p>Montant net associé au paiement. Le statut <code>Completed</code> reste la confirmation de référence.</p></div></div></div>
+             <div className="card card-pad docs-callout-card"><span className="docs-callout-icon"><Activity size={16} /></span><h3>Le parcours automatique</h3><p>Après la création, votre backend conserve la <code>reference</code>, interroge le suivi et attend le statut Mulapay <code>Completed</code>.</p><p style={{ marginTop: 12 }}>Ne déclenchez pas votre livraison métier sur <code>providerStatus</code> ou sur le HTTP 201 seul. Utilisez le statut local Mulapay.</p><pre className="api-code" style={{ marginTop: 16 }}>{`POST /api/v1/deposits
+  → status: Pending
+  → GET /api/v1/deposits/:reference
+  → status: Completed`}</pre></div>
            </div>
          </section>
 
         <section className="docs-resources card">
           <div><span className="docs-kicker">Référence API</span><h2>Endpoints disponibles</h2><p>Les routes publiques actuellement exposées par Mulapay.</p></div>
-           <div className="docs-resource-list"><div><span className="api-method">POST</span><code>/api/v1/deposits</code><span>Créer un payin Mobile Money</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/deposits/:reference</code><span>Consulter le statut local d’un payin</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/payments/:reference</code><span>Consulter un paiement par lien</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/public/payment-links/:token</code><span>Lire un lien public</span></div><div><span className="api-method api-method-muted">POST</span><code>/api/v1/public/payment-links/:token/payments</code><span>Démarrer un paiement public</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/bootstrap</code><span>Lire les wallets et transactions du compte</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/withdrawals/:reference</code><span>Consulter un retrait</span></div><div><span className="api-method api-method-muted">POST</span><code>/api/v1/withdrawals</code><span>Créer un payout DrimPay</span></div></div>
+           <div className="docs-resource-list"><div><span className="api-method">POST</span><code>/api/v1/deposits</code><span>Créer un paiement automatique Mulapay</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/deposits/:reference</code><span>Consulter le statut Mulapay</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/payments/:reference</code><span>Consulter un paiement par lien</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/public/payment-links/:token</code><span>Lire un lien public Mulapay</span></div><div><span className="api-method api-method-muted">POST</span><code>/api/v1/public/payment-links/:token/payments</code><span>Démarrer un paiement public</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/bootstrap</code><span>Lire les wallets et transactions du compte</span></div><div><span className="api-method api-method-muted">GET</span><code>/api/v1/withdrawals/:reference</code><span>Consulter un retrait Mulapay</span></div><div><span className="api-method api-method-muted">POST</span><code>/api/v1/withdrawals</code><span>Créer un retrait Mulapay</span></div></div>
           <div className="docs-bottom-cta"><div><strong>Prêt à connecter votre backend ?</strong><span>Créez une clé serveur et commencez avec le quickstart.</span></div><Link href="/app/api" className="button button-primary">Créer une clé API <ArrowRight size={15} /></Link></div>
         </section>
       </div>

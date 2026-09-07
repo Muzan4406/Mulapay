@@ -5,3 +5,4 @@
 - [AshtechPay webhook boundary](ashtechpay-provider.md) — AshtechPay uses the server API credential for HMAC verification; a separate webhook secret is not required.
 - [Wallet settlement matching](wallet-settlement-matching.md) — provider callbacks must resolve the stored transaction wallet and validate provider country/currency before ledger credit.
 - [Mulapay fee settlement](mulapay-fee-settlement.md) — capture the admin fee at transaction creation and credit the stored net amount; later rate changes affect future transactions only.
+- [Mulapay partner API boundary](mulapay-partner-api-boundary.md) — partner documentation and public responses present Mulapay as the only payment API; PSPs remain internal routing details.

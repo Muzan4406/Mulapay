@@ -138,7 +138,6 @@ export const CreateTransferResponse = zod.object({
   "netAmount": zod.number().optional(),
   "platformFee": zod.number().optional(),
   "merchantAmount": zod.number().optional(),
-  "provider": zod.string().nullish(),
   "providerStatus": zod.string().nullish(),
   "otpRequired": zod.boolean().optional(),
   "ussdCode": zod.string().nullish()
@@ -169,7 +168,6 @@ export const CreateExchangeResponse = zod.object({
   "netAmount": zod.number().optional(),
   "platformFee": zod.number().optional(),
   "merchantAmount": zod.number().optional(),
-  "provider": zod.string().nullish(),
   "providerStatus": zod.string().nullish(),
   "otpRequired": zod.boolean().optional(),
   "ussdCode": zod.string().nullish()
@@ -199,7 +197,6 @@ export const DecideExchangeResponse = zod.object({
   "netAmount": zod.number().optional(),
   "platformFee": zod.number().optional(),
   "merchantAmount": zod.number().optional(),
-  "provider": zod.string().nullish(),
   "providerStatus": zod.string().nullish(),
   "otpRequired": zod.boolean().optional(),
   "ussdCode": zod.string().nullish()
@@ -372,7 +369,6 @@ export const CreatePublicPaymentResponse = zod.object({
   "netAmount": zod.number().optional(),
   "platformFee": zod.number().optional(),
   "merchantAmount": zod.number().optional(),
-  "provider": zod.string().nullish(),
   "providerStatus": zod.string().nullish(),
   "otpRequired": zod.boolean().optional(),
   "ussdCode": zod.string().nullish()
@@ -487,7 +483,6 @@ export const DeletePaymentLinkResponse = zod.object({
   "netAmount": zod.number().optional(),
   "platformFee": zod.number().optional(),
   "merchantAmount": zod.number().optional(),
-  "provider": zod.string().nullish(),
   "providerStatus": zod.string().nullish(),
   "otpRequired": zod.boolean().optional(),
   "ussdCode": zod.string().nullish()
@@ -517,8 +512,7 @@ export const CreateDepositBody = zod.object({
   "country": zod.string(),
   "operator": zod.string(),
   "phone": zod.string().regex(createDepositBodyPhoneRegExp),
-  "operatorOtp": zod.string().optional(),
-  "providerReference": zod.string().optional()
+  "operatorOtp": zod.string().optional()
 })
 
 export const CreateDepositResponse = zod.object({
@@ -532,7 +526,6 @@ export const CreateDepositResponse = zod.object({
   "netAmount": zod.number().optional(),
   "platformFee": zod.number().optional(),
   "merchantAmount": zod.number().optional(),
-  "provider": zod.string().nullish(),
   "providerStatus": zod.string().nullish(),
   "otpRequired": zod.boolean().optional(),
   "ussdCode": zod.string().nullish()
@@ -579,7 +572,6 @@ export const CreateWithdrawalBody = zod.object({
   "operator": zod.string().optional(),
   "phone": zod.string().optional(),
   "operatorOtp": zod.string().optional(),
-  "providerReference": zod.string().optional(),
   "feePayer": zod.enum(['sender', 'recipient']).optional()
 })
 
@@ -594,7 +586,6 @@ export const CreateWithdrawalResponse = zod.object({
   "netAmount": zod.number().optional(),
   "platformFee": zod.number().optional(),
   "merchantAmount": zod.number().optional(),
-  "provider": zod.string().nullish(),
   "providerStatus": zod.string().nullish(),
   "otpRequired": zod.boolean().optional(),
   "ussdCode": zod.string().nullish()
@@ -619,7 +610,6 @@ export const MarkNotificationReadResponse = zod.object({
   "netAmount": zod.number().optional(),
   "platformFee": zod.number().optional(),
   "merchantAmount": zod.number().optional(),
-  "provider": zod.string().nullish(),
   "providerStatus": zod.string().nullish(),
   "otpRequired": zod.boolean().optional(),
   "ussdCode": zod.string().nullish()
@@ -834,7 +824,6 @@ export const DecideKycResponse = zod.object({
   "netAmount": zod.number().optional(),
   "platformFee": zod.number().optional(),
   "merchantAmount": zod.number().optional(),
-  "provider": zod.string().nullish(),
   "providerStatus": zod.string().nullish(),
   "otpRequired": zod.boolean().optional(),
   "ussdCode": zod.string().nullish()

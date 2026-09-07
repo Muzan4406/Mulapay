@@ -20,8 +20,6 @@ export interface OperationResult {
   platformFee?: number;
   merchantAmount?: number;
   /** @nullable */
-  provider?: string | null;
-  /** @nullable */
   providerStatus?: string | null;
   otpRequired?: boolean;
   /** @nullable */
