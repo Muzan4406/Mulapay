@@ -11,3 +11,4 @@
 - [KYC file storage boundary](object-storage-budget.md) — KYC files use a private Supabase Storage bucket because Replit App Storage provisioning was blocked by exhausted credits.
 - [Supabase Session Pooler](supabase-session-pooler.md) — use the Node PostgreSQL client for migration URLs with special password characters; libpq URL parsing may fail.
 - [Responsive shell layout](responsive-shell-layout.md) — keep mobile shell children and tables inside the viewport; hiding document overflow alone is not enough.
+- [Wallet pending semantics](wallet-pending-semantics.md) — pending is reserved outgoing funds only; incoming deposits must not reduce displayed wallet availability.

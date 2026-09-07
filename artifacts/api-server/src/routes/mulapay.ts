@@ -367,7 +367,6 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
         .update(wallets)
         .set({
           balance: sql`${wallets.balance} + ${merchantAmount}`,
-          pending: sql`GREATEST(${wallets.pending} - ${transaction.amount}, 0)`,
         })
         .where(eq(wallets.id, wallet.id));
       await tx.update(transactions).set({ status: "Completed", netAmount: providerNetAmount }).where(eq(transactions.id, transaction.id));
@@ -422,12 +421,6 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
       return { found: true };
     }
 
-    if (TERMINAL_PROVIDER_STATUSES.has(payload.status!)) {
-      await tx
-        .update(wallets)
-        .set({ pending: sql`GREATEST(${wallets.pending} - ${transaction.amount}, 0)` })
-        .where(eq(wallets.id, transaction.walletId ?? ""));
-    }
     await tx.update(transactions).set({ status: nextStatus }).where(eq(transactions.id, transaction.id));
     if (["Failed", "Expired", "Cancelled"].includes(nextStatus)) {
       await tx.insert(notifications).values({
@@ -689,7 +682,6 @@ async function handleAshtechPayWebhook(req: Request, res: Response) {
       }
       await tx.update(wallets).set({
         balance: sql`${wallets.balance} + ${merchantAmount}`,
-        pending: sql`GREATEST(${wallets.pending} - ${transaction.amount}, 0)`,
       }).where(eq(wallets.id, wallet.id));
       await tx.update(transactions).set({ status: "Completed", netAmount: providerNetAmount }).where(eq(transactions.id, transaction.id));
       await tx.insert(ledgerEntries).values({
@@ -716,11 +708,6 @@ async function handleAshtechPayWebhook(req: Request, res: Response) {
       return { found: true, duplicate: false };
     }
 
-    if (nextStatus === "Failed") {
-      await tx.update(wallets)
-        .set({ pending: sql`GREATEST(${wallets.pending} - ${transaction.amount}, 0)` })
-        .where(eq(wallets.id, transaction.walletId ?? ""));
-    }
     await tx.update(transactions).set({ status: nextStatus }).where(eq(transactions.id, transaction.id));
     if (["Failed", "Expired", "Cancelled"].includes(nextStatus)) {
       await tx.insert(notifications).values({
@@ -1073,9 +1060,6 @@ async function expireAndReconcilePending(userId: string) {
     await db.transaction(async (tx) => {
       const current = await tx.query.transactions.findFirst({ where: eq(transactions.id, transaction.id) });
       if (!current || !activeStatuses.includes(current.status) || current.createdAt > cutoff) return;
-      await tx.update(wallets)
-        .set({ pending: sql`GREATEST(${wallets.pending} - ${current.amount}, 0)` })
-        .where(eq(wallets.id, current.walletId ?? ""));
       await tx.update(transactions).set({ status: "Failed" }).where(eq(transactions.id, current.id));
     });
   }
@@ -1084,13 +1068,11 @@ async function expireAndReconcilePending(userId: string) {
   // leave an orphaned pending amount on the wallet.
   const [userWallets, liveTransactions, pendingExchanges] = await Promise.all([
     db.select().from(wallets).where(eq(wallets.userId, userId)),
-    db.select({ walletId: transactions.walletId, amount: transactions.amount })
+    db.select({ walletId: transactions.walletId, type: transactions.type, amount: transactions.amount, fee: transactions.fee })
       .from(transactions)
       .where(and(
         eq(transactions.userId, userId),
         inArray(transactions.status, activeStatuses),
-        ne(transactions.type, "Withdrawal"),
-        ne(transactions.type, "Transfer"),
       )),
     db.select({ source: exchanges.source, sourceWalletId: exchanges.sourceWalletId, amount: exchanges.amount })
       .from(exchanges)
@@ -1101,8 +1083,9 @@ async function expireAndReconcilePending(userId: string) {
   ]);
   const pendingByWallet = new Map<string, number>();
   for (const transaction of liveTransactions) {
-    if (!transaction.walletId) continue;
-    pendingByWallet.set(transaction.walletId, (pendingByWallet.get(transaction.walletId) ?? 0) + transaction.amount);
+    if (!transaction.walletId || (transaction.type !== "Withdrawal" && transaction.type !== "Transfer")) continue;
+    const reservation = transaction.amount + (transaction.fee ?? 0);
+    pendingByWallet.set(transaction.walletId, (pendingByWallet.get(transaction.walletId) ?? 0) + reservation);
   }
   for (const exchange of pendingExchanges) {
     const wallet = userWallets.find((item) => item.id === exchange.sourceWalletId) ?? userWallets.find((item) => item.country === exchange.source);
@@ -1720,7 +1703,6 @@ router.post("/v1/public/payment-links/:token/payments", async (req, res) => {
       };
     }
     await db.transaction(async (tx) => {
-      await tx.update(wallets).set({ pending: sql`${wallets.pending} + ${input.amount}` }).where(eq(wallets.id, ownerWallet.id));
       await tx.insert(transactions).values({
         id: crypto.randomUUID(),
         userId: link.userId,
@@ -2028,10 +2010,6 @@ router.post("/v1/deposits", async (req, res) => {
       };
     }
     await db.transaction(async (tx) => {
-      await tx
-        .update(wallets)
-        .set({ pending: sql`${wallets.pending} + ${validatedAmount}` })
-        .where(eq(wallets.id, wallet.id));
       await tx.insert(transactions).values({
         id: crypto.randomUUID(),
         userId: user.id,
