@@ -49,7 +49,7 @@ type Wallet = { id: string; country: string; code: string; currency: string; bal
 type Transaction = { id: string; type: string; status: string; amount: number; currency: string; country: string; counterparty: string; createdAt: string; reference: string };
 type Exchange = { id: string; sourceWalletId?: string | null; destinationWalletId?: string | null; source: string; destination: string; amount: number; rate: number; receivedAmount: number; fee: number; status: string; requestedAt: string };
 type PaymentLink = ApiPaymentLink;
-type PublicPaymentLink = Omit<PaymentLink, 'id' | 'walletId' | 'notifyApp' | 'notifyEmail' | 'notifyWebhook'>;
+type PublicPaymentLink = Omit<PaymentLink, 'id' | 'walletId' | 'notifyApp' | 'notifyEmail' | 'notifyWebhook'> & { allowedCountry?: string | null; allowedCountryCode?: string | null };
 type Notification = { id: string; title: string; body: string; read: boolean; createdAt: string };
 type ApiKey = { id: string; name: string; keyPrefix: string; scopes: string[]; lastUsedAt: string | null; revokedAt: string | null; createdAt: string };
 
@@ -2061,6 +2061,13 @@ function PublicPaymentPage() {
       })
       .then(data => {
         if (!mounted) return;
+        const allowedCountry = data.allowedCountryCode
+          ? mobileMoneyCountryOptions.find(option => option.code === data.allowedCountryCode)
+          : null;
+        if (allowedCountry) {
+          setCustomerCountry(allowedCountry.country);
+          setCustomerOperator(allowedCountry.operators[0]?.name ?? '');
+        }
         setLink(data);
         setState('ready');
       })
@@ -2137,7 +2144,10 @@ function PublicPaymentPage() {
   if (state === 'loading') return <main className="public-payment-loading" aria-busy="true"><div className="public-payment-loading-card"><div className="public-payment-loading-head"><Logo /><span className="public-payment-loading-lock"><LockKeyhole size={13} /> Sécurisé</span></div><div className="public-payment-loading-art"><span /><span /><span /></div><div className="public-payment-loading-copy"><span className="eyebrow">Mulapay</span><h1>Préparation de votre paiement</h1><p>Nous vérifions le lien reçu. Cela ne prendra qu’un instant.</p><div className="public-payment-loading-progress"><span /></div></div></div></main>;
   if (state === 'error' || !link) return <main className="page-wrap public-payment-page"><div className="public-payment-header"><Logo /></div><PageIntro eyebrow="Paiement Mulapay" title="Lien indisponible" subtitle="Vérifiez l’adresse reçue ou demandez un nouveau lien au commerçant." /><div className="card card-pad public-payment-unavailable"><CircleAlert size={22} /><strong>Ce lien de paiement n’est plus disponible.</strong><Link className="button button-primary" href="/">Retour à Mulapay</Link></div></main>;
 
-  const selectedCustomerCountry = mobileMoneyCountryOptions.find(option => option.country === customerCountry) ?? mobileMoneyCountryOptions[0];
+  const customerCountryOptions = link?.allowedCountryCode
+    ? mobileMoneyCountryOptions.filter(option => option.code === link.allowedCountryCode)
+    : mobileMoneyCountryOptions;
+  const selectedCustomerCountry = customerCountryOptions.find(option => option.country === customerCountry) ?? customerCountryOptions[0] ?? mobileMoneyCountryOptions[0];
    // Les informations de paiement sont toujours obligatoires pour une transaction réelle,
    // même si un ancien lien a été créé avec une configuration de champs incomplète.
    const hasField = (name: string) => link.customerFields?.includes(name as NonNullable<PaymentLink['customerFields']>[number]) ?? true;
@@ -2228,7 +2238,7 @@ function PublicPaymentPage() {
            <div className="public-payment-form-head"><div><span className="eyebrow">Vos informations</span><h2>Préparez votre paiement</h2><p>Renseignez les coordonnées utilisées pour le paiement.</p></div></div>
            {link.amountType === 'CUSTOMER_CHOOSES' && <div className="field public-payment-custom-amount"><label htmlFor="public-payment-amount">Montant à payer</label><div className="input-prefix"><span>{link.currency}</span><input id="public-payment-amount" type="number" min={paymentMinAmount} max={paymentMaxAmount} step="1" value={amount} onChange={event => setAmount(event.target.value)} placeholder={String(paymentMinAmount)} required /></div><small className="field-hint">Choisissez un montant entier entre {paymentMinAmount.toLocaleString('fr-FR')} et {paymentMaxAmount.toLocaleString('fr-FR')} {link.currency}.</small></div>}
            {hasField('full_name') && <div className="field"><label htmlFor="public-payment-full-name">Nom complet</label><input id="public-payment-full-name" value={customerValues.full_name ?? ''} onChange={event => updateCustomerValue('full_name', event.target.value)} autoComplete="name" placeholder="Votre nom et prénom" required /></div>}
-           {hasField('country') && <div className="field"><label htmlFor="public-payment-country">Pays du payeur</label><div className="country-select"><img src={`${import.meta.env.BASE_URL}countries/${selectedCustomerCountry.flagSrc}`} alt="" /><select id="public-payment-country" value={customerCountry} onChange={event => { setCustomerCountry(event.target.value); const next = mobileMoneyCountryOptions.find(option => option.country === event.target.value); setCustomerOperator(next?.operators[0]?.name ?? ''); }} required>{mobileMoneyCountryOptions.map(option => <option key={option.country} value={option.country} disabled={option.code === 'NE'}>{option.country} · {option.dialCode}{option.code === 'NE' ? ' · bientôt disponible' : ''}</option>)}</select><ChevronDown className="country-select-chevron" size={16} aria-hidden="true" /></div></div>}
+           {hasField('country') && <div className="field"><label htmlFor="public-payment-country">Pays du payeur</label><div className="country-select"><img src={`${import.meta.env.BASE_URL}countries/${selectedCustomerCountry.flagSrc}`} alt="" /><select id="public-payment-country" value={customerCountry} onChange={event => { setCustomerCountry(event.target.value); const next = customerCountryOptions.find(option => option.country === event.target.value); setCustomerOperator(next?.operators[0]?.name ?? ''); }} required>{customerCountryOptions.map(option => <option key={option.country} value={option.country}>{option.country} · {option.dialCode}</option>)}</select><ChevronDown className="country-select-chevron" size={16} aria-hidden="true" /></div>{link.allowedCountry ? <small className="field-hint">Ce lien accepte uniquement les paiements depuis {link.allowedCountry}.</small> : null}</div>}
            {hasField('operator') && <div className="field"><label>Opérateur Mobile Money</label><div className="mobile-money-options" role="radiogroup" aria-label="Choisir un opérateur Mobile Money">{selectedCustomerCountry.operators.map(option => <label className={`mobile-money-option ${customerOperator === option.name ? 'selected' : ''}`} key={option.name}><input type="radio" name="public-payment-operator" value={option.name} checked={customerOperator === option.name} onChange={event => setCustomerOperator(event.target.value)} required /><img src={`${import.meta.env.BASE_URL}mobile-money/${option.src}`} alt="" /><span>{option.name}</span></label>)}</div></div>}
            {hasField('phone') && <div className="field"><label htmlFor="public-payment-phone">Numéro de téléphone</label><div className="phone-input"><span className="phone-prefix" aria-label={`Indicatif ${selectedCustomerCountry.dialCode}`}>{selectedCustomerCountry.dialCode}</span><input id="public-payment-phone" type="tel" inputMode="numeric" value={customerValues.phone ?? ''} onChange={event => updateCustomerValue('phone', event.target.value.replace(/\D/g, ''))} placeholder="90 00 00 00" autoComplete="tel-national" required /></div><small className="field-hint">Utilisez le numéro associé à votre compte Mobile Money.</small></div>}
            {hasField('email') && <div className="field"><label htmlFor="public-payment-email">Adresse e-mail</label><input id="public-payment-email" type="email" value={customerValues.email ?? ''} onChange={event => updateCustomerValue('email', event.target.value)} placeholder="vous@exemple.com" autoComplete="email" required /></div>}

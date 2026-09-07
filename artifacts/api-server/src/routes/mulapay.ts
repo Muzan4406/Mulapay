@@ -1728,6 +1728,15 @@ router.get("/v1/public/payment-links/:token", async (req, res) => {
     res.status(410).json({ error: "Ce lien de paiement n’est plus disponible." });
     return;
   }
+  const allowedWallet = link.walletId
+    ? await db.query.wallets.findFirst({
+      where: and(
+        eq(wallets.id, link.walletId),
+        eq(wallets.userId, link.userId),
+        eq(wallets.currency, link.currency),
+      ),
+    })
+    : null;
   res.json({
     slug: `${requestOrigin(req)}/pay/${token}`,
     reference: link.reference,
@@ -1745,6 +1754,8 @@ router.get("/v1/public/payment-links/:token", async (req, res) => {
     afterPaymentAction: link.afterPaymentAction,
     redirectUrl: link.redirectUrl,
     payments: link.payments,
+    allowedCountry: allowedWallet?.country ?? null,
+    allowedCountryCode: allowedWallet?.code ?? null,
   });
 });
 
@@ -1803,6 +1814,10 @@ router.post("/v1/public/payment-links/:token/payments", async (req, res) => {
     : await db.query.wallets.findFirst({ where: and(eq(wallets.userId, link.userId), eq(wallets.code, countryCode), eq(wallets.currency, link.currency), eq(wallets.status, "Active")) });
   if (!ownerWallet) {
     res.status(400).json({ error: "Aucun wallet de réception actif ne correspond au pays choisi." });
+    return;
+  }
+  if (link.walletId && ownerWallet.code !== countryCode) {
+    res.status(400).json({ error: `Ce lien accepte uniquement les paiements depuis ${ownerWallet.country}.` });
     return;
   }
   const settings = await getPlatformSettings();
