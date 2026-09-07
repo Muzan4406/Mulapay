@@ -1952,7 +1952,7 @@ router.get("/v1/public/payment-links/:token/payments/:reference", async (req, re
     res.status(404).json({ error: "Paiement introuvable." });
     return;
   }
-  const reconciledTransaction = await reconcileAshtechTransaction(transaction);
+  const reconciledTransaction = await reconcileIncomingTransaction(transaction);
   res.json({
     ok: true,
     reference: reconciledTransaction.reference,
@@ -2270,7 +2270,7 @@ router.get("/v1/deposits/:reference", async (req, res) => {
     res.status(404).json({ error: "Dépôt introuvable." });
     return;
   }
-  const reconciledTransaction = await reconcileAshtechTransaction(transaction);
+  const reconciledTransaction = await reconcileIncomingTransaction(transaction);
   res.json({
     ok: true,
     reference: reconciledTransaction.reference,
@@ -2333,7 +2333,7 @@ router.get("/v1/payments/:reference", async (req, res) => {
     res.status(404).json({ error: "Paiement introuvable." });
     return;
   }
-  const reconciledTransaction = await reconcileAshtechTransaction(transaction);
+  const reconciledTransaction = await reconcileIncomingTransaction(transaction);
   res.json({
     ok: true,
     reference: reconciledTransaction.reference,
