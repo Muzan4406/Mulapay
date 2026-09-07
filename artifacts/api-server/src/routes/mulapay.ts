@@ -49,6 +49,7 @@ import {
   countryCodeForName,
   DrimPayError,
   drimPayWebhookUrl,
+  getPayin,
   initiatePayin,
   initiatePayout,
   isDrimPayConfigured,
@@ -804,6 +805,111 @@ async function reconcileAshtechTransaction(transaction: typeof transactions.$inf
   }
 }
 
+async function reconcileDrimPayTransaction(transaction: typeof transactions.$inferSelect) {
+  if (
+    transaction.paymentProvider !== "DRIMPAY" ||
+    (transaction.type !== "Deposit" && transaction.type !== "Payment") ||
+    !transaction.providerReference ||
+    !["Pending", "Processing"].includes(transaction.status)
+  ) {
+    return transaction;
+  }
+
+  let provider: Awaited<ReturnType<typeof getPayin>>;
+  try {
+    provider = await getPayin(transaction.providerReference);
+  } catch (error) {
+    console.warn("DrimPay payin status check unavailable", {
+      reference: transaction.reference,
+      message: error instanceof Error ? error.message : "unknown error",
+    });
+    return transaction;
+  }
+
+  const nextStatus = providerStatusToTransactionStatus(provider.status);
+  if (
+    nextStatus === "Pending" ||
+    (provider.reference !== transaction.providerReference && provider.order_id !== transaction.providerOrderId)
+  ) {
+    return transaction;
+  }
+
+  try {
+    return await db.transaction(async (tx) => {
+      const current = await tx.query.transactions.findFirst({ where: eq(transactions.id, transaction.id) });
+      if (!current || !["Pending", "Processing"].includes(current.status)) return current ?? transaction;
+      const wallet = await tx.query.wallets.findFirst({ where: eq(wallets.id, current.walletId ?? "") });
+      if (!wallet) throw new Error("WALLET_NOT_FOUND");
+
+      if (nextStatus === "Completed") {
+        const merchantAmount = current.merchantAmount ?? provider.net_amount;
+        if (
+          !depositPayloadMatchesWallet(current, wallet, provider.country_code, provider.currency, "DRIMPAY") ||
+          provider.amount !== current.amount ||
+          provider.net_amount <= 0 ||
+          provider.net_amount > provider.amount ||
+          merchantAmount <= 0 ||
+          merchantAmount > provider.amount
+        ) {
+          throw new Error("INVALID_DRIMPAY_STATUS_RESPONSE");
+        }
+        await tx.update(wallets).set({ balance: sql`${wallets.balance} + ${merchantAmount}` }).where(eq(wallets.id, wallet.id));
+        await tx.update(transactions).set({
+          status: "Completed",
+          netAmount: merchantAmount,
+        }).where(eq(transactions.id, current.id));
+        await tx.insert(ledgerEntries).values({
+          id: crypto.randomUUID(),
+          userId: current.userId,
+          walletId: wallet.id,
+          transactionId: current.id,
+          entryType: "CREDIT",
+          amount: merchantAmount,
+          currency: current.currency,
+          description: `${current.type === "Payment" ? "Paiement par lien" : "Dépôt Mulapay"} confirmé par vérification sécurisée · ${current.reference}`,
+        });
+        const paymentLinkId = current.providerOrderId?.match(/^paylink_([^_]+)_/)?.[1];
+        if (current.type === "Payment" && paymentLinkId) {
+          await tx.update(paymentLinks).set({ payments: sql`${paymentLinks.payments} + 1` }).where(eq(paymentLinks.id, paymentLinkId));
+        }
+        await tx.insert(notifications).values({
+          id: crypto.randomUUID(),
+          userId: current.userId,
+          title: current.type === "Payment" ? "Paiement reçu" : "Dépôt confirmé",
+          body: `${merchantAmount.toLocaleString("fr-FR")} ${current.currency} ont été crédités sur le wallet ${wallet.country}.`,
+          read: false,
+        });
+        return { ...current, status: "Completed", netAmount: merchantAmount };
+      }
+
+      if (["Failed", "Expired", "Cancelled"].includes(nextStatus)) {
+        await tx.update(transactions).set({ status: nextStatus }).where(eq(transactions.id, current.id));
+        await tx.insert(notifications).values({
+          id: crypto.randomUUID(),
+          userId: current.userId,
+          title: current.type === "Payment" ? "Paiement non abouti" : "Dépôt non abouti",
+          body: `${current.type === "Payment" ? "Le paiement" : "Le dépôt"} de ${current.amount.toLocaleString("fr-FR")} ${current.currency} n’a pas été confirmé.`,
+          read: false,
+        });
+        return { ...current, status: nextStatus };
+      }
+
+      return current;
+    });
+  } catch (error) {
+    console.error("DrimPay status reconciliation rejected", {
+      reference: transaction.reference,
+      message: error instanceof Error ? error.message : "unknown error",
+    });
+    return transaction;
+  }
+}
+
+async function reconcileIncomingTransaction(transaction: typeof transactions.$inferSelect) {
+  const ashtechReconciled = await reconcileAshtechTransaction(transaction);
+  return reconcileDrimPayTransaction(ashtechReconciled);
+}
+
 type MulapayRequest = Request & { mulapayUserId?: string; mulapayAuthMode?: "clerk" | "api_key"; mulapayScopes?: string[] };
 
 function apiKeyFromRequest(req: Request) {
@@ -1121,7 +1227,8 @@ async function expireAndReconcilePending(userId: string) {
       lte(transactions.createdAt, cutoff),
       ne(transactions.type, "Withdrawal"),
       ne(transactions.type, "Transfer"),
-      or(ne(transactions.paymentProvider, "ASHTECHPAY"), isNull(transactions.providerTransactionId)),
+      ne(transactions.type, "Deposit"),
+      ne(transactions.type, "Payment"),
     ),
   });
 
