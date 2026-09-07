@@ -974,7 +974,7 @@ export const getCreateDepositUrl = () => {
 }
 
 /**
- * @summary Starts a provider-backed Mobile Money payin
+ * @summary Starts a Mulapay Mobile Money payment
  */
 export const createDeposit = async (depositInput: DepositInput, options?: Parameters<typeof customFetch>[1]): Promise<OperationResult> => {
 
@@ -1023,7 +1023,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type CreateDepositMutationError = ErrorType<BadRequestResponse | UnauthorizedResponse | ProviderUnavailableResponse>
 
     /**
- * @summary Starts a provider-backed Mobile Money payin
+ * @summary Starts a Mulapay Mobile Money payment
  */
 export const useCreateDeposit = <TError = ErrorType<BadRequestResponse | UnauthorizedResponse | ProviderUnavailableResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createDeposit>>, TError,{data: BodyType<DepositInput>}, TContext>, request?: SecondParameter<typeof customFetch>}

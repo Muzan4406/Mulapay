@@ -31,6 +31,8 @@ paths:
       operationId: getBootstrap
       tags: [wallet]
       summary: Loads the authenticated Mulapay workspace
+      security:
+        - MulapayApiKey: []
       responses:
         "200":
           description: Workspace state
@@ -231,7 +233,7 @@ paths:
     post:
       operationId: createDeposit
       tags: [payin]
-      summary: Starts a provider-backed Mobile Money payin
+      summary: Starts a Mulapay Mobile Money payment
       security:
         - MulapayApiKey: []
       parameters:
@@ -250,7 +252,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/OperationResult"
         "201":
-          description: Payin request created and awaiting provider confirmation
+          description: Mulapay payment request created and awaiting confirmation
           content:
             application/json:
               schema:

@@ -490,7 +490,7 @@ export const DeletePaymentLinkResponse = zod.object({
 
 
 /**
- * @summary Starts a provider-backed Mobile Money payin
+ * @summary Starts a Mulapay Mobile Money payment
  */
 export const createDepositHeaderIdempotencyKeyMax = 128;
 

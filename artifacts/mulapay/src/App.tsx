@@ -1072,14 +1072,28 @@ Idempotency-Key: commande-unique-123`}</pre><p className="docs-inline-note"><Shi
         </section>
 
         <section id="quickstart" className="docs-section">
-          <div className="docs-section-heading"><div><span className="docs-kicker">02 · Démarrage</span><h2>Démarrage rapide</h2><p>Un premier appel suffit pour initialiser une collecte.</p></div><span className="docs-muted-label">POST</span></div>
-          <div className="docs-endpoint-bar"><span className="api-method">POST</span><code>/api/v1/deposits</code><span>Créer un dépôt</span></div>
+          <div className="docs-section-heading"><div><span className="docs-kicker">02 · Démarrage</span><h2>Démarrage rapide</h2><p>Récupérez d’abord votre wallet Mulapay, puis initialisez le paiement depuis votre serveur.</p></div><span className="docs-muted-label">SERVER-TO-SERVER</span></div>
+          <div className="docs-two-column docs-align-start">
+            <div className="card card-pad"><h3>Avant le premier paiement</h3><div className="docs-status-list"><div><span className="docs-step-number">01</span><div><strong>Créer une clé</strong><p>Générez une clé API depuis l’espace partenaire et conservez-la uniquement dans votre backend.</p></div></div><div><span className="docs-step-number">02</span><div><strong>Récupérer vos wallets</strong><p>Appelez <code>GET /api/v1/bootstrap</code>, puis choisissez le wallet dont le pays correspond au paiement.</p></div></div><div><span className="docs-step-number">03</span><div><strong>Vérifier l’activation</strong><p>Le compte Mulapay doit disposer d’un wallet actif et d’un canal de paiement disponible pour le pays et l’opérateur choisis.</p></div></div></div></div>
+            <div className="card card-pad"><h3>Lire les wallets</h3><div className="docs-endpoint-bar"><span className="api-method api-method-muted">GET</span><code>/api/v1/bootstrap</code><span>État du compte Mulapay</span></div><pre className="api-code" style={{ marginTop: 16 }}>{`{
+  "wallets": [
+    {
+      "id": "uuid-du-wallet",
+      "country": "Togo",
+      "code": "TG",
+      "currency": "XOF",
+      "status": "Active"
+    }
+  ]
+}`}</pre><p className="docs-inline-note"><Info size={14} /> Utilisez la valeur réelle de <code>id</code> dans la requête de paiement. <code>wallet_togo</code> n’est qu’un exemple lisible.</p></div>
+          </div>
+          <div className="docs-endpoint-bar" style={{ marginTop: 18 }}><span className="api-method">POST</span><code>/api/v1/deposits</code><span>Créer un paiement Mulapay</span></div>
           <div className="docs-code-grid"><div><div className="docs-code-label">cURL</div><pre className="api-code">{`curl -X POST https://votre-domaine/api/v1/deposits \\
   -H "Authorization: Bearer mp_live_votre_cle" \\
   -H "Content-Type: application/json" \\
   -H "Idempotency-Key: commande-unique-123" \\
   -d '{
-    "walletId": "wallet_togo",
+    "walletId": "uuid-du-wallet-recupere-avec-bootstrap",
     "amount": 10000,
     "method": "mobile_money",
     "country": "Togo",
