@@ -8,3 +8,5 @@ Custom Mulapay auth screens must use the current Clerk React Future resources: `
 **Why:** The installed Clerk React SDK exposes the newer Future resource API; the legacy method names may typecheck only when cast loosely but fail at runtime.
 
 **How to apply:** For sign-up use `signUp.create()`, `signUp.password()`, `signUp.verifications.sendEmailCode()`, `verifyEmailCode()`, then `signUp.finalize()`. For password sign-in use `signIn.create()`, `signIn.password()`, then `signIn.finalize()`. For password reset use `resetPasswordEmailCode.sendCode()`, `verifyCode()`, `submitPassword()`, then finalize.
+
+The custom sign-in flow has been confirmed working with an email OTP after password authentication; `needs_second_factor` must not be treated as a failed login.
