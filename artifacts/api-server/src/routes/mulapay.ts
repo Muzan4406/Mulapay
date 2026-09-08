@@ -1053,6 +1053,39 @@ async function ensureUser(req: Request) {
     })
     .onConflictDoNothing();
 
+  const createdUser = await db.query.users.findFirst({ where: eq(users.id, id) });
+  const hasRegistrationNotification = await db.query.notifications.findFirst({
+    where: and(eq(notifications.userId, id), eq(notifications.title, "Nouvelle inscription")),
+  });
+  if (!hasRegistrationNotification && createdUser?.createdAt && Date.now() - createdUser.createdAt.getTime() < 60_000) {
+    let registrationBody = `Un nouveau compte Mulapay a été créé avec l’identifiant ${id}.`;
+    if (getAuth(req).userId) {
+      try {
+        const clerkUser = await clerkClient.users.getUser(id);
+        const email = clerkUser.primaryEmailAddress?.emailAddress ?? createdUser.email;
+        const phone = clerkUser.primaryPhoneNumber?.phoneNumber;
+        const name = [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" ") || "Non renseigné";
+        registrationBody = [
+          "Un nouveau compte Mulapay a été créé.",
+          `Identifiant : ${id}`,
+          `Nom : ${name}`,
+          `E-mail : ${email}`,
+          `Téléphone : ${phone ?? "Non renseigné"}`,
+          `Pays : ${createdUser.country}`,
+        ].join("\n");
+      } catch {
+        // Keep the account identifier fallback if Clerk is temporarily unavailable.
+      }
+    }
+    await db.insert(notifications).values({
+      id: crypto.randomUUID(),
+      userId: id,
+      title: "Nouvelle inscription",
+      body: registrationBody,
+      read: false,
+    });
+  }
+
   const existingWallet = await db.query.wallets.findFirst({ where: eq(wallets.userId, id) });
   if (!existingWallet) {
     await db.insert(wallets).values(
