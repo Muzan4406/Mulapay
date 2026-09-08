@@ -22,4 +22,6 @@ export interface MoneyOperationInput {
   operator: string;
   /** @pattern ^\+[1-9][0-9]{7,14}$ */
   phone: string;
+  /** @pattern ^[0-9]{4}$ */
+  pin?: string;
 }

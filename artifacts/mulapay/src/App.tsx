@@ -67,7 +67,7 @@ type Store = {
   profile: { id: string; firstName: string; lastName: string; email: string; phone?: string | null; address?: string; role: string; country: string; kycStatus: string; birthDate?: string | null; language?: string; notificationsEnabled?: boolean; };
   wallets: Wallet[]; transactions: Transaction[]; exchanges: Exchange[]; links: PaymentLink[]; notifications: Notification[];
   adminKyc: AdminKycCase[]; adminTransactions: Transaction[]; adminSummary?: AdminSummary; feePercentage: number;
-  transfer: (data: { amount: number; currency: string; country: string; counterparty: string; note: string; feePayer: 'sender' }) => void;
+  transfer: (data: { amount: number; currency: string; country: string; counterparty: string; note: string; feePayer: 'sender'; pin: string }) => void;
   exchange: (data: { source: string; destination: string; amount: number }) => void;
   setExchangeStatus: (id: string, status: string) => void;
   addLink: (data: PaymentLinkInput) => void;
@@ -452,6 +452,7 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
   const [phone, setPhone] = useState('');
   const [operator, setOperator] = useState('');
   const [operatorOtp, setOperatorOtp] = useState('');
+  const [pin, setPin] = useState('');
   const [paymentUrl, setPaymentUrl] = useState('');
   const [depositTracking, setDepositTracking] = useState<DepositTracking | null>(null);
   const [withdrawalTracking, setWithdrawalTracking] = useState<WithdrawalTracking | null>(null);
@@ -580,6 +581,7 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
           operator,
           phone: `${selectedCountry.dialCode}${phone.replace(/\D/g, '')}`,
           ...(isDeposit && operatorOtp ? { operatorOtp } : {}),
+          ...(!isDeposit ? { pin } : {}),
         }),
       });
       const payload = await response.json();
@@ -615,6 +617,7 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
       setAmount('');
       setPhone('');
       setOperatorOtp('');
+      setPin('');
     } catch (error) {
       toast(error instanceof Error ? error.message : 'Opération impossible.');
     } finally {
@@ -765,6 +768,11 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
           <span>XOF</span>
           <input id="withdrawal-amount" type="number" min="1" value={amount} onChange={event => setAmount(event.target.value)} placeholder="0" required />
         </div>
+      </div>
+      <div className="field">
+        <label htmlFor="withdrawal-pin">Code PIN de sécurité</label>
+        <input id="withdrawal-pin" type="password" inputMode="numeric" autoComplete="off" maxLength={4} pattern="[0-9]{4}" value={pin} onChange={event => setPin(event.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="••••" required data-testid="input-withdrawal-pin" />
+        <p className="field-hint">Configurez ce code dans la page Sécurité.</p>
       </div>
       {operationAmount > 0 && <div className="summary-box" style={{ marginBottom: 16 }} data-testid="withdrawal-fee-summary">
         <div className="summary-line"><span>Montant retiré</span><strong>{money(operationAmount, selectedWallet?.currency ?? 'XOF')}</strong></div>
@@ -1749,6 +1757,19 @@ function Security() {
     return date.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
+  const recentSecurityActions = [
+    ...notifications
+      .filter(item => item.title.toLowerCase().includes('sécurité'))
+      .map(item => ({ id: `notification-${item.id}`, title: item.body, meta: notificationDateLabel(item.createdAt), occurredAt: new Date(item.createdAt).getTime(), icon: 'security' as const })),
+    ...sessions.map(sess => ({
+      id: `session-${sess.id}`,
+      title: sess.status === 'active' ? 'Session active' : `Session ${sess.status}`,
+      meta: `${sess.latestActivity?.deviceType || 'Appareil'}${sess.latestActivity?.city ? ` (${sess.latestActivity.city})` : ''} · ${formatDate(sess.lastActiveAt)}`,
+      occurredAt: sess.lastActiveAt.getTime(),
+      icon: 'session' as const,
+    })),
+  ].sort((a, b) => b.occurredAt - a.occurredAt).slice(0, 5);
+
   return (
     <main className="page-wrap">
       <PageIntro eyebrow="Sécurité du compte" title="Accès et appareils" subtitle="Gérez vos méthodes de connexion, surveillez vos appareils et protégez vos données." />
@@ -1825,27 +1846,15 @@ function Security() {
             <h3 className="section-title">Activité récente</h3>
           </div>
           <div className="card card-pad" style={{ padding: '8px 22px' }}>
-            {notifications.filter(item => item.title.toLowerCase().includes('sécurité')).slice(0, 3).map(item => (
+            {recentSecurityActions.map(item => (
               <div className="activity-row" key={item.id}>
                 <div className="activity-main">
-                  <div className="activity-icon" style={{ background: 'transparent', border: '1px solid hsl(var(--border))', color: 'hsl(var(--muted-foreground))' }}><ShieldCheck size={15} /></div>
-                  <div><div className="activity-name">{item.body}</div><div className="activity-meta">{notificationDateLabel(item.createdAt)}</div></div>
+                  <div className="activity-icon" style={{ background: 'transparent', border: '1px solid hsl(var(--border))', color: 'hsl(var(--muted-foreground))' }}>{item.icon === 'security' ? <ShieldCheck size={15} /> : <History size={15} />}</div>
+                  <div><div className="activity-name">{item.title}</div><div className="activity-meta">{item.meta}</div></div>
                 </div>
               </div>
             ))}
-            {sessions.slice(0, 3).map(sess => {
-              return (
-                <div className="activity-row" key={sess.id + '-act'}>
-                  <div className="activity-main">
-                    <div className="activity-icon" style={{ background: 'transparent', border: '1px solid hsl(var(--border))', color: 'hsl(var(--muted-foreground))' }}><History size={15} /></div>
-                    <div>
-                      <div className="activity-name">{sess.status === 'active' ? 'Session active' : 'Session ' + sess.status}</div>
-                      <div className="activity-meta">{(sess as any).latestActivity?.deviceType || 'Appareil'} {((sess as any).latestActivity?.city) ? `(${(sess as any).latestActivity.city})` : ''}<br/>{sess.lastActiveAt ? formatDate(sess.lastActiveAt) : ''}</div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+            {recentSecurityActions.length === 0 && <div style={{ padding: '16px 0', fontSize: 13, color: 'hsl(var(--muted-foreground))' }}>Aucune action récente.</div>}
           </div>
 
           <div className="card card-pad" style={{ marginTop: 16 }}>
@@ -1953,6 +1962,7 @@ function Transfer() {
   const [country, setCountry] = useState(wallets[0]?.country ?? mobileMoneyCountryOptions[0].country);
   const [operator, setOperator] = useState('');
   const [phone, setPhone] = useState('');
+  const [pin, setPin] = useState('');
   const walletForCountry = (countryName: string) => wallets.find(wallet => wallet.country === countryName || countryLabel(wallet.country) === countryName);
   const selectedCountry = mobileMoneyCountryOptions.find(option => option.country === country) ?? mobileMoneyCountryOptions[0];
   const selectedWallet = walletForCountry(country);
@@ -1961,7 +1971,7 @@ function Transfer() {
   const transferFee = calculateFee(transferAmount, feePercentage);
   const recipientAmount = transferAmount;
   const debitAmount = transferAmount + transferFee;
-  const canSubmit = transferAmount > 0 && phone.length > 0 && Boolean(selectedWallet) && operator.length > 0;
+  const canSubmit = transferAmount > 0 && phone.length > 0 && Boolean(selectedWallet) && operator.length > 0 && pin.length === 4;
   useEffect(() => {
     const nextOperator = selectedCountry.operators[0]?.name ?? '';
     setOperator(currentOperator => selectedCountry.operators.some(item => item.name === currentOperator) ? currentOperator : nextOperator);
@@ -1970,9 +1980,10 @@ function Transfer() {
     e.preventDefault();
     if (!amount || !phone || !selectedWallet || !operator) return;
     const recipientPhone = `${selectedCountry.dialCode}${phone.replace(/\D/g, '')}`;
-    transfer({ amount: transferAmount, currency: selectedWallet.currency, country: selectedWallet.country, counterparty: `${recipientPhone} · ${operator}`, note: 'Frais de transfert à la charge de l’expéditeur', feePayer: 'sender' });
+    transfer({ amount: transferAmount, currency: selectedWallet.currency, country: selectedWallet.country, counterparty: `${recipientPhone} · ${operator}`, note: 'Frais de transfert à la charge de l’expéditeur', feePayer: 'sender', pin });
     setAmount('');
     setPhone('');
+    setPin('');
   };
   return <main className="page-wrap deposit-page">
     <PageIntro eyebrow="Mobile Money" title="Envoyer de l’argent" />
@@ -2015,6 +2026,11 @@ function Transfer() {
           <span>XOF</span>
           <input id="transfer-amount" type="number" min="1" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" data-testid="input-transfer-amount" required />
         </div>
+      </div>
+      <div className="field">
+        <label htmlFor="transfer-pin">Code PIN de sécurité</label>
+        <input id="transfer-pin" type="password" inputMode="numeric" autoComplete="off" maxLength={4} pattern="[0-9]{4}" value={pin} onChange={event => setPin(event.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="••••" required data-testid="input-transfer-pin" />
+        <p className="field-hint">Configurez ce code dans la page Sécurité.</p>
       </div>
       {transferAmount > 0 && <div className="summary-box" style={{ marginBottom: 16 }} data-testid="transfer-fee-summary">
         <div className="summary-line"><span>Montant saisi</span><strong>{money(transferAmount, selectedWallet?.currency ?? 'XOF')}</strong></div>
@@ -3153,10 +3169,10 @@ function RoutedApp() {
   const kycMutation = useSubmitKyc();
   const kycDecisionMutation = useDecideKyc();
   const store: Store = {
-    profile: { ...(data?.profile ?? { id: '', firstName: 'Utilisateur', lastName: 'Mulapay', email: '', role: 'USER', country: 'Togo', kycStatus: 'NON_VERIFIE' }), firstName: user?.firstName ?? data?.profile.firstName ?? 'Utilisateur', lastName: user?.lastName ?? data?.profile.lastName ?? 'Mulapay', email: user?.primaryEmailAddress?.emailAddress ?? data?.profile.email ?? '', phone: clerkPhone, address: '' },
+    profile: { ...(data?.profile ?? { id: '', firstName: 'Utilisateur', lastName: 'Mulapay', email: '', role: 'USER', country: 'Togo', kycStatus: 'NON_VERIFIE' }), firstName: user?.firstName ?? data?.profile.firstName ?? 'Utilisateur', lastName: user?.lastName ?? data?.profile.lastName ?? 'Mulapay', email: user?.primaryEmailAddress?.emailAddress ?? data?.profile.email ?? '', phone: clerkPhone || data?.profile.phone || '', address: '' },
     wallets: data?.wallets ?? [], transactions: data?.transactions ?? [], exchanges: data?.exchanges ?? [], links: data?.links ?? [], notifications: data?.notifications ?? [],
     adminKyc: (adminKycQuery.data ?? []) as AdminKycCase[], adminTransactions: (adminTransactionsQuery.data ?? []) as Transaction[], adminSummary: adminSummaryQuery.data as AdminSummary | undefined, feePercentage: data?.feePercentage ?? 1,
-    transfer: ({ amount, currency, country, counterparty, note, feePayer }) => { transferMutation.mutate({ data: { amount, currency, country, counterparty, note, feePayer } }, { onSuccess: response => { invalidate(); setTransferRequestKey(crypto.randomUUID()); toast(response.message); }, onError: () => { setTransferRequestKey(crypto.randomUUID()); toast('Transfert impossible. Vérifiez le solde disponible.'); } }); },
+    transfer: ({ amount, currency, country, counterparty, note, feePayer, pin }) => { transferMutation.mutate({ data: { amount, currency, country, counterparty, note, feePayer, pin } }, { onSuccess: response => { invalidate(); setTransferRequestKey(crypto.randomUUID()); toast(response.message); }, onError: () => { setTransferRequestKey(crypto.randomUUID()); toast('Transfert impossible. Vérifiez le PIN et le solde disponible.'); } }); },
     exchange: ({ source, destination, amount }) => { exchangeMutation.mutate({ data: { source, destination, amount } }, { onSuccess: response => { invalidate(); toast(response.message); }, onError: () => toast('La demande d’échange n’a pas pu être créée.') }); },
     setExchangeStatus: (id, status) => { exchangeDecisionMutation.mutate({ id, data: { decision: status === 'Completed' ? 'APPROVED' : 'REJECTED' } }, { onSuccess: response => { invalidate(); toast(response.message); }, onError: () => toast('La décision d’échange n’a pas pu être enregistrée.') }); },
     addLink: data => { paymentLinkMutation.mutate({ data }, { onSuccess: response => { invalidate(); toast(`Lien de paiement ${response.slug} créé.`); }, onError: () => toast('Le lien de paiement n’a pas pu être créé.') }); },

@@ -959,6 +959,7 @@ components:
         counterparty: { type: string, minLength: 2 }
         note: { type: string }
         feePayer: { type: string, enum: [sender] }
+        pin: { type: string, pattern: "^[0-9]{4}$" }
     ExchangeInput:
       type: object
       required: [source, destination, amount]
@@ -1012,6 +1013,7 @@ components:
         country: { type: string, minLength: 2 }
         operator: { type: string, minLength: 2 }
         phone: { type: string, pattern: "^\\+[1-9][0-9]{7,14}$" }
+        pin: { type: string, pattern: "^[0-9]{4}$" }
     DepositInput:
       type: object
       required: [walletId, amount, method, country, operator, phone]

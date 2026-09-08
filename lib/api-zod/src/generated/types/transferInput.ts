@@ -21,4 +21,6 @@ export interface TransferInput {
   counterparty: string;
   note?: string;
   feePayer: TransferInputFeePayer;
+  /** @pattern ^[0-9]{4}$ */
+  pin?: string;
 }

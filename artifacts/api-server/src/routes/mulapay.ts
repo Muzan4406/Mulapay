@@ -1148,6 +1148,32 @@ async function ensureClerkUser(req: Request) {
   return ensureUser(req);
 }
 
+async function requireOperationPin(req: Request, userId: string, pin: unknown, res: Response) {
+  if (!getAuth(req).userId) return true;
+  if (typeof pin !== "string" || !/^\d{4}$/.test(pin)) {
+    res.status(403).json({ error: "Saisissez votre code PIN à 4 chiffres pour confirmer l’opération." });
+    return false;
+  }
+  const clerkUser = await clerkClient.users.getUser(userId);
+  const storedHash = clerkUser.privateMetadata.mulapayPinHash;
+  if (typeof storedHash !== "string") {
+    res.status(403).json({ error: "Configurez d’abord votre code PIN dans la page Sécurité." });
+    return false;
+  }
+  const [algorithm, saltHex, digestHex] = storedHash.split(":");
+  if (algorithm !== "scrypt" || !saltHex || !digestHex) {
+    res.status(403).json({ error: "La configuration du code PIN est invalide. Configurez un nouveau PIN." });
+    return false;
+  }
+  const expected = Buffer.from(digestHex, "hex");
+  const actual = scryptSync(pin, Buffer.from(saltHex, "hex"), expected.length);
+  if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
+    res.status(403).json({ error: "Code PIN incorrect." });
+    return false;
+  }
+  return true;
+}
+
 const DEFAULT_API_KEY_SCOPES = [
   "wallets:read",
   "wallets:write",
@@ -1350,6 +1376,7 @@ router.post("/v1/transfers", async (req, res) => {
     counterparty?: string;
     note?: string;
     feePayer?: string;
+    pin?: string;
   };
   if (
     typeof input.amount !== "number" ||
@@ -1380,6 +1407,7 @@ router.post("/v1/transfers", async (req, res) => {
     return;
   }
   const user = await ensureUser(req);
+  if (!await requireOperationPin(req, user.id, input.pin, res)) return;
   const wallet = await db.query.wallets.findFirst({
     where: and(
       eq(wallets.userId, user.id),
@@ -2427,6 +2455,7 @@ router.post("/v1/withdrawals", async (req, res) => {
     operator?: string;
     phone?: string;
     method?: string;
+    pin?: string;
   };
   if (
     !input.walletId ||
@@ -2466,6 +2495,7 @@ router.post("/v1/withdrawals", async (req, res) => {
 
   const user = await ensureUser(req);
   if (!requireVerifiedKyc(user, res, "les retraits")) return;
+  if (!await requireOperationPin(req, user.id, input.pin, res)) return;
   const wallet = await db.query.wallets.findFirst({
     where: and(eq(wallets.id, requestedWalletId), eq(wallets.userId, user.id), eq(wallets.code, countryCode)),
   });

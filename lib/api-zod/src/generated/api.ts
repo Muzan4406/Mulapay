@@ -148,6 +148,7 @@ export const createTransferBodyCountryMin = 2;
 
 export const createTransferBodyCounterpartyMin = 2;
 
+export const createTransferBodyPinRegExp = new RegExp('^[0-9]{4}$');
 
 
 export const CreateTransferBody = zod.object({
@@ -156,7 +157,8 @@ export const CreateTransferBody = zod.object({
   "country": zod.string().min(createTransferBodyCountryMin),
   "counterparty": zod.string().min(createTransferBodyCounterpartyMin),
   "note": zod.string().optional(),
-  "feePayer": zod.enum(['sender'])
+  "feePayer": zod.enum(['sender']),
+  "pin": zod.string().regex(createTransferBodyPinRegExp).optional()
 })
 
 export const CreateTransferResponse = zod.object({
@@ -642,6 +644,7 @@ export const createWithdrawalBodyCountryMin = 2;
 export const createWithdrawalBodyOperatorMin = 2;
 
 export const createWithdrawalBodyPhoneRegExp = new RegExp('^\\+[1-9][0-9]{7,14}$');
+export const createWithdrawalBodyPinRegExp = new RegExp('^[0-9]{4}$');
 
 
 export const CreateWithdrawalBody = zod.object({
@@ -650,7 +653,8 @@ export const CreateWithdrawalBody = zod.object({
   "method": zod.enum(['mobile_money']),
   "country": zod.string().min(createWithdrawalBodyCountryMin),
   "operator": zod.string().min(createWithdrawalBodyOperatorMin),
-  "phone": zod.string().regex(createWithdrawalBodyPhoneRegExp)
+  "phone": zod.string().regex(createWithdrawalBodyPhoneRegExp),
+  "pin": zod.string().regex(createWithdrawalBodyPinRegExp).optional()
 })
 
 export const CreateWithdrawalResponse = zod.object({

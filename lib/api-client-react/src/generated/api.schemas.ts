@@ -387,6 +387,8 @@ export interface TransferInput {
   counterparty: string;
   note?: string;
   feePayer: TransferInputFeePayer;
+  /** @pattern ^[0-9]{4}$ */
+  pin?: string;
 }
 
 export interface ExchangeInput {
@@ -509,6 +511,8 @@ export interface MoneyOperationInput {
   operator: string;
   /** @pattern ^\+[1-9][0-9]{7,14}$ */
   phone: string;
+  /** @pattern ^[0-9]{4}$ */
+  pin?: string;
 }
 
 export type DepositInputMethod = typeof DepositInputMethod[keyof typeof DepositInputMethod];
