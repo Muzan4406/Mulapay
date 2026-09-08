@@ -141,6 +141,7 @@ h1,h2,h3,p { margin:0; }
 .metric-value { margin-top:17px; font-size:22px; letter-spacing:-.045em; }
 .metric-value small { font-size:11px; color:hsl(var(--muted-foreground)); letter-spacing:0; margin-left:3px; }
 .dashboard-grid { display:grid; grid-template-columns:minmax(0,1.45fr) minmax(280px,.85fr); gap:16px; margin-top:18px; align-items:start; }
+.account-security-grid,.account-settings-grid { grid-template-columns:minmax(0,1.3fr) minmax(280px,.85fr); }
 .activity-row { display:flex; align-items:center; justify-content:space-between; padding:14px 0; border-bottom:1px solid hsl(var(--border)); gap:12px; }
 .activity-row:last-child { border-bottom:0; padding-bottom:0; }
 .activity-main { display:flex; align-items:center; gap:11px; min-width:0; }
@@ -750,7 +751,8 @@ h1,h2,h3,p { margin:0; }
   .exchange-layout,
   .payment-builder-layout,
   .api-docs-grid { width:100%; min-width:0; }
-  .dashboard-grid,.form-layout { grid-template-columns:1fr; }
+  .dashboard-grid,.form-layout,.account-security-grid,.account-settings-grid { grid-template-columns:minmax(0,1fr); }
+  .account-security-grid > *, .account-settings-grid > * { min-width:0; }
   .kyc-progress { grid-template-columns:repeat(3,minmax(0,1fr)); }
   .kyc-layout { grid-template-columns:1fr; }
   .kyc-document-types { grid-template-columns:1fr; }

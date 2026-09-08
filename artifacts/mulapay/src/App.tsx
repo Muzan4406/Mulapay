@@ -1744,7 +1744,7 @@ function Security() {
     <main className="page-wrap">
       <PageIntro eyebrow="Sécurité du compte" title="Accès et appareils" subtitle="Gérez vos méthodes de connexion, surveillez vos appareils et protégez vos données." />
 
-      <div className="dashboard-grid" style={{ gridTemplateColumns: 'minmax(0,1.3fr) minmax(280px,0.85fr)' }}>
+      <div className="dashboard-grid account-security-grid">
         <div>
           <div className="section-head" style={{ marginBottom: 12 }}>
             <h3 className="section-title">Authentification</h3>
@@ -2781,7 +2781,7 @@ function Settings() {
     <main className="page-wrap">
       <PageIntro eyebrow="Informations personnelles" title="Compte" subtitle="Gérez votre profil et vos préférences de contact." />
 
-      <div className="dashboard-grid" style={{ gridTemplateColumns: 'minmax(0,1.3fr) minmax(280px,0.85fr)' }}>
+      <div className="dashboard-grid account-settings-grid">
         <div>
           <form onSubmit={handleSave} className="card card-pad">
             <div className="section-head" style={{ marginBottom: 12 }}>
