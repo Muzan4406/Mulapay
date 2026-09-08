@@ -6,6 +6,7 @@ self.addEventListener("install", event => {
       "./",
       "./manifest.webmanifest",
       "./mulapay-favicon.png",
+      "./mulapay-icon-192.png",
       "./mulapay-mark.png",
     ])),
   );
