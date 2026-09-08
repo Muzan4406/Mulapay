@@ -2768,7 +2768,6 @@ function Settings() {
   const [lastName, setLastName] = useState(profile.lastName || '');
   const [birthDate, setBirthDate] = useState(profile.birthDate || '');
   const [phone, setPhone] = useState(profile.phone || '');
-  const [language, setLanguage] = useState(profile.language || 'fr');
   const [loading, setLoading] = useState(false);
 
   const handleSave = async (e: FormEvent) => {
@@ -2779,7 +2778,7 @@ function Settings() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ firstName, lastName, birthDate, phone, language, notificationsEnabled: profile.notificationsEnabled ?? true })
+        body: JSON.stringify({ firstName, lastName, birthDate, phone, language: profile.language || 'fr', notificationsEnabled: profile.notificationsEnabled ?? true })
       });
       if (res.ok) {
         queryClient.invalidateQueries({ queryKey: getGetBootstrapQueryKey() });
@@ -2845,20 +2844,6 @@ function Settings() {
         </form>
 
         <div className="settings-bottom-grid">
-          <div className="card card-pad">
-            <div className="section-head" style={{ marginBottom: 16 }}>
-              <h3 className="section-title">Préférences</h3>
-            </div>
-
-            <div className="field settings-language-card">
-              <label>Langue choisie</label>
-              <select value={language} onChange={e => setLanguage(e.target.value)} disabled={loading} data-testid="select-settings-language">
-                <option value="fr">Français</option>
-                <option value="en">Anglais</option>
-              </select>
-            </div>
-          </div>
-
           <div className="card card-pad">
             <div className="section-head" style={{ marginBottom: 12 }}>
               <h3 className="section-title">Conformité</h3>
