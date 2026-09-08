@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Download, Share, X } from "lucide-react";
+import { Share, X } from "lucide-react";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -66,7 +66,7 @@ export function PwaInstallBanner() {
 
   return (
     <aside className="pwa-install-banner" role="dialog" aria-label="Installer Mulapay">
-      <div className="pwa-install-icon"><Download size={18} /></div>
+      <div className="pwa-install-icon"><img src={`${import.meta.env.BASE_URL}mulapay-mark.png`} alt="" /></div>
       <div className="pwa-install-copy">
         <strong>Installer Mulapay</strong>
         {isIos && !installPrompt
