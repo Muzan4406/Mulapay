@@ -126,6 +126,13 @@ h1,h2,h3,p { margin:0; }
 .button-danger { background:hsl(5 59% 49% / .1); color:hsl(var(--destructive)); }
 .button:disabled { opacity:.48; cursor:not-allowed; transform:none; box-shadow:none; }
 .button-sm { padding:8px 11px; font-size:11px; }
+.pwa-install-banner { position:fixed; left:20px; bottom:20px; z-index:40; width:min(430px, calc(100vw - 28px)); display:flex; align-items:center; gap:12px; padding:13px 14px; border:1px solid hsl(var(--border)); border-radius:16px; background:hsl(var(--card) / .97); box-shadow:0 16px 40px hsl(205 38% 16% / .18); backdrop-filter:blur(16px); }
+.pwa-install-icon { width:36px; height:36px; display:grid; place-items:center; flex:0 0 auto; border-radius:11px; color:hsl(var(--primary)); background:hsl(var(--primary) / .12); }
+.pwa-install-copy { min-width:0; flex:1; display:grid; gap:2px; }
+.pwa-install-copy strong { font-size:13px; }
+.pwa-install-copy span { display:flex; align-items:center; gap:3px; color:hsl(var(--muted-foreground)); font-size:11px; line-height:1.35; }
+.pwa-install-close { width:26px; height:26px; display:grid; place-items:center; flex:0 0 auto; border:0; border-radius:8px; background:transparent; color:hsl(var(--muted-foreground)); cursor:pointer; }
+.pwa-install-close:hover { background:hsl(var(--muted)); color:hsl(var(--foreground)); }
 .button-wide { width:100%; }
 .balance-hero { background: hsl(var(--sidebar)); color:hsl(var(--sidebar-foreground)); overflow:hidden; position:relative; min-height:245px; }
 .balance-hero:after { content:''; position:absolute; width:320px; height:320px; right:-100px; top:-150px; border:1px solid hsl(160 42% 64% / .25); border-radius:50%; box-shadow:0 0 0 30px hsl(160 42% 64% / .035), 0 0 0 75px hsl(160 42% 64% / .035); }

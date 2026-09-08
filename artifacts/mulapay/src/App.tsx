@@ -43,6 +43,7 @@ import {
 } from '@workspace/api-client-react';
 import type { PaymentLink as ApiPaymentLink, PaymentLinkInput } from '@workspace/api-client-react';
 import { Toaster } from '@/components/ui/toaster';
+import { PwaInstallBanner } from '@/components/pwa-install-banner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
@@ -3489,7 +3490,7 @@ function Router() {
 
 function App() {
   if (!clerkPubKey) throw new Error('Missing VITE_CLERK_PUBLISHABLE_KEY in .env file');
-  return <QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={basePath}><ClerkProvider publishableKey={clerkPubKey} proxyUrl={clerkProxyUrl} appearance={clerkAppearance} signInUrl={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} localization={frFR}><Router /></ClerkProvider></WouterRouter><Toaster /></TooltipProvider></QueryClientProvider>;
+  return <QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={basePath}><ClerkProvider publishableKey={clerkPubKey} proxyUrl={clerkProxyUrl} appearance={clerkAppearance} signInUrl={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} localization={frFR}><Router /></ClerkProvider></WouterRouter><PwaInstallBanner /><Toaster /></TooltipProvider></QueryClientProvider>;
 }
 
 export default App;
