@@ -2753,9 +2753,6 @@ function Settings() {
   const [birthDate, setBirthDate] = useState(profile.birthDate || '');
   const [phone, setPhone] = useState(profile.phone || '');
   const [language, setLanguage] = useState(profile.language || 'fr');
-  const [notificationsEnabled, setNotificationsEnabled] = useState(
-    profile.notificationsEnabled ?? true
-  );
   const [loading, setLoading] = useState(false);
 
   const handleSave = async (e: FormEvent) => {
@@ -2766,7 +2763,7 @@ function Settings() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ firstName, lastName, birthDate, phone, language, notificationsEnabled })
+        body: JSON.stringify({ firstName, lastName, birthDate, phone, language, notificationsEnabled: profile.notificationsEnabled ?? true })
       });
       if (res.ok) {
         queryClient.invalidateQueries({ queryKey: getGetBootstrapQueryKey() });
@@ -2797,28 +2794,28 @@ function Settings() {
           </div>
 
           <div className="settings-form-grid">
-            <div className="field">
+            <div className="field settings-info-card">
               <label>Nom</label>
               <input value={lastName} onChange={e => setLastName(e.target.value)} required disabled={loading} data-testid="input-settings-lastname" />
             </div>
-            <div className="field">
+            <div className="field settings-info-card">
               <label>Prénom</label>
               <input value={firstName} onChange={e => setFirstName(e.target.value)} required disabled={loading} data-testid="input-settings-firstname" />
             </div>
           </div>
 
           <div className="settings-form-grid">
-            <div className="field">
+            <div className="field settings-info-card">
               <label>Date de naissance</label>
               <input type="date" max={new Date().toISOString().slice(0, 10)} value={birthDate} onChange={e => setBirthDate(e.target.value)} disabled={loading} data-testid="input-settings-birthdate" />
             </div>
-            <div className="field">
+            <div className="field settings-info-card">
               <label>Numéro de téléphone</label>
               <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} disabled={loading} data-testid="input-settings-phone" />
             </div>
           </div>
 
-          <div className="field">
+          <div className="field settings-info-card settings-email-card">
             <label>Adresse e-mail</label>
             <input value={profile.email} readOnly disabled className="static-field" style={{ cursor: 'not-allowed', opacity: 0.7 }} />
             <small className="field-hint">Adresse utilisée pour la connexion.</small>
@@ -2837,16 +2834,12 @@ function Settings() {
               <h3 className="section-title">Préférences</h3>
             </div>
 
-            <div className="field">
-              <label>Langue</label>
+            <div className="field settings-language-card">
+              <label>Langue choisie</label>
               <select value={language} onChange={e => setLanguage(e.target.value)} disabled={loading} data-testid="select-settings-language">
                 <option value="fr">Français</option>
-                <option value="en">English</option>
+                <option value="en">Anglais</option>
               </select>
-            </div>
-            <div className="field" style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 16 }}>
-              <input type="checkbox" id="notif-toggle" checked={notificationsEnabled} onChange={e => setNotificationsEnabled(e.target.checked)} disabled={loading} style={{ width: 'auto', margin: 0 }} data-testid="checkbox-settings-notifications" />
-              <label htmlFor="notif-toggle" style={{ margin: 0, cursor: 'pointer' }}>Activer les notifications</label>
             </div>
           </div>
 
