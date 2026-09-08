@@ -691,6 +691,30 @@ export const MarkNotificationReadResponse = zod.object({
 
 
 /**
+ * @summary Deletes an owned notification
+ */
+export const DeleteNotificationParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const DeleteNotificationResponse = zod.object({
+  "ok": zod.boolean(),
+  "message": zod.string(),
+  "reference": zod.string().nullish(),
+  "status": zod.string().optional(),
+  "amount": zod.number().optional(),
+  "currency": zod.string().optional(),
+  "paymentUrl": zod.string().nullish(),
+  "expiresAt": zod.coerce.date().nullish(),
+  "fee": zod.number().optional(),
+  "netAmount": zod.number().optional(),
+  "platformFee": zod.number().optional(),
+  "merchantAmount": zod.number().optional(),
+  "totalDebited": zod.number().optional()
+})
+
+
+/**
  * @summary Marks all account notifications as read
  */
 export const MarkAllNotificationsReadResponse = zod.object({

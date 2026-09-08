@@ -23,6 +23,7 @@ import {
   useCreateExchange,
   useCreatePaymentLink,
   useCreateTransfer,
+  useDeleteNotification,
   useDeletePaymentLink,
   useUpdatePaymentLink,
   useDecideExchange,
@@ -70,6 +71,7 @@ type Store = {
   addLink: (data: PaymentLinkInput) => void;
   markRead: (id: string) => void;
   markAllRead: () => void;
+  deleteNotification: (id: string) => void;
   submitKyc: (documents: KycDocument[], details?: Record<string, string>, onSuccess?: (status: string) => void) => void;
   decideKyc: (id: string, decision: 'VERIFIED' | 'REFUSED' | 'REVIEW', reason?: string) => void;
   signOut: () => void;
@@ -1538,7 +1540,7 @@ data = response.json()`}</pre></div></div></div>
 }
 
 function NotificationsPage() {
-  const { notifications, markRead, markAllRead } = useStore();
+  const { notifications, markRead, markAllRead, deleteNotification } = useStore();
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
   const unreadCount = notifications.filter(item => !item.read).length;
   const visibleNotifications = [...notifications]
@@ -1586,11 +1588,14 @@ function NotificationsPage() {
             const copy = notificationCopy(item);
             const title = item.title.toLowerCase();
             const Icon = title.includes('kyc') || title.includes('ident') ? FileCheck2 : title.includes('sécur') || title.includes('security') ? ShieldCheck : title.includes('échange') || title.includes('exchange') ? ArrowRightLeft : title.includes('transfert') || title.includes('transfer') ? Send : Banknote;
-            return <button key={item.id} className={`notification-row ${item.read ? 'is-read' : 'is-unread'}`} onClick={() => markRead(item.id)} data-testid={`button-notification-row-${item.id}`}>
-              <span className="notification-row-icon"><Icon size={17} /></span>
-              <span className="notification-row-content"><span className="notification-row-title">{copy.title}</span><span className="notification-row-body">{copy.body}</span><span className="notification-row-date">{notificationDateLabel(item.createdAt)}</span></span>
-              <span className={`notification-row-status ${item.read ? 'is-read' : ''}`}>{item.read ? <><Check size={12} /> Lue</> : <><span className="notification-unread-dot" /> À lire</>}</span>
-            </button>;
+            return <div key={item.id} className={`notification-row ${item.read ? 'is-read' : 'is-unread'}`} data-testid={`notification-row-${item.id}`}>
+              <button className="notification-row-main" onClick={() => markRead(item.id)} data-testid={`button-notification-row-${item.id}`}>
+                <span className="notification-row-icon"><Icon size={17} /></span>
+                <span className="notification-row-content"><span className="notification-row-title">{copy.title}</span><span className="notification-row-body">{copy.body}</span><span className="notification-row-date">{notificationDateLabel(item.createdAt)}</span></span>
+                <span className={`notification-row-status ${item.read ? 'is-read' : ''}`}>{item.read ? <><Check size={12} /> Lue</> : <><span className="notification-unread-dot" /> À lire</>}</span>
+              </button>
+              <button className="notification-delete-button" aria-label={`Supprimer la notification ${copy.title}`} title="Supprimer" onClick={() => { if (window.confirm('Supprimer définitivement cette notification ?')) deleteNotification(item.id); }} data-testid={`button-delete-notification-${item.id}`}><Trash2 size={15} /></button>
+            </div>;
           })}
       </div>
     </section>
@@ -2706,6 +2711,7 @@ function RoutedApp() {
   const paymentLinkMutation = useCreatePaymentLink();
   const notificationMutation = useMarkNotificationRead();
   const markAllNotificationsMutation = useMarkAllNotificationsRead();
+  const deleteNotificationMutation = useDeleteNotification();
   const kycMutation = useSubmitKyc();
   const kycDecisionMutation = useDecideKyc();
   const store: Store = {
@@ -2721,6 +2727,12 @@ function RoutedApp() {
       markAllNotificationsMutation.mutate(undefined, {
         onSuccess: () => { invalidate(); toast('Toutes les notifications sont marquées comme lues.'); },
         onError: () => toast('Les notifications n’ont pas pu être mises à jour.'),
+      });
+    },
+    deleteNotification: id => {
+      deleteNotificationMutation.mutate({ id }, {
+        onSuccess: () => { invalidate(); toast('Notification supprimée.'); },
+        onError: () => toast('La notification n’a pas pu être supprimée.'),
       });
     },
     submitKyc: (documents, details, onSuccess) => { kycMutation.mutate({ data: { country: data?.profile.country ?? 'Togo', documents, details } }, { onSuccess: response => { invalidate(); onSuccess?.(response.status); }, onError: error => { const message = error instanceof Error ? error.message : 'Le dossier KYC n’a pas pu être enregistré.'; toast(message); } }); },

@@ -968,6 +968,7 @@ function requiredApiScope(req: Request) {
   if (req.method === "PATCH" && req.path.startsWith("/v1/payment-links/")) return "payment_links:write";
   if (req.method === "DELETE" && req.path.startsWith("/v1/payment-links/")) return "payment_links:write";
   if (req.method === "PATCH" && req.path.startsWith("/v1/notifications/")) return "wallets:write";
+  if (req.method === "DELETE" && req.path.startsWith("/v1/notifications/")) return "wallets:write";
   if (req.method === "POST" && req.path === "/v1/kyc") return "kyc:write";
   return null;
 }
@@ -2608,6 +2609,19 @@ router.patch("/v1/notifications/:id/read", async (req, res) => {
   const user = await ensureUser(req);
   await db.update(notifications).set({ read: true }).where(and(eq(notifications.id, id), eq(notifications.userId, user.id)));
   res.json(MarkNotificationReadResponse.parse({ ok: true, message: "Notification marquée comme lue.", reference: null }));
+});
+
+router.delete("/v1/notifications/:id", async (req, res) => {
+  const { id } = MarkNotificationReadParams.parse(req.params);
+  const user = await ensureUser(req);
+  const [deleted] = await db.delete(notifications)
+    .where(and(eq(notifications.id, id), eq(notifications.userId, user.id)))
+    .returning({ id: notifications.id });
+  if (!deleted) {
+    res.status(404).json({ error: "Notification introuvable." });
+    return;
+  }
+  res.json(MarkNotificationReadResponse.parse({ ok: true, message: "Notification supprimée.", reference: null }));
 });
 
 router.patch("/v1/notifications/read-all", async (req, res) => {

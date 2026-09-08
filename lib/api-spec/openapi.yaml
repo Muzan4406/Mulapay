@@ -333,6 +333,24 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/OperationResult"
+  /v1/notifications/{id}:
+    delete:
+      operationId: deleteNotification
+      tags: [wallet]
+      summary: Deletes an owned notification
+      security:
+        - MulapayApiKey: []
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Notification deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationResult"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /v1/notifications/read-all:
     patch:
       operationId: markAllNotificationsRead
