@@ -6,7 +6,7 @@ import {
   Send, Settings2, Shield, ShieldCheck, Smartphone, Trash2, UploadCloud, UserRound, WalletCards, X
 } from 'lucide-react';
 import { Link, Redirect, Route, Router as WouterRouter, Switch, useLocation } from 'wouter';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { ClerkProvider, useAuth, useClerk, useSignIn, useSignUp, useUser, useSession, useReverification } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
@@ -64,7 +64,7 @@ type DepositTracking = { reference: string; status: string; amount: number; curr
 type WithdrawalTracking = { reference: string; status: string; amount: number; currency: string; fee: number | null; totalDebited: number | null };
 type PublicPaymentResult = { reference: string; status: string; operator?: string; message?: string; amount?: number; currency?: string; fee?: number | null; netAmount?: number | null; platformFee?: number | null; merchantAmount?: number | null; paymentUrl?: string | null; expiresAt?: string | null };
 type Store = {
-  profile: { id: string; firstName: string; lastName: string; email: string; phone?: string; address?: string; role: string; country: string; kycStatus: string };
+  profile: { id: string; firstName: string; lastName: string; email: string; phone?: string | null; address?: string; role: string; country: string; kycStatus: string; birthDate?: string | null; language?: string; notificationsEnabled?: boolean; };
   wallets: Wallet[]; transactions: Transaction[]; exchanges: Exchange[]; links: PaymentLink[]; notifications: Notification[];
   adminKyc: AdminKycCase[]; adminTransactions: Transaction[]; adminSummary?: AdminSummary; feePercentage: number;
   transfer: (data: { amount: number; currency: string; country: string; counterparty: string; note: string; feePayer: 'sender' }) => void;
@@ -380,7 +380,7 @@ function Shell({ children, admin = false, onNotifications }: { children: ReactNo
   const nav = admin ? adminNav : userNav;
   const kycVerified = admin || kycIsVerified(profile.kycStatus);
   const unread = useStore().notifications.filter(n => !n.read).length;
-  const current = nav.find(item => item.href === location)?.label || (location === '/app/kyc' ? 'Vérification KYC' : location === '/app/settings' ? 'Profil' : admin ? 'Opérations' : 'Vue d’ensemble');
+  const current = nav.find(item => item.href === location)?.label || (location === '/app/kyc' ? 'Vérification KYC' : location === '/app/settings' ? 'Compte' : admin ? 'Opérations' : 'Vue d’ensemble');
   useEffect(() => {
     setMobileMenuOpen(false);
   }, [location, admin]);
@@ -399,7 +399,7 @@ function Shell({ children, admin = false, onNotifications }: { children: ReactNo
       <div className="side-label">{admin ? 'Bureau des opérations' : 'Votre Mulapay'}</div>
       <nav className="nav-list">{nav.map(item => { const Icon = item.icon; const testId = `link-nav-${item.label.toLowerCase().replaceAll(' ', '-')}`; return item.kycRequired && !kycVerified ? <button key={item.href} type="button" className="nav-link nav-link-locked" onClick={() => setLocation('/app/kyc')} data-testid={testId} aria-label={`${item.label} — vérification KYC requise`}>{item.image ? <img className="nav-image" src={dashboardIcon(item.image)} alt="" /> : <Icon className="nav-icon" />}<span>{item.label}</span><LockKeyhole size={13} /></button> : <Link key={item.href} href={item.href} className={`nav-link ${location === item.href ? 'active' : ''}`} data-testid={testId}>{item.image ? <img className="nav-image" src={dashboardIcon(item.image)} alt="" /> : <Icon className="nav-icon" />}<span>{item.label}</span></Link>; })}</nav>
       {!admin && canAccessAdmin && <><div className="side-label" style={{ marginTop: 30 }}>Administration</div><nav className="nav-list"><Link href="/admin" className="nav-link admin-access-link" data-testid="link-open-admin"><ShieldCheck className="nav-icon" /><span>Panel administrateur</span><ChevronRight size={13} /></Link></nav></>}
-      {!admin && <><div className="side-label" style={{ marginTop: 30 }}>Compte</div><nav className="nav-list">{!kycVerified ? <><button type="button" className="nav-link nav-link-locked" onClick={() => setLocation('/app/kyc')} data-testid="link-nav-api" aria-label="API partenaire — vérification KYC requise"><img className="nav-image" src={dashboardIcon('api.png')} alt="" /><span>API partenaire</span><LockKeyhole size={13} /></button><button type="button" className="nav-link nav-link-locked" onClick={() => setLocation('/app/kyc')} data-testid="link-nav-api-docs" aria-label="Documentation API Payin — vérification KYC requise"><img className="nav-image" src={dashboardIcon('documents.png')} alt="" /><span>Documentation API Payin</span><LockKeyhole size={13} /></button></> : <><Link href="/app/api" className={`nav-link ${location === '/app/api' ? 'active' : ''}`} data-testid="link-nav-api"><img className="nav-image" src={dashboardIcon('api.png')} alt="" /><span>API partenaire</span></Link><Link href="/app/api-docs" className={`nav-link ${location === '/app/api-docs' ? 'active' : ''}`} data-testid="link-nav-api-docs"><img className="nav-image" src={dashboardIcon('documents.png')} alt="" /><span>Documentation API Payin</span></Link></>}<Link href="/app/notifications" className={`nav-link ${location === '/app/notifications' ? 'active' : ''}`} data-testid="link-nav-notifications"><img className="nav-image" src={dashboardIcon('notifications.png')} alt="" /><span>Notifications</span></Link><Link href="/app/kyc" className={`nav-link ${location === '/app/kyc' ? 'active' : ''}`} data-testid="link-nav-verification"><img className="nav-image" src={dashboardIcon('kyc.png')} alt="" /><span>Vérification KYC</span></Link><Link href="/app/security" className={`nav-link ${location === '/app/security' ? 'active' : ''}`} data-testid="link-nav-security"><img className="nav-image" src={dashboardIcon('security.png')} alt="" /><span>Sécurité</span></Link><Link href="/app/settings" className={`nav-link ${location === '/app/settings' ? 'active' : ''}`} data-testid="link-nav-settings"><img className="nav-image" src={dashboardIcon('profile.png')} alt="" /><span>Profil</span></Link></nav></>}
+      {!admin && <><div className="side-label" style={{ marginTop: 30 }}>Compte</div><nav className="nav-list">{!kycVerified ? <><button type="button" className="nav-link nav-link-locked" onClick={() => setLocation('/app/kyc')} data-testid="link-nav-api" aria-label="API partenaire — vérification KYC requise"><img className="nav-image" src={dashboardIcon('api.png')} alt="" /><span>API partenaire</span><LockKeyhole size={13} /></button><button type="button" className="nav-link nav-link-locked" onClick={() => setLocation('/app/kyc')} data-testid="link-nav-api-docs" aria-label="Documentation API Payin — vérification KYC requise"><img className="nav-image" src={dashboardIcon('documents.png')} alt="" /><span>Documentation API Payin</span><LockKeyhole size={13} /></button></> : <><Link href="/app/api" className={`nav-link ${location === '/app/api' ? 'active' : ''}`} data-testid="link-nav-api"><img className="nav-image" src={dashboardIcon('api.png')} alt="" /><span>API partenaire</span></Link><Link href="/app/api-docs" className={`nav-link ${location === '/app/api-docs' ? 'active' : ''}`} data-testid="link-nav-api-docs"><img className="nav-image" src={dashboardIcon('documents.png')} alt="" /><span>Documentation API Payin</span></Link></>}<Link href="/app/notifications" className={`nav-link ${location === '/app/notifications' ? 'active' : ''}`} data-testid="link-nav-notifications"><img className="nav-image" src={dashboardIcon('notifications.png')} alt="" /><span>Notifications</span></Link><Link href="/app/kyc" className={`nav-link ${location === '/app/kyc' ? 'active' : ''}`} data-testid="link-nav-verification"><img className="nav-image" src={dashboardIcon('kyc.png')} alt="" /><span>Vérification KYC</span></Link><Link href="/app/security" className={`nav-link ${location === '/app/security' ? 'active' : ''}`} data-testid="link-nav-security"><img className="nav-image" src={dashboardIcon('security.png')} alt="" /><span>Sécurité</span></Link><Link href="/app/settings" className={`nav-link ${location === '/app/settings' ? 'active' : ''}`} data-testid="link-nav-settings"><img className="nav-image" src={dashboardIcon('profile.png')} alt="" /><span>Compte</span></Link></nav></>}
     </aside>
     {mobileMenuOpen && <button className="mobile-menu-backdrop" aria-label="Fermer le menu" onClick={() => setMobileMenuOpen(false)} />}
     <div className="main-pane">
@@ -2735,15 +2735,151 @@ function Kyc() {
   return <main className="page-wrap"><PageIntro eyebrow="Vérification du compte" title="Votre vérification" subtitle="Un compte vérifié rend les mouvements transfrontaliers plus sûrs pour tous. Les nouveaux documents sont enregistrés dans la file conformité." action={<span className="pill pill-success" style={{ padding: '8px 12px' }}><CheckCircle2 size={13} style={{ marginRight: 5 }} /> Vérifié</span>} /><div className="dashboard-grid" style={{ marginTop: 27 }}><div className="card card-pad"><div className="section-head"><div><h2 className="section-title">État de la vérification</h2><p className="section-note">L’état actuel est enregistré sur votre profil Mulapay.</p></div><ShieldCheck size={24} color="hsl(160 42% 38%)" /></div><div style={{ height: 7, borderRadius: 5, background: 'hsl(160 42% 38% / .12)', overflow: 'hidden', margin: '23px 0 25px' }}><div style={{ width: uploaded ? '100%' : '66%', height: '100%', background: 'hsl(160 42% 38%)', borderRadius: 5 }} /></div><div className="step-list"><div className="step done"><div className="step-number"><Check size={13} /></div><div><div className="step-title">Informations du profil</div><div className="step-copy">Nom, email et numéro de téléphone confirmés.</div></div></div><div className="step done"><div className="step-number"><Check size={13} /></div><div><div className="step-title">Pièce d’identité</div><div className="step-copy">Carte nationale · examinée et approuvée.</div></div></div><div className={`step ${uploaded ? 'done' : ''}`}><div className="step-number">{uploaded ? <Check size={13} /> : '3'}</div><div><div className="step-title">Confirmation de l’adresse <span className="pill pill-neutral" style={{ marginLeft: 6 }}>{uploaded ? 'Envoyée' : 'Facultatif'}</span></div><div className="step-copy">{uploaded ? 'Justificatif de domicile envoyé pour examen.' : 'Ajoutez un justificatif de domicile pour augmenter vos limites.'}</div></div></div></div></div><div className="card card-pad"><div className="eyebrow">Liste des documents</div><div className="step-list" style={{ marginTop: 10 }}><div className="step done"><div className="step-number"><Check size={13} /></div><div><div className="step-title">Carte nationale</div><div className="step-copy">Approuvée et conservée dans le dossier de vérification.</div></div></div><div className={`step ${uploaded ? 'done' : ''}`}><div className="step-number">{uploaded ? <Check size={13} /> : '+'}</div><div style={{ flex: 1 }}><div className="step-title">Justificatif de domicile</div><div className="step-copy">{uploaded ? 'Document envoyé avec succès.' : 'Facture ou relevé bancaire des 3 derniers mois.'}</div>{!uploaded && <button className="button button-ghost button-sm" style={{ marginTop: 11 }} onClick={() => { setUploaded(true); submitKyc(['National ID', 'Selfie', 'Proof of address']); toast('Justificatif de domicile envoyé pour examen.'); }} data-testid="button-upload-kyc">Envoyer le document</button>}</div></div></div><div className="notice" style={{ marginTop: 20 }}><LockKeyhole size={14} /><span>Les documents sont transmis au circuit conformité Mulapay ; aucun prestataire de paiement n’intervient.</span></div></div></div></main>;
 }
 
-function RealSettings() {
-  const { profile, signOut } = useStore();
-  const fullName = `${profile.firstName} ${profile.lastName}`.trim();
-  return <main className="page-wrap"><PageIntro eyebrow="Préférences du compte" title="Paramètres" subtitle="Les informations d’identité sont gérées par Clerk ; aucun bouton local ne prétend enregistrer une modification non persistée." /><div className="form-layout" style={{ marginTop: 27 }}><div className="card card-pad"><div className="section-title">Informations du profil</div><p className="section-note" style={{ marginTop: 5, marginBottom: 22 }}>Ces données viennent du profil authentifié.</p><div className="field"><label>Nom complet</label><input value={fullName || 'Non renseigné'} readOnly /></div><div className="field"><label>Adresse e-mail</label><input value={profile.email || 'Non renseignée'} readOnly /></div><div className="field"><label>Pays de résidence</label><input value={profile.country} readOnly /></div><div className="notice"><LockKeyhole size={14} /><span>Pour modifier votre identité ou votre sécurité, utilisez les réglages de votre compte Clerk.</span></div></div><div><div className="card card-pad"><div className="section-title">Sécurité</div><div className="activity-row"><div className="activity-main"><div className="activity-icon"><LockKeyhole size={15} /></div><div><div className="activity-name">Authentification</div><div className="activity-meta">Gérée par Clerk avec des sessions sécurisées</div></div></div><Link className="button button-ghost button-sm" href="/sign-in">Gérer</Link></div></div><div className="card card-pad" style={{ marginTop: 14 }}><div className="eyebrow">Compte</div><button className="button button-danger button-wide" style={{ marginTop: 17 }} onClick={signOut} data-testid="button-sign-out"><LogOut size={14} /> Se déconnecter</button></div></div></div></main>;
-}
-
 function Settings() {
-  const { toast, signOut } = useStore(); const [name, setName] = useState('Afi Kossi'); const [email, setEmail] = useState(''); const [phone, setPhone] = useState('+228 90 12 45 67');
-  return <main className="page-wrap"><PageIntro eyebrow="Préférences du compte" title="Paramètres" subtitle="Gardez votre profil Mulapay et vos informations de sécurité à jour." /><div className="form-layout" style={{ marginTop: 27 }}><div className="card card-pad"><div className="section-title">Informations du profil</div><p className="section-note" style={{ marginTop: 5, marginBottom: 22 }}>Votre identité est gérée de façon sécurisée par Clerk ; les données de paiement restent dans le ledger Mulapay.</p><div className="field"><label>Nom complet</label><input value={name} onChange={e => setName(e.target.value)} data-testid="input-settings-name" /></div><div className="field"><label>Adresse email</label><input value={email} onChange={e => setEmail(e.target.value)} placeholder="Gérée par votre fournisseur de connexion" data-testid="input-settings-email" /></div><div className="field"><label>Numéro de téléphone</label><input value={phone} onChange={e => setPhone(e.target.value)} data-testid="input-settings-phone" /></div><div className="field"><label>Pays de résidence</label><select defaultValue="Togo" data-testid="select-settings-country"><option>Togo</option><option>Bénin</option><option>Sénégal</option><option>Côte d’Ivoire</option><option>Burkina Faso</option><option>Mali</option><option>Niger</option></select></div><button className="button button-primary" onClick={() => toast('Préférences du profil enregistrées pour la prochaine mise à jour.')} data-testid="button-save-settings">Enregistrer les changements</button></div><div><div className="card card-pad"><div className="section-title">Sécurité</div><div className="activity-row"><div className="activity-main"><div className="activity-icon"><LockKeyhole size={15} /></div><div><div className="activity-name">Authentification</div><div className="activity-meta">Gérée par Clerk avec des sessions sécurisées</div></div></div><Link className="button button-ghost button-sm" href="/sign-in">Gérer</Link></div><div className="activity-row"><div className="activity-main"><div className="activity-icon"><Bell size={15} /></div><div><div className="activity-name">Alertes de transaction</div><div className="activity-meta">Notifications email et dans l’application</div></div></div><button className="button button-primary button-sm" onClick={() => toast('Les alertes de transaction sont activées.')} data-testid="button-toggle-alerts">Activées</button></div></div><div className="card card-pad" style={{ marginTop: 14 }}><div className="eyebrow">Compte</div><button className="button button-danger button-wide" style={{ marginTop: 17 }} onClick={signOut} data-testid="button-sign-out"><LogOut size={14} /> Se déconnecter</button></div></div></div></main>;
+  const { profile, toast, signOut } = useStore();
+  const queryClient = useQueryClient();
+
+  const [firstName, setFirstName] = useState(profile.firstName || '');
+  const [lastName, setLastName] = useState(profile.lastName || '');
+  const [birthDate, setBirthDate] = useState(profile.birthDate || '');
+  const [phone, setPhone] = useState(profile.phone || '');
+  const [language, setLanguage] = useState(profile.language || 'fr');
+  const [notificationsEnabled, setNotificationsEnabled] = useState(
+    profile.notificationsEnabled ?? true
+  );
+  const [loading, setLoading] = useState(false);
+
+  const handleSave = async (e: FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const res = await fetch('/api/v1/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ firstName, lastName, birthDate, phone, language, notificationsEnabled })
+      });
+      if (res.ok) {
+        queryClient.invalidateQueries({ queryKey: getGetBootstrapQueryKey() });
+        toast('Vos informations ont été mises à jour.');
+      } else {
+        toast('Erreur lors de la mise à jour du profil.');
+      }
+    } catch (err) {
+      toast('Erreur de connexion. Veuillez réessayer.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const kycVerified = kycIsVerified(profile.kycStatus);
+  const kycRejected = ['REFUSED', 'REJECTED'].includes(profile.kycStatus.toUpperCase());
+  const kycPending = ['PENDING', 'EN_ATTENTE', 'REVIEW'].includes(profile.kycStatus.toUpperCase());
+  const kycLabel = kycVerified ? 'Vérifié' : kycRejected ? 'À corriger' : kycPending ? 'En attente' : 'Non vérifié';
+
+  return (
+    <main className="page-wrap">
+      <PageIntro eyebrow="Informations personnelles" title="Compte" subtitle="Gérez votre profil et vos préférences de contact." />
+
+      <div className="dashboard-grid" style={{ gridTemplateColumns: 'minmax(0,1.3fr) minmax(280px,0.85fr)' }}>
+        <div>
+          <form onSubmit={handleSave} className="card card-pad">
+            <div className="section-head" style={{ marginBottom: 12 }}>
+              <h3 className="section-title">Informations personnelles</h3>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+              <div className="field">
+                <label>Nom</label>
+                <input value={lastName} onChange={e => setLastName(e.target.value)} required disabled={loading} data-testid="input-settings-lastname" />
+              </div>
+              <div className="field">
+                <label>Prénom</label>
+                <input value={firstName} onChange={e => setFirstName(e.target.value)} required disabled={loading} data-testid="input-settings-firstname" />
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+              <div className="field">
+                <label>Date de naissance</label>
+                <input type="date" max={new Date().toISOString().slice(0, 10)} value={birthDate} onChange={e => setBirthDate(e.target.value)} disabled={loading} data-testid="input-settings-birthdate" />
+              </div>
+              <div className="field">
+                <label>Numéro de téléphone</label>
+                <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} disabled={loading} data-testid="input-settings-phone" />
+              </div>
+            </div>
+
+            <div className="field">
+              <label>Adresse e-mail</label>
+              <input value={profile.email} readOnly disabled className="static-field" style={{ cursor: 'not-allowed', opacity: 0.7 }} />
+              <small className="field-hint">Adresse utilisée pour la connexion.</small>
+            </div>
+
+            <div className="section-head" style={{ marginTop: 24, marginBottom: 12 }}>
+              <h3 className="section-title">Préférences</h3>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+              <div className="field">
+                <label>Langue</label>
+                <select value={language} onChange={e => setLanguage(e.target.value)} disabled={loading} data-testid="select-settings-language">
+                  <option value="fr">Français</option>
+                  <option value="en">English</option>
+                </select>
+              </div>
+              <div className="field" style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 24 }}>
+                <input type="checkbox" id="notif-toggle" checked={notificationsEnabled} onChange={e => setNotificationsEnabled(e.target.checked)} disabled={loading} style={{ width: 'auto', margin: 0 }} data-testid="checkbox-settings-notifications" />
+                <label htmlFor="notif-toggle" style={{ margin: 0, cursor: 'pointer' }}>Activer les notifications</label>
+              </div>
+            </div>
+
+            <div style={{ marginTop: 24, display: 'flex', justifyContent: 'flex-end' }}>
+              <button type="submit" className="button button-primary" disabled={loading} data-testid="button-save-settings">
+                {loading ? 'Enregistrement...' : 'Enregistrer les modifications'}
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div>
+          <div className="card card-pad">
+            <div className="section-head" style={{ marginBottom: 12 }}>
+              <h3 className="section-title">Conformité</h3>
+            </div>
+            <div className="activity-row" style={{ borderBottom: 0, paddingBottom: 0, paddingTop: 0 }}>
+              <div className="activity-main">
+                <div className="activity-icon"><ShieldCheck size={16} /></div>
+                <div>
+                  <div className="activity-name">Vérification KYC</div>
+                  <div className="activity-meta">Statut de votre identité</div>
+                </div>
+              </div>
+              <span className={`pill ${kycVerified ? 'pill-success' : 'pill-pending'}`} style={{ marginLeft: 10 }}>
+                {kycLabel}
+              </span>
+            </div>
+            <Link href="/app/kyc" className="button button-ghost button-wide" style={{ marginTop: 16 }} data-testid="link-settings-kyc">
+              Voir ou modifier les informations KYC
+            </Link>
+          </div>
+
+          <div className="card card-pad" style={{ marginTop: 16 }}>
+            <div className="activity-row" style={{ borderBottom: 0, paddingBottom: 0, paddingTop: 0 }}>
+              <div className="activity-main">
+                <div className="activity-icon" style={{ background: 'hsl(5 59% 49% / 0.1)', color: 'hsl(var(--destructive))' }}><LogOut size={16} /></div>
+                <div>
+                  <div className="activity-name">Déconnexion</div>
+                  <div className="activity-meta">Ferme la session actuelle.</div>
+                </div>
+              </div>
+              <button className="button button-danger button-sm" onClick={signOut} data-testid="button-logout-settings">Déconnexion</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  );
 }
 
 function AdminFeeSettings() {
@@ -3053,7 +3189,6 @@ function RoutedApp() {
   const admin = location.startsWith('/admin') && hasAdminAccess;
   if (location.startsWith('/admin') && !admin) return <Redirect to="/app" />;
   const Kyc = RealKyc;
-  const Settings = RealSettings;
   const kycVerified = kycIsVerified(store.profile.kycStatus);
   const gatedPath = !admin && !kycVerified && (
     location === '/app/withdrawal' ? 'les retraits'

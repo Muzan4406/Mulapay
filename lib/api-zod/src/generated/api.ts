@@ -38,6 +38,10 @@ export const GetBootstrapResponse = zod.object({
   "firstName": zod.string(),
   "lastName": zod.string(),
   "email": zod.string(),
+  "birthDate": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "language": zod.enum(['fr', 'en']),
+  "notificationsEnabled": zod.boolean(),
   "role": zod.string(),
   "country": zod.string(),
   "kycStatus": zod.string()
@@ -838,6 +842,41 @@ export const RecordSecurityEventResponse = zod.object({
   "platformFee": zod.number().optional(),
   "merchantAmount": zod.number().optional(),
   "totalDebited": zod.number().optional()
+})
+
+
+/**
+ * @summary Updates the current user's personal information and preferences
+ */
+export const updateProfileBodyFirstNameMax = 80;
+
+export const updateProfileBodyLastNameMax = 80;
+
+export const updateProfileBodyPhoneMax = 30;
+
+
+
+export const UpdateProfileBody = zod.object({
+  "firstName": zod.string().min(1).max(updateProfileBodyFirstNameMax),
+  "lastName": zod.string().min(1).max(updateProfileBodyLastNameMax),
+  "birthDate": zod.coerce.date().nullish(),
+  "phone": zod.string().max(updateProfileBodyPhoneMax).nullish(),
+  "language": zod.enum(['fr', 'en']),
+  "notificationsEnabled": zod.boolean()
+})
+
+export const UpdateProfileResponse = zod.object({
+  "id": zod.string(),
+  "firstName": zod.string(),
+  "lastName": zod.string(),
+  "email": zod.string(),
+  "birthDate": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "language": zod.enum(['fr', 'en']),
+  "notificationsEnabled": zod.boolean(),
+  "role": zod.string(),
+  "country": zod.string(),
+  "kycStatus": zod.string()
 })
 
 

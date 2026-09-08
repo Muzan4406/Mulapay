@@ -448,6 +448,24 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/OperationResult"
+  /v1/profile:
+    put:
+      operationId: updateProfile
+      tags: [wallet]
+      summary: Updates the current user's personal information and preferences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileInput"
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Profile"
   /v1/kyc:
     post:
       operationId: submitKyc
@@ -704,15 +722,29 @@ components:
         otpRequired: { type: boolean }
     Profile:
       type: object
-      required: [id, firstName, lastName, email, role, country, kycStatus]
+      required: [id, firstName, lastName, email, language, notificationsEnabled, role, country, kycStatus]
       properties:
         id: { type: string }
         firstName: { type: string }
         lastName: { type: string }
         email: { type: string }
+        birthDate: { type: ["string", "null"] }
+        phone: { type: ["string", "null"] }
+        language: { type: string, enum: [fr, en] }
+        notificationsEnabled: { type: boolean }
         role: { type: string }
         country: { type: string }
         kycStatus: { type: string }
+    ProfileInput:
+      type: object
+      required: [firstName, lastName, language, notificationsEnabled]
+      properties:
+        firstName: { type: string, minLength: 1, maxLength: 80 }
+        lastName: { type: string, minLength: 1, maxLength: 80 }
+        birthDate: { type: ["string", "null"], format: date }
+        phone: { type: ["string", "null"], maxLength: 30 }
+        language: { type: string, enum: [fr, en] }
+        notificationsEnabled: { type: boolean }
     Wallet:
       type: object
       required: [id, country, code, currency, balance, pending, status]

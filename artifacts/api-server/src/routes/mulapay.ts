@@ -1085,7 +1085,8 @@ function isPartnerApiPath(req: Request) {
     && req.path !== "/v1/bootstrap"
     && !req.path.startsWith("/v1/kyc")
     && !req.path.startsWith("/v1/notifications")
-    && !req.path.startsWith("/v1/security");
+    && !req.path.startsWith("/v1/security")
+    && req.path !== "/v1/profile";
 }
 
 function normalizeKycDocuments(raw: unknown): KycDocument[] {
@@ -1317,7 +1318,7 @@ async function bootstrap(req: Request) {
   const reconciledTransactions = await Promise.all(userTransactions.map((transaction) => reconcileIncomingTransaction(transaction)));
   const userWallets = await db.select().from(wallets).where(eq(wallets.userId, user.id));
   return GetBootstrapResponse.parse({
-    profile: { id: user.id, firstName: user.firstName, lastName: user.lastName, email: user.email, role: user.role, country: user.country, kycStatus: user.kycStatus },
+    profile: { id: user.id, firstName: user.firstName, lastName: user.lastName, email: user.email, birthDate: user.birthDate, phone: user.phone, language: user.language, notificationsEnabled: user.notificationsEnabled, role: user.role, country: user.country, kycStatus: user.kycStatus },
     wallets: userWallets.map(formatWallet),
     transactions: reconciledTransactions.map(formatTransaction),
     exchanges: userExchanges.map(formatExchange),
@@ -2674,6 +2675,34 @@ router.post("/v1/security/events", async (req, res) => {
     read: false,
   });
   res.json({ ok: true, message: "Événement enregistré." });
+});
+
+router.put("/v1/profile", async (req, res) => {
+  const user = await ensureUser(req);
+  const firstName = typeof req.body?.firstName === "string" ? req.body.firstName.trim() : "";
+  const lastName = typeof req.body?.lastName === "string" ? req.body.lastName.trim() : "";
+  const birthDate = typeof req.body?.birthDate === "string" && req.body.birthDate ? req.body.birthDate : null;
+  const phone = typeof req.body?.phone === "string" && req.body.phone.trim() ? req.body.phone.trim() : null;
+  const language = req.body?.language === "en" ? "en" : req.body?.language === "fr" ? "fr" : null;
+  const notificationsEnabled = req.body?.notificationsEnabled;
+  if (!firstName || firstName.length > 80 || !lastName || lastName.length > 80 || !language || typeof notificationsEnabled !== "boolean") {
+    res.status(400).json({ error: "Informations du compte invalides." });
+    return;
+  }
+  if (birthDate) {
+    const parsedBirthDate = new Date(`${birthDate}T00:00:00.000Z`);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(birthDate) || Number.isNaN(parsedBirthDate.getTime()) || parsedBirthDate > new Date()) {
+      res.status(400).json({ error: "Date de naissance invalide." });
+      return;
+    }
+  }
+  if (phone && phone.length > 30) {
+    res.status(400).json({ error: "Numéro de téléphone invalide." });
+    return;
+  }
+  const [updated] = await db.update(users).set({ firstName, lastName, birthDate, phone, language, notificationsEnabled }).where(eq(users.id, user.id)).returning();
+  await clerkClient.users.updateUser(user.id, { firstName, lastName });
+  res.json({ id: updated.id, firstName: updated.firstName, lastName: updated.lastName, email: updated.email, birthDate: updated.birthDate, phone: updated.phone, language: updated.language, notificationsEnabled: updated.notificationsEnabled, role: updated.role, country: updated.country, kycStatus: updated.kycStatus });
 });
 
 router.post("/v1/kyc/uploads/request-url", async (req, res) => {

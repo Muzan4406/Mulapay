@@ -15,14 +15,58 @@ export interface Error {
   otpRequired?: boolean;
 }
 
+export type ProfileLanguage = typeof ProfileLanguage[keyof typeof ProfileLanguage];
+
+
+export const ProfileLanguage = {
+  fr: 'fr',
+  en: 'en',
+} as const;
+
 export interface Profile {
   id: string;
   firstName: string;
   lastName: string;
   email: string;
+  /** @nullable */
+  birthDate?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  language: ProfileLanguage;
+  notificationsEnabled: boolean;
   role: string;
   country: string;
   kycStatus: string;
+}
+
+export type ProfileInputLanguage = typeof ProfileInputLanguage[keyof typeof ProfileInputLanguage];
+
+
+export const ProfileInputLanguage = {
+  fr: 'fr',
+  en: 'en',
+} as const;
+
+export interface ProfileInput {
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  firstName: string;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  lastName: string;
+  /** @nullable */
+  birthDate?: string | null;
+  /**
+     * @maxLength 30
+     * @nullable
+     */
+  phone?: string | null;
+  language: ProfileInputLanguage;
+  notificationsEnabled: boolean;
 }
 
 export interface Wallet {

@@ -5,12 +5,19 @@
  * Mulapay wallet, ledger, KYC and operations API
  * OpenAPI spec version: 0.2.0
  */
+import type { ProfileLanguage } from './profileLanguage';
 
 export interface Profile {
   id: string;
   firstName: string;
   lastName: string;
   email: string;
+  /** @nullable */
+  birthDate?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  language: ProfileLanguage;
+  notificationsEnabled: boolean;
   role: string;
   country: string;
   kycStatus: string;
