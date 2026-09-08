@@ -1,13 +1,13 @@
 import { createContext, type ChangeEvent, type FormEvent, type ReactNode, useContext, useEffect, useRef, useState } from 'react';
 import {
   Activity, ArrowDown, ArrowDownLeft, ArrowLeft, ArrowRightLeft, ArrowRight, ArrowUpRight, Banknote, Bell, CalendarDays, Check, CheckCircle2,
-  ChevronDown, ChevronRight, CircleAlert, Clock3, Copy, Download, Eye, FileCheck2, Globe2, Info, LayoutDashboard,
+  ChevronDown, ChevronRight, CircleAlert, Clock3, Copy, Download, Eye, FileCheck2, Globe2, History, Info, KeyRound, Laptop, LayoutDashboard,
   FileText, Link2, ListFilter, LockKeyhole, LogOut, Menu, MoreHorizontal, Pencil, Plus, QrCode, RefreshCw, Search,
-  Send, Settings2, ShieldCheck, Trash2, UploadCloud, UserRound, WalletCards, X
+  Send, Settings2, Shield, ShieldCheck, Smartphone, Trash2, UploadCloud, UserRound, WalletCards, X
 } from 'lucide-react';
 import { Link, Redirect, Route, Router as WouterRouter, Switch, useLocation } from 'wouter';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ClerkProvider, useAuth, useClerk, useSignIn, useSignUp, useUser } from '@clerk/react';
+import { ClerkProvider, useAuth, useClerk, useSignIn, useSignUp, useUser, useSession, useReverification } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
 import { frFR } from '@clerk/localizations';
@@ -44,6 +44,8 @@ import {
 import type { PaymentLink as ApiPaymentLink, PaymentLinkInput } from '@workspace/api-client-react';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import NotFound from '@/pages/not-found';
 
 type Wallet = { id: string; country: string; code: string; currency: string; balance: number; pending: number; status: string };
@@ -1605,8 +1607,310 @@ function NotificationsPage() {
 }
 
 function Security() {
-  const { signOut } = useStore();
-  return <main className="page-wrap"><PageIntro eyebrow="Protection du compte" title="Sécurité" subtitle="Clerk gère l’authentification, les sessions et les facteurs de sécurité." /><div className="card card-pad"><div className="activity-row"><div className="activity-main"><div className="activity-icon"><ShieldCheck size={15} /></div><div><div className="activity-name">Authentification sécurisée</div><div className="activity-meta">Connexion, OTP, récupération et sessions sont gérés par Clerk.</div></div></div><Link href="/sign-in" className="button button-ghost button-sm">Gérer</Link></div><div className="activity-row"><div className="activity-main"><div className="activity-icon"><LogOut size={15} /></div><div><div className="activity-name">Déconnexion globale</div><div className="activity-meta">Révoquer la session actuelle et revenir à l’accueil.</div></div></div><button className="button button-danger button-sm" onClick={signOut}>Se déconnecter</button></div></div></main>;
+  const { user } = useUser();
+  const { signOut, toast, notifications } = useStore();
+  const { session: currentSession } = useSession();
+  const [sessions, setSessions] = useState<Awaited<ReturnType<NonNullable<typeof user>['getSessions']>>>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(true);
+  const [sessionsError, setSessionsError] = useState(false);
+
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [pinModalOpen, setPinModalOpen] = useState(false);
+
+  const [passwordVal, setPasswordVal] = useState('');
+  const [passwordConfirmVal, setPasswordConfirmVal] = useState('');
+
+  const [pinVal, setPinVal] = useState('');
+  const [pinAction, setPinAction] = useState<'create' | 'modify'>('create');
+
+  const [pinStatus, setPinStatus] = useState<'loading' | 'defined' | 'undefined'>('loading');
+  const [loadingAction, setLoadingAction] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    if (!user) {
+      setSessionsLoading(false);
+      return;
+    }
+    setSessionsLoading(true);
+    setSessionsError(false);
+    void user.getSessions()
+      .then(items => { if (active) setSessions(items); })
+      .catch(() => { if (active) setSessionsError(true); })
+      .finally(() => { if (active) setSessionsLoading(false); });
+    return () => { active = false; };
+  }, [user]);
+
+  useEffect(() => {
+    fetch('/api/v1/security/pin')
+      .then(async res => {
+        if (!res.ok) throw new Error('PIN status unavailable');
+        const payload = await res.json() as { configured?: boolean };
+        setPinStatus(payload.configured ? 'defined' : 'undefined');
+      })
+      .catch(() => setPinStatus('undefined'));
+  }, []);
+
+  useEffect(() => {
+    if (pinStatus === 'defined') setPinAction('modify');
+    else if (pinStatus === 'undefined') setPinAction('create');
+  }, [pinStatus]);
+
+  const handleRevoke = async (sessionId: string) => {
+    try {
+      const sessionToRevoke = sessions.find(s => s.id === sessionId);
+      if (sessionToRevoke) {
+        await sessionToRevoke.revoke();
+        setSessions(current => current.filter(item => item.id !== sessionId));
+        toast('Appareil déconnecté et révoqué avec succès.');
+      }
+    } catch (e) {
+      toast('Erreur lors de la révocation de l’appareil.');
+    }
+  };
+
+  const updatePasswordRequest = async (pwd: string) => {
+    if (!user) return;
+    return await user.updatePassword({ newPassword: pwd });
+  };
+
+  const enhancedUpdatePassword = useReverification(updatePasswordRequest);
+
+  const handlePasswordSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (passwordVal.length < 8) {
+      toast('Le mot de passe doit contenir au moins 8 caractères.');
+      return;
+    }
+    if (passwordVal !== passwordConfirmVal) {
+      toast('Les mots de passe ne correspondent pas.');
+      return;
+    }
+
+    setLoadingAction(true);
+    try {
+      await enhancedUpdatePassword(passwordVal);
+      await fetch('/api/v1/security/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ type: 'PASSWORD_CHANGED' }),
+      });
+      void queryClient.invalidateQueries({ queryKey: getGetBootstrapQueryKey() });
+      toast('Mot de passe mis à jour avec succès.');
+      setPasswordModalOpen(false);
+      setPasswordVal('');
+      setPasswordConfirmVal('');
+    } catch (e: any) {
+      toast(e.message || 'Échec de la modification du mot de passe.');
+    } finally {
+      setLoadingAction(false);
+    }
+  };
+
+  const handlePinSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (pinVal.length !== 4) return;
+
+    setLoadingAction(true);
+    try {
+      const res = await fetch('/api/v1/security/pin', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ pin: pinVal })
+      });
+      if (res.ok) {
+        toast(`Code PIN ${pinAction === 'create' ? 'créé' : 'modifié'} avec succès.`);
+        setPinModalOpen(false);
+        setPinVal('');
+        setPinStatus('defined');
+        void queryClient.invalidateQueries({ queryKey: getGetBootstrapQueryKey() });
+      } else {
+        toast('Erreur lors de la mise à jour du code PIN.');
+      }
+    } catch (e) {
+      toast('Erreur réseau lors de la modification du code PIN.');
+    } finally {
+      setLoadingAction(false);
+    }
+  };
+
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  };
+
+  return (
+    <main className="page-wrap">
+      <PageIntro eyebrow="Sécurité du compte" title="Accès et appareils" subtitle="Gérez vos méthodes de connexion, surveillez vos appareils et protégez vos données." />
+
+      <div className="dashboard-grid" style={{ gridTemplateColumns: 'minmax(0,1.3fr) minmax(280px,0.85fr)' }}>
+        <div>
+          <div className="section-head" style={{ marginBottom: 12 }}>
+            <h3 className="section-title">Authentification</h3>
+          </div>
+          <div className="card card-pad" style={{ padding: '8px 22px' }}>
+            <div className="activity-row">
+              <div className="activity-main">
+                <div className="activity-icon"><KeyRound size={16} /></div>
+                <div>
+                  <div className="activity-name">Mot de passe</div>
+                  <div className="activity-meta">Dernière modification : {user?.updatedAt ? formatDate(user.updatedAt) : 'Inconnue'}</div>
+                </div>
+              </div>
+              <button className="button button-ghost button-sm" onClick={() => { setPasswordVal(''); setPasswordConfirmVal(''); setPasswordModalOpen(true); }} data-testid="button-modify-password">Modifier</button>
+            </div>
+
+            <div className="activity-row">
+              <div className="activity-main">
+                <div className="activity-icon"><LockKeyhole size={16} /></div>
+                <div>
+                  <div className="activity-name">Code PIN</div>
+                  <div className="activity-meta">{pinStatus === 'loading' ? 'Chargement...' : pinStatus === 'undefined' ? 'Non défini · Requis pour les transferts rapides' : 'Défini · Utilisé pour les paiements'}</div>
+                </div>
+              </div>
+              <button className="button button-ghost button-sm" onClick={() => setPinModalOpen(true)} disabled={pinStatus === 'loading'} data-testid="button-manage-pin">{pinAction === 'create' ? 'Créer' : 'Modifier'}</button>
+            </div>
+          </div>
+
+          <div className="notice notice-dark" style={{ marginTop: 14 }}>
+            <Shield size={14} />
+            <div>La double authentification (2FA) sera bientôt disponible pour renforcer la sécurité de votre compte avec une couche de validation supplémentaire.</div>
+          </div>
+
+          <div className="section-head" style={{ marginTop: 34, marginBottom: 12 }}>
+            <h3 className="section-title">Appareils connectés</h3>
+          </div>
+          <div className="card card-pad" style={{ padding: '8px 22px' }}>
+            {sessions.map(sess => {
+              const isCurrent = sess.id === currentSession?.id;
+              const deviceType = (sess as any).latestActivity?.deviceType || 'Appareil';
+              const isMobile = deviceType.toLowerCase().includes('mobile') || deviceType.toLowerCase().includes('phone');
+
+              return (
+                <div className="activity-row" key={sess.id} data-testid={`row-device-${sess.id}`}>
+                  <div className="activity-main">
+                    <div className="activity-icon" style={{ background: isCurrent ? 'hsl(var(--primary) / 0.1)' : 'hsl(var(--secondary))', color: isCurrent ? 'hsl(var(--primary))' : 'hsl(var(--primary))' }}>
+                      {isMobile ? <Smartphone size={16} /> : <Laptop size={16} />}
+                    </div>
+                    <div>
+                      <div className="activity-name">
+                        {deviceType} {((sess as any).latestActivity?.browserName) ? `(${(sess as any).latestActivity.browserName})` : ''}
+                        {isCurrent && <span className="pill pill-success" style={{ marginLeft: 6 }}>Actuel</span>}
+                      </div>
+                      <div className="activity-meta">{((sess as any).latestActivity?.city) ? ((sess as any).latestActivity.city + ' · ') : ''}{sess.lastActiveAt ? formatDate(sess.lastActiveAt) : 'Actif'}</div>
+                    </div>
+                  </div>
+                  {!isCurrent && <button className="button button-danger button-sm" onClick={() => handleRevoke(sess.id)} data-testid={`button-revoke-${sess.id}`}>Révoquer</button>}
+                </div>
+              );
+            })}
+            {sessionsLoading && <div style={{ padding: '16px 0', fontSize: 13, color: 'hsl(var(--muted-foreground))' }}>Chargement des appareils…</div>}
+            {!sessionsLoading && sessionsError && <div style={{ padding: '16px 0', fontSize: 13, color: 'hsl(var(--destructive))' }}>Impossible de charger les appareils connectés.</div>}
+            {!sessionsLoading && !sessionsError && sessions.length === 0 && <div style={{ padding: '16px 0', fontSize: 13, color: 'hsl(var(--muted-foreground))' }}>Aucun autre appareil connecté.</div>}
+          </div>
+        </div>
+
+        <div>
+          <div className="section-head" style={{ marginBottom: 12 }}>
+            <h3 className="section-title">Activité récente</h3>
+          </div>
+          <div className="card card-pad" style={{ padding: '8px 22px' }}>
+            {notifications.filter(item => item.title.toLowerCase().includes('sécurité')).slice(0, 3).map(item => (
+              <div className="activity-row" key={item.id}>
+                <div className="activity-main">
+                  <div className="activity-icon" style={{ background: 'transparent', border: '1px solid hsl(var(--border))', color: 'hsl(var(--muted-foreground))' }}><ShieldCheck size={15} /></div>
+                  <div><div className="activity-name">{item.body}</div><div className="activity-meta">{notificationDateLabel(item.createdAt)}</div></div>
+                </div>
+              </div>
+            ))}
+            {sessions.slice(0, 3).map(sess => {
+              return (
+                <div className="activity-row" key={sess.id + '-act'}>
+                  <div className="activity-main">
+                    <div className="activity-icon" style={{ background: 'transparent', border: '1px solid hsl(var(--border))', color: 'hsl(var(--muted-foreground))' }}><History size={15} /></div>
+                    <div>
+                      <div className="activity-name">{sess.status === 'active' ? 'Session active' : 'Session ' + sess.status}</div>
+                      <div className="activity-meta">{(sess as any).latestActivity?.deviceType || 'Appareil'} {((sess as any).latestActivity?.city) ? `(${(sess as any).latestActivity.city})` : ''}<br/>{sess.lastActiveAt ? formatDate(sess.lastActiveAt) : ''}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="card card-pad" style={{ marginTop: 16 }}>
+             <div className="activity-row" style={{ borderBottom: 0, paddingBottom: 0, paddingTop: 0 }}>
+               <div className="activity-main">
+                 <div className="activity-icon" style={{ background: 'hsl(5 59% 49% / 0.1)', color: 'hsl(var(--destructive))' }}><LogOut size={16} /></div>
+                 <div>
+                   <div className="activity-name">Déconnexion globale</div>
+                   <div className="activity-meta">Ferme la session actuelle.</div>
+                 </div>
+               </div>
+               <button className="button button-danger button-sm" onClick={signOut} data-testid="button-logout">Quitter</button>
+             </div>
+          </div>
+        </div>
+      </div>
+
+      <Dialog open={passwordModalOpen} onOpenChange={setPasswordModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Mise à jour du mot de passe</DialogTitle>
+            <DialogDescription>
+              Saisissez votre nouveau mot de passe. Un code de vérification sera envoyé à votre adresse email avant la modification.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handlePasswordSubmit} style={{ display: 'grid', gap: 16, marginTop: 10 }}>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>Nouveau mot de passe</label>
+              <input type="password" required minLength={8} value={passwordVal} onChange={e => setPasswordVal(e.target.value)} placeholder="Minimum 8 caractères" data-testid="input-new-password" disabled={loadingAction} />
+            </div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>Confirmer le mot de passe</label>
+              <input type="password" required minLength={8} value={passwordConfirmVal} onChange={e => setPasswordConfirmVal(e.target.value)} placeholder="Confirmer le mot de passe" data-testid="input-confirm-password" disabled={loadingAction} />
+            </div>
+            <DialogFooter style={{ marginTop: 10 }}>
+              <button type="button" className="button button-ghost" onClick={() => setPasswordModalOpen(false)} disabled={loadingAction}>Annuler</button>
+              <button type="submit" className="button button-primary" disabled={loadingAction}>{loadingAction ? 'Mise à jour...' : 'Enregistrer'}</button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={pinModalOpen} onOpenChange={setPinModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{pinAction === 'create' ? 'Création du code PIN' : 'Modification du code PIN'}</DialogTitle>
+            <DialogDescription>
+              Ce code à 4 chiffres sécurise vos transferts et retraits d'argent. Ne le partagez avec personne.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handlePinSubmit} style={{ display: 'grid', gap: 16, marginTop: 10 }}>
+            <div className="field" style={{ marginBottom: 0, display: 'grid', justifyItems: 'center', margin: '15px 0' }}>
+              <label style={{ marginBottom: 10 }}>Code PIN à 4 chiffres</label>
+              <InputOTP maxLength={4} value={pinVal} onChange={setPinVal} data-testid="input-pin-code" disabled={loadingAction}>
+                <InputOTPGroup>
+                  <InputOTPSlot index={0} />
+                  <InputOTPSlot index={1} />
+                  <InputOTPSlot index={2} />
+                  <InputOTPSlot index={3} />
+                </InputOTPGroup>
+              </InputOTP>
+            </div>
+            <DialogFooter style={{ marginTop: 10 }}>
+              <button type="button" className="button button-ghost" onClick={() => setPinModalOpen(false)} disabled={loadingAction}>Annuler</button>
+              <button type="submit" className="button button-primary" disabled={pinVal.length !== 4 || loadingAction} data-testid="button-confirm-pin">{loadingAction ? 'Enregistrement...' : 'Enregistrer'}</button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+    </main>
+  );
 }
 
 function TransactionsLegacy() {

@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
-import { getAuth } from "@clerk/express";
-import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { clerkClient, getAuth } from "@clerk/express";
+import { createHash, createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { Readable } from "node:stream";
 import { and, desc, eq, gte, inArray, isNull, like, lte, ne, or, sql } from "drizzle-orm";
 import { db } from "@workspace/db";
@@ -1084,7 +1084,8 @@ function isPartnerApiPath(req: Request) {
   return req.path.startsWith("/v1/")
     && req.path !== "/v1/bootstrap"
     && !req.path.startsWith("/v1/kyc")
-    && !req.path.startsWith("/v1/notifications");
+    && !req.path.startsWith("/v1/notifications")
+    && !req.path.startsWith("/v1/security");
 }
 
 function normalizeKycDocuments(raw: unknown): KycDocument[] {
@@ -2628,6 +2629,51 @@ router.patch("/v1/notifications/read-all", async (req, res) => {
   const user = await ensureUser(req);
   await db.update(notifications).set({ read: true }).where(eq(notifications.userId, user.id));
   res.json(MarkNotificationReadResponse.parse({ ok: true, message: "Toutes les notifications sont marquées comme lues.", reference: null }));
+});
+
+router.get("/v1/security/pin", async (req, res) => {
+  const user = await ensureUser(req);
+  const clerkUser = await clerkClient.users.getUser(user.id);
+  res.json({ configured: typeof clerkUser.privateMetadata.mulapayPinHash === "string" });
+});
+
+router.put("/v1/security/pin", async (req, res) => {
+  const user = await ensureUser(req);
+  const pin = typeof req.body?.pin === "string" ? req.body.pin.trim() : "";
+  if (!/^\d{4}$/.test(pin)) {
+    res.status(400).json({ error: "Le code PIN doit contenir exactement 4 chiffres." });
+    return;
+  }
+  const salt = randomBytes(16);
+  const digest = scryptSync(pin, salt, 64);
+  const pinHash = `scrypt:${salt.toString("hex")}:${digest.toString("hex")}`;
+  await clerkClient.users.updateUserMetadata(user.id, {
+    privateMetadata: { mulapayPinHash: pinHash },
+  });
+  await db.insert(notifications).values({
+    id: crypto.randomUUID(),
+    userId: user.id,
+    title: "Sécurité du compte",
+    body: "Votre code PIN de sécurité a été créé ou modifié.",
+    read: false,
+  });
+  res.json({ ok: true, message: "Code PIN enregistré." });
+});
+
+router.post("/v1/security/events", async (req, res) => {
+  const user = await ensureUser(req);
+  if (req.body?.type !== "PASSWORD_CHANGED") {
+    res.status(400).json({ error: "Événement de sécurité invalide." });
+    return;
+  }
+  await db.insert(notifications).values({
+    id: crypto.randomUUID(),
+    userId: user.id,
+    title: "Sécurité du compte",
+    body: "Votre mot de passe a été modifié.",
+    read: false,
+  });
+  res.json({ ok: true, message: "Événement enregistré." });
 });
 
 router.post("/v1/kyc/uploads/request-url", async (req, res) => {

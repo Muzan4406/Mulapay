@@ -532,6 +532,26 @@ export interface KycUploadResponse {
   metadata: KycUploadInput;
 }
 
+export interface SecurityPinStatus {
+  configured: boolean;
+}
+
+export interface SecurityPinInput {
+  /** @pattern ^[0-9]{4}$ */
+  pin: string;
+}
+
+export type SecurityEventInputType = typeof SecurityEventInputType[keyof typeof SecurityEventInputType];
+
+
+export const SecurityEventInputType = {
+  PASSWORD_CHANGED: 'PASSWORD_CHANGED',
+} as const;
+
+export interface SecurityEventInput {
+  type: SecurityEventInputType;
+}
+
 export type DecisionInputDecision = typeof DecisionInputDecision[keyof typeof DecisionInputDecision];
 
 

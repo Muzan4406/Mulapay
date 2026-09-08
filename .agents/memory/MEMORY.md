@@ -13,3 +13,4 @@
 - [Responsive shell layout](responsive-shell-layout.md) — keep mobile shell children and tables inside the viewport; hiding document overflow alone is not enough.
 - [Wallet pending semantics](wallet-pending-semantics.md) — pending is reserved outgoing funds only; incoming deposits must not reduce displayed wallet availability.
 - [Payment link country scope](payment-link-country-scope.md) — payment links support all countries or an explicit country allowlist routed to local wallets.
+- [Account security boundary](account-security.md) — Clerk owns password reverification and sessions; Mulapay stores only a server-hashed PIN in private metadata.

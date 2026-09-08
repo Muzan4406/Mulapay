@@ -44,6 +44,9 @@ import type {
   ProviderUnavailableResponse,
   PublicPaymentInput,
   PublicPaymentLink,
+  SecurityEventInput,
+  SecurityPinInput,
+  SecurityPinStatus,
   Transaction,
   TransferInput,
   UnauthorizedResponse,
@@ -1552,6 +1555,225 @@ export function useGetPayment<TData = Awaited<ReturnType<typeof getPayment>>, TE
 
 
 
+
+export const getGetSecurityPinStatusUrl = () => {
+
+
+
+
+  return `/api/v1/security/pin`
+}
+
+/**
+ * @summary Gets the current user's PIN status
+ */
+export const getSecurityPinStatus = async ( options?: Parameters<typeof customFetch>[1]): Promise<SecurityPinStatus> => {
+
+  return customFetch<SecurityPinStatus>(getGetSecurityPinStatusUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSecurityPinStatusQueryKey = () => {
+    return [
+    `/api/v1/security/pin`
+    ] as const;
+    }
+
+
+export const getGetSecurityPinStatusQueryOptions = <TData = Awaited<ReturnType<typeof getSecurityPinStatus>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSecurityPinStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSecurityPinStatusQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSecurityPinStatus>>> = ({ signal }) => getSecurityPinStatus({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSecurityPinStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSecurityPinStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getSecurityPinStatus>>>
+export type GetSecurityPinStatusQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Gets the current user's PIN status
+ */
+
+export function useGetSecurityPinStatus<TData = Awaited<ReturnType<typeof getSecurityPinStatus>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSecurityPinStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSecurityPinStatusQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateSecurityPinUrl = () => {
+
+
+
+
+  return `/api/v1/security/pin`
+}
+
+/**
+ * @summary Creates or replaces the current user's security PIN
+ */
+export const updateSecurityPin = async (securityPinInput: SecurityPinInput, options?: Parameters<typeof customFetch>[1]): Promise<OperationResult> => {
+
+  return customFetch<OperationResult>(getUpdateSecurityPinUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(securityPinInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateSecurityPinMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSecurityPin>>, TError,{data: BodyType<SecurityPinInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateSecurityPin>>, TError,{data: BodyType<SecurityPinInput>}, TContext> => {
+
+const mutationKey = ['updateSecurityPin'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateSecurityPin>>, {data: BodyType<SecurityPinInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateSecurityPin(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateSecurityPinMutationResult = NonNullable<Awaited<ReturnType<typeof updateSecurityPin>>>
+    export type UpdateSecurityPinMutationBody = BodyType<SecurityPinInput>
+    export type UpdateSecurityPinMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Creates or replaces the current user's security PIN
+ */
+export const useUpdateSecurityPin = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSecurityPin>>, TError,{data: BodyType<SecurityPinInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateSecurityPin>>,
+        TError,
+        {data: BodyType<SecurityPinInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateSecurityPinMutationOptions(options));
+    }
+
+export const getRecordSecurityEventUrl = () => {
+
+
+
+
+  return `/api/v1/security/events`
+}
+
+/**
+ * @summary Records a completed account-security change
+ */
+export const recordSecurityEvent = async (securityEventInput: SecurityEventInput, options?: Parameters<typeof customFetch>[1]): Promise<OperationResult> => {
+
+  return customFetch<OperationResult>(getRecordSecurityEventUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(securityEventInput)
+  }
+);}
+
+
+
+
+
+export const getRecordSecurityEventMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof recordSecurityEvent>>, TError,{data: BodyType<SecurityEventInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof recordSecurityEvent>>, TError,{data: BodyType<SecurityEventInput>}, TContext> => {
+
+const mutationKey = ['recordSecurityEvent'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof recordSecurityEvent>>, {data: BodyType<SecurityEventInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  recordSecurityEvent(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RecordSecurityEventMutationResult = NonNullable<Awaited<ReturnType<typeof recordSecurityEvent>>>
+    export type RecordSecurityEventMutationBody = BodyType<SecurityEventInput>
+    export type RecordSecurityEventMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Records a completed account-security change
+ */
+export const useRecordSecurityEvent = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof recordSecurityEvent>>, TError,{data: BodyType<SecurityEventInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof recordSecurityEvent>>,
+        TError,
+        {data: BodyType<SecurityEventInput>},
+        TContext
+      > => {
+      return useMutation(getRecordSecurityEventMutationOptions(options));
+    }
 
 export const getSubmitKycUrl = () => {
 

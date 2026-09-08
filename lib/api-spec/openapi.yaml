@@ -401,6 +401,53 @@ paths:
                 $ref: "#/components/schemas/PaymentStatus"
         "404":
           $ref: "#/components/responses/NotFound"
+  /v1/security/pin:
+    get:
+      operationId: getSecurityPinStatus
+      tags: [wallet]
+      summary: Gets the current user's PIN status
+      responses:
+        "200":
+          description: PIN status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecurityPinStatus"
+    put:
+      operationId: updateSecurityPin
+      tags: [wallet]
+      summary: Creates or replaces the current user's security PIN
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SecurityPinInput"
+      responses:
+        "200":
+          description: PIN updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationResult"
+  /v1/security/events:
+    post:
+      operationId: recordSecurityEvent
+      tags: [wallet]
+      summary: Records a completed account-security change
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SecurityEventInput"
+      responses:
+        "200":
+          description: Event recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationResult"
   /v1/kyc:
     post:
       operationId: submitKyc
@@ -961,6 +1008,21 @@ components:
         objectPath: { type: string, pattern: "^/objects/" }
         metadata:
           $ref: "#/components/schemas/KycUploadInput"
+    SecurityPinStatus:
+      type: object
+      required: [configured]
+      properties:
+        configured: { type: boolean }
+    SecurityPinInput:
+      type: object
+      required: [pin]
+      properties:
+        pin: { type: string, pattern: "^[0-9]{4}$" }
+    SecurityEventInput:
+      type: object
+      required: [type]
+      properties:
+        type: { type: string, enum: [PASSWORD_CHANGED] }
     DecisionInput:
       type: object
       required: [decision]

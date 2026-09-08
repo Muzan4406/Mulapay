@@ -783,6 +783,65 @@ export const GetPaymentResponse = zod.object({
 
 
 /**
+ * @summary Gets the current user's PIN status
+ */
+export const GetSecurityPinStatusResponse = zod.object({
+  "configured": zod.boolean()
+})
+
+
+/**
+ * @summary Creates or replaces the current user's security PIN
+ */
+export const updateSecurityPinBodyPinRegExp = new RegExp('^[0-9]{4}$');
+
+
+export const UpdateSecurityPinBody = zod.object({
+  "pin": zod.string().regex(updateSecurityPinBodyPinRegExp)
+})
+
+export const UpdateSecurityPinResponse = zod.object({
+  "ok": zod.boolean(),
+  "message": zod.string(),
+  "reference": zod.string().nullish(),
+  "status": zod.string().optional(),
+  "amount": zod.number().optional(),
+  "currency": zod.string().optional(),
+  "paymentUrl": zod.string().nullish(),
+  "expiresAt": zod.coerce.date().nullish(),
+  "fee": zod.number().optional(),
+  "netAmount": zod.number().optional(),
+  "platformFee": zod.number().optional(),
+  "merchantAmount": zod.number().optional(),
+  "totalDebited": zod.number().optional()
+})
+
+
+/**
+ * @summary Records a completed account-security change
+ */
+export const RecordSecurityEventBody = zod.object({
+  "type": zod.enum(['PASSWORD_CHANGED'])
+})
+
+export const RecordSecurityEventResponse = zod.object({
+  "ok": zod.boolean(),
+  "message": zod.string(),
+  "reference": zod.string().nullish(),
+  "status": zod.string().optional(),
+  "amount": zod.number().optional(),
+  "currency": zod.string().optional(),
+  "paymentUrl": zod.string().nullish(),
+  "expiresAt": zod.coerce.date().nullish(),
+  "fee": zod.number().optional(),
+  "netAmount": zod.number().optional(),
+  "platformFee": zod.number().optional(),
+  "merchantAmount": zod.number().optional(),
+  "totalDebited": zod.number().optional()
+})
+
+
+/**
  * @summary Submits KYC information for review
  */
 export const submitKycBodyDocumentsItemObjectPathRegExp = new RegExp('^/objects');
