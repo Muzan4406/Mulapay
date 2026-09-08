@@ -87,6 +87,8 @@ async function handleTelegramCommands() {
           "/notifications — compter les notifications des dernières 24 h",
           "/dernieres — afficher les 5 derniers événements",
           "/inscriptions — compter les inscriptions des dernières 24 h",
+          "/statistiques — afficher les statistiques globales Mulapay",
+          "/stats — alias de /statistiques",
           "",
           "Les notifications financières et de sécurité sont envoyées automatiquement dans ce groupe.",
         ].join("\n"));
