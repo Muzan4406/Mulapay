@@ -7,4 +7,4 @@ Replit App Storage provisioning may fail with a permission-denied response stati
 
 **Why:** KYC image upload and admin review must remain usable without a public file fallback or an artificial local filesystem dependency.
 
-**How to apply:** Keep the Supabase Storage bucket private, upload through the authenticated API, and stream admin document reads through the `requireAdmin` route. Never expose the service-role key to the browser.
+**How to apply:** Keep the Supabase Storage bucket private, upload through the authenticated API, and stream admin document reads through the `requireAdmin` route. Never expose the service-role key to the browser. If `SUPABASE_URL` is absent, derive the project URL from the direct database host or the pooler username. Bucket creation may report an existing bucket as HTTP 400 with error `Duplicate`, not only HTTP 409; accept only that explicit duplicate response.

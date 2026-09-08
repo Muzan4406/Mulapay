@@ -21,8 +21,25 @@ export class ObjectStorageService {
   private bucketReady = false;
   private bucketSetup: Promise<void> | null = null;
 
+  private resolveSupabaseUrl() {
+    const configuredUrl = process.env.SUPABASE_URL?.trim().replace(/\/+$/, "");
+    if (configuredUrl) return configuredUrl;
+
+    const databaseUrl = process.env.SUPABASE_DATABASE_URL?.trim() || process.env.DATABASE_URL?.trim();
+    if (!databaseUrl) return null;
+    try {
+      const parsed = new URL(databaseUrl);
+      const directProjectRef = parsed.hostname.match(/^db\.([a-z0-9]+)\.supabase\.co$/i)?.[1];
+      const pooledProjectRef = decodeURIComponent(parsed.username).match(/^postgres\.([a-z0-9]+)$/i)?.[1];
+      const projectRef = directProjectRef ?? pooledProjectRef;
+      return projectRef ? `https://${projectRef}.supabase.co` : null;
+    } catch {
+      return null;
+    }
+  }
+
   private getConfig() {
-    const url = process.env.SUPABASE_URL?.trim().replace(/\/+$/, "");
+    const url = this.resolveSupabaseUrl();
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
     if (!url || !serviceRoleKey) throw new Error("Supabase Storage is not configured.");
     return { url, serviceRoleKey };
@@ -59,7 +76,12 @@ export class ObjectStorageService {
       body: JSON.stringify({ id: this.bucketName, name: this.bucketName, public: false }),
       signal: AbortSignal.timeout(15_000),
     });
-    if (!response.ok && response.status !== 409) {
+    const errorBody = response.ok
+      ? null
+      : await response.json().catch(() => null) as { error?: string; message?: string } | null;
+    const bucketAlreadyExists = response.status === 409
+      || (response.status === 400 && errorBody?.error === "Duplicate");
+    if (!response.ok && !bucketAlreadyExists) {
       throw new Error(`Unable to provision Supabase Storage bucket (HTTP ${response.status}).`);
     }
       this.bucketReady = true;
