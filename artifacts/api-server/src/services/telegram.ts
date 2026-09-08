@@ -7,6 +7,8 @@ const TELEGRAM_API = "https://api.telegram.org";
 const MAX_MESSAGE_LENGTH = 3900;
 let workerStartedAt: Date | null = null;
 let polling = false;
+let commandPolling = false;
+let updateOffset: number | undefined;
 const deliveredNotificationIds = new Set<string>();
 
 function telegramConfig() {
@@ -39,6 +41,61 @@ async function sendTelegramMessage(text: string) {
   const payload = await response.json() as { ok?: boolean; description?: string };
   if (!payload.ok) throw new Error(payload.description ?? "Telegram rejected the message.");
   return true;
+}
+
+async function fetchTelegramUpdates() {
+  const config = telegramConfig();
+  if (!config) return [];
+  const params = new URLSearchParams({
+    timeout: "1",
+    allowed_updates: JSON.stringify(["message"]),
+  });
+  if (updateOffset !== undefined) params.set("offset", String(updateOffset));
+  const response = await fetch(`${TELEGRAM_API}/bot${config.token}/getUpdates?${params.toString()}`);
+  if (!response.ok) throw new Error(`Telegram getUpdates failed (${response.status})`);
+  const payload = await response.json() as {
+    ok?: boolean;
+    description?: string;
+    result?: Array<{
+      update_id: number;
+      message?: {
+        chat?: { id?: number; type?: string };
+        text?: string;
+      };
+    }>;
+  };
+  if (!payload.ok) throw new Error(payload.description ?? "Telegram rejected getUpdates.");
+  return payload.result ?? [];
+}
+
+async function handleTelegramCommands() {
+  if (commandPolling || !telegramConfig()) return;
+  commandPolling = true;
+  try {
+    const updates = await fetchTelegramUpdates();
+    for (const update of updates) {
+      updateOffset = update.update_id + 1;
+      const chatId = update.message?.chat?.id;
+      const text = update.message?.text?.trim();
+      if (!chatId || String(chatId) !== telegramConfig()?.chatId || !text?.startsWith("/")) continue;
+      const command = text.split(/\s+/, 1)[0].split("@", 1)[0].toLowerCase();
+      if (command === "/aide" || command === "/start") {
+        await sendTelegramMessage([
+          "🤖 Commandes Mulapay",
+          "/aide — afficher cette aide",
+          "/statut — vérifier que le bot est actif",
+          "",
+          "Les notifications financières et de sécurité sont envoyées automatiquement dans ce groupe.",
+        ].join("\n"));
+      } else if (command === "/statut") {
+        await sendTelegramMessage("✅ Mulapay est actif. Les notifications sont surveillées.");
+      }
+    }
+  } catch (error) {
+    logger.error({ error }, "Telegram command polling failed");
+  } finally {
+    commandPolling = false;
+  }
 }
 
 async function deliverNewNotifications() {
@@ -97,5 +154,7 @@ export function startTelegramNotificationWorker() {
   }
   void deliverNewNotifications();
   setInterval(() => void deliverNewNotifications(), 3000);
+  void handleTelegramCommands();
+  setInterval(() => void handleTelegramCommands(), 1500);
   logger.info("Telegram notification worker started");
 }
