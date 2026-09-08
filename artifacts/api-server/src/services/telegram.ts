@@ -1,6 +1,6 @@
-import { and, asc, desc, eq, gt, gte } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, gte, inArray, sql, sum } from "drizzle-orm";
 import { db } from "@workspace/db";
-import { notifications, users } from "@workspace/db";
+import { exchanges, notifications, transactions, users, wallets } from "@workspace/db";
 import { logger } from "../lib/logger";
 
 const TELEGRAM_API = "https://api.telegram.org";
@@ -109,6 +109,69 @@ async function handleTelegramCommands() {
             gte(notifications.createdAt, since),
           ));
         await sendTelegramMessage(`👤 Inscriptions des dernières 24 h : ${registrations.length}`);
+      } else if (command === "/statistiques" || command === "/stats") {
+        const [
+          [userStats],
+          [verifiedStats],
+          walletStats,
+          [transactionStats],
+          transactionVolumes,
+          transactionFees,
+          [exchangeStats],
+          [exchangeFees],
+        ] = await Promise.all([
+          db.select({ total: count() }).from(users),
+          db.select({ total: count() }).from(users).where(inArray(users.kycStatus, ["VERIFIE", "VERIFIED"])),
+          db.select({
+            currency: wallets.currency,
+            balance: sum(wallets.balance),
+            pending: sum(wallets.pending),
+          }).from(wallets).groupBy(wallets.currency),
+          db.select({
+            total: count(),
+            completed: sql<number>`count(*) filter (where ${transactions.status} = 'Completed')`,
+            pending: sql<number>`count(*) filter (where ${transactions.status} = 'Pending')`,
+          }).from(transactions),
+          db.select({
+            currency: transactions.currency,
+            amount: sum(transactions.amount),
+          }).from(transactions).where(eq(transactions.status, "Completed")).groupBy(transactions.currency),
+          db.select({
+            currency: transactions.currency,
+            amount: sum(transactions.platformFee),
+          }).from(transactions).where(and(
+            eq(transactions.status, "Completed"),
+            sql`${transactions.platformFee} is not null`,
+          )).groupBy(transactions.currency),
+          db.select({ total: count() }).from(exchanges).where(eq(exchanges.status, "COMPLETED")),
+          db.select({ amount: sum(exchanges.platformFee) }).from(exchanges).where(eq(exchanges.status, "COMPLETED")),
+        ]);
+        const formatAmount = (value: string | number | null | undefined) => new Intl.NumberFormat("fr-FR").format(Number(value ?? 0));
+        const balances = walletStats.map(item => `• ${item.currency} : disponible ${formatAmount(item.balance)} · réservé ${formatAmount(item.pending)}`);
+        const volumes = transactionVolumes.map(item => `• ${item.currency} : ${formatAmount(item.amount)}`);
+        const fees = transactionFees.map(item => `• ${item.currency} : ${formatAmount(item.amount)}`);
+        await sendTelegramMessage([
+          "📊 Statistiques Mulapay",
+          "",
+          `👥 Utilisateurs : ${userStats?.total ?? 0}`,
+          `✅ KYC vérifiés : ${verifiedStats?.total ?? 0}`,
+          "",
+          "💰 Soldes wallets",
+          ...(balances.length ? balances : ["• Aucun wallet"]),
+          "",
+          `🔄 Transactions : ${transactionStats?.total ?? 0}`,
+          `✅ Transactions confirmées : ${transactionStats?.completed ?? 0}`,
+          `⏳ Transactions en attente : ${transactionStats?.pending ?? 0}`,
+          "📈 Volume confirmé par devise",
+          ...(volumes.length ? volumes : ["• Aucun volume"]),
+          "",
+          "💸 Commissions transactions",
+          ...(fees.length ? fees : ["• Aucune commission"]),
+          `💱 Échanges confirmés : ${exchangeStats?.total ?? 0}`,
+          `💱 Commissions échanges : ${formatAmount(exchangeFees?.amount)}`,
+          "",
+          `🕒 ${new Date().toISOString()}`,
+        ].join("\n"));
       } else if (command === "/dernieres") {
         const latest = await db
           .select({
