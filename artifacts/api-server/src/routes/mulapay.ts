@@ -1095,7 +1095,7 @@ function normalizeKycDocuments(raw: unknown): KycDocument[] {
       if (
         KYC_DOCUMENT_KINDS.includes(value.kind as KycDocumentKind)
         && typeof value.objectPath === "string"
-        && /^\/objects\/uploads\/[a-zA-Z0-9-]+$/.test(value.objectPath)
+        && /^\/objects\/kyc\/[a-zA-Z0-9-]+$/.test(value.objectPath)
         && typeof value.fileName === "string"
         && typeof value.contentType === "string"
         && typeof value.size === "number"
