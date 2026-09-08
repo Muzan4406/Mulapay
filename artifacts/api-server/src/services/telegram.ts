@@ -1,4 +1,4 @@
-import { asc, eq, gt } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { notifications, users } from "@workspace/db";
 import { logger } from "../lib/logger";
@@ -82,13 +82,44 @@ async function handleTelegramCommands() {
       if (command === "/aide" || command === "/start") {
         await sendTelegramMessage([
           "🤖 Commandes Mulapay",
-          "/aide — afficher cette aide",
+          "/aide — afficher toutes les commandes",
           "/statut — vérifier que le bot est actif",
+          "/notifications — compter les notifications des dernières 24 h",
+          "/dernieres — afficher les 5 derniers événements",
+          "/inscriptions — compter les inscriptions des dernières 24 h",
           "",
           "Les notifications financières et de sécurité sont envoyées automatiquement dans ce groupe.",
         ].join("\n"));
       } else if (command === "/statut") {
         await sendTelegramMessage("✅ Mulapay est actif. Les notifications sont surveillées.");
+      } else if (command === "/notifications") {
+        const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const recent = await db
+          .select({ id: notifications.id })
+          .from(notifications)
+          .where(gte(notifications.createdAt, since));
+        await sendTelegramMessage(`📊 Notifications des dernières 24 h : ${recent.length}`);
+      } else if (command === "/inscriptions") {
+        const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const registrations = await db
+          .select({ id: notifications.id })
+          .from(notifications)
+          .where(and(
+            eq(notifications.title, "Nouvelle inscription"),
+            gte(notifications.createdAt, since),
+          ));
+        await sendTelegramMessage(`👤 Inscriptions des dernières 24 h : ${registrations.length}`);
+      } else if (command === "/dernieres") {
+        const latest = await db
+          .select({
+            title: notifications.title,
+            createdAt: notifications.createdAt,
+          })
+          .from(notifications)
+          .orderBy(desc(notifications.createdAt))
+          .limit(5);
+        const lines = latest.map(item => `• ${item.title} · ${item.createdAt.toISOString()}`);
+        await sendTelegramMessage(lines.length ? `🕘 5 derniers événements\n${lines.join("\n")}` : "🕘 Aucun événement récent.");
       }
     }
   } catch (error) {
