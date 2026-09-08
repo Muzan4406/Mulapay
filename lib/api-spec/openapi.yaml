@@ -448,6 +448,25 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/OperationResult"
+  /v1/security/sessions/{sessionId}/revoke:
+    post:
+      operationId: revokeSecuritySession
+      tags: [wallet]
+      summary: Revokes one of the current user's Clerk sessions
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Session revoked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationResult"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /v1/profile:
     put:
       operationId: updateProfile

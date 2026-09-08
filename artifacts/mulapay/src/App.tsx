@@ -1613,6 +1613,7 @@ function Security() {
   const [sessions, setSessions] = useState<Awaited<ReturnType<NonNullable<typeof user>['getSessions']>>>([]);
   const [sessionsLoading, setSessionsLoading] = useState(true);
   const [sessionsError, setSessionsError] = useState(false);
+  const [revokingSessionId, setRevokingSessionId] = useState<string | null>(null);
 
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [pinModalOpen, setPinModalOpen] = useState(false);
@@ -1657,15 +1658,23 @@ function Security() {
   }, [pinStatus]);
 
   const handleRevoke = async (sessionId: string) => {
+    setRevokingSessionId(sessionId);
     try {
-      const sessionToRevoke = sessions.find(s => s.id === sessionId);
-      if (sessionToRevoke) {
-        await sessionToRevoke.revoke();
-        setSessions(current => current.filter(item => item.id !== sessionId));
-        toast('Appareil déconnecté et révoqué avec succès.');
+      const response = await fetch(`/api/v1/security/sessions/${encodeURIComponent(sessionId)}/revoke`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null) as { error?: string } | null;
+        throw new Error(payload?.error || 'La révocation a échoué.');
       }
-    } catch (e) {
-      toast('Erreur lors de la révocation de l’appareil.');
+      setSessions(current => current.filter(item => item.id !== sessionId));
+      void queryClient.invalidateQueries({ queryKey: getGetBootstrapQueryKey() });
+      toast('Appareil déconnecté avec succès.');
+    } catch (error) {
+      toast(error instanceof Error ? error.message : 'Erreur lors de la révocation de l’appareil.');
+    } finally {
+      setRevokingSessionId(null);
     }
   };
 
@@ -1801,7 +1810,7 @@ function Security() {
                       <div className="activity-meta">{((sess as any).latestActivity?.city) ? ((sess as any).latestActivity.city + ' · ') : ''}{sess.lastActiveAt ? formatDate(sess.lastActiveAt) : 'Actif'}</div>
                     </div>
                   </div>
-                  {!isCurrent && <button className="button button-danger button-sm" onClick={() => handleRevoke(sess.id)} data-testid={`button-revoke-${sess.id}`}>Révoquer</button>}
+                  {!isCurrent && <button className="button button-danger button-sm" disabled={revokingSessionId === sess.id} onClick={() => handleRevoke(sess.id)} data-testid={`button-revoke-${sess.id}`}>{revokingSessionId === sess.id ? 'Révocation…' : 'Révoquer'}</button>}
                 </div>
               );
             })}
@@ -2781,68 +2790,66 @@ function Settings() {
     <main className="page-wrap">
       <PageIntro eyebrow="Informations personnelles" title="Compte" subtitle="Gérez votre profil et vos préférences de contact." />
 
-      <div className="dashboard-grid account-settings-grid">
-        <div>
-          <form onSubmit={handleSave} className="card card-pad">
-            <div className="section-head" style={{ marginBottom: 12 }}>
-              <h3 className="section-title">Informations personnelles</h3>
-            </div>
+      <div className="settings-layout">
+        <form onSubmit={handleSave} className="card card-pad">
+          <div className="section-head" style={{ marginBottom: 16 }}>
+            <h3 className="section-title">Informations personnelles</h3>
+          </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
-              <div className="field">
-                <label>Nom</label>
-                <input value={lastName} onChange={e => setLastName(e.target.value)} required disabled={loading} data-testid="input-settings-lastname" />
-              </div>
-              <div className="field">
-                <label>Prénom</label>
-                <input value={firstName} onChange={e => setFirstName(e.target.value)} required disabled={loading} data-testid="input-settings-firstname" />
-              </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
-              <div className="field">
-                <label>Date de naissance</label>
-                <input type="date" max={new Date().toISOString().slice(0, 10)} value={birthDate} onChange={e => setBirthDate(e.target.value)} disabled={loading} data-testid="input-settings-birthdate" />
-              </div>
-              <div className="field">
-                <label>Numéro de téléphone</label>
-                <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} disabled={loading} data-testid="input-settings-phone" />
-              </div>
-            </div>
-
+          <div className="settings-form-grid">
             <div className="field">
-              <label>Adresse e-mail</label>
-              <input value={profile.email} readOnly disabled className="static-field" style={{ cursor: 'not-allowed', opacity: 0.7 }} />
-              <small className="field-hint">Adresse utilisée pour la connexion.</small>
+              <label>Nom</label>
+              <input value={lastName} onChange={e => setLastName(e.target.value)} required disabled={loading} data-testid="input-settings-lastname" />
             </div>
+            <div className="field">
+              <label>Prénom</label>
+              <input value={firstName} onChange={e => setFirstName(e.target.value)} required disabled={loading} data-testid="input-settings-firstname" />
+            </div>
+          </div>
 
-            <div className="section-head" style={{ marginTop: 24, marginBottom: 12 }}>
+          <div className="settings-form-grid">
+            <div className="field">
+              <label>Date de naissance</label>
+              <input type="date" max={new Date().toISOString().slice(0, 10)} value={birthDate} onChange={e => setBirthDate(e.target.value)} disabled={loading} data-testid="input-settings-birthdate" />
+            </div>
+            <div className="field">
+              <label>Numéro de téléphone</label>
+              <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} disabled={loading} data-testid="input-settings-phone" />
+            </div>
+          </div>
+
+          <div className="field">
+            <label>Adresse e-mail</label>
+            <input value={profile.email} readOnly disabled className="static-field" style={{ cursor: 'not-allowed', opacity: 0.7 }} />
+            <small className="field-hint">Adresse utilisée pour la connexion.</small>
+          </div>
+
+          <div style={{ marginTop: 24, display: 'flex', justifyContent: 'flex-end', paddingTop: 20, borderTop: '1px solid hsl(var(--border))' }}>
+            <button type="submit" className="button button-primary" disabled={loading} data-testid="button-save-settings">
+              {loading ? 'Enregistrement...' : 'Enregistrer les modifications'}
+            </button>
+          </div>
+        </form>
+
+        <div className="settings-bottom-grid">
+          <div className="card card-pad">
+            <div className="section-head" style={{ marginBottom: 16 }}>
               <h3 className="section-title">Préférences</h3>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
-              <div className="field">
-                <label>Langue</label>
-                <select value={language} onChange={e => setLanguage(e.target.value)} disabled={loading} data-testid="select-settings-language">
-                  <option value="fr">Français</option>
-                  <option value="en">English</option>
-                </select>
-              </div>
-              <div className="field" style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 24 }}>
-                <input type="checkbox" id="notif-toggle" checked={notificationsEnabled} onChange={e => setNotificationsEnabled(e.target.checked)} disabled={loading} style={{ width: 'auto', margin: 0 }} data-testid="checkbox-settings-notifications" />
-                <label htmlFor="notif-toggle" style={{ margin: 0, cursor: 'pointer' }}>Activer les notifications</label>
-              </div>
+            <div className="field">
+              <label>Langue</label>
+              <select value={language} onChange={e => setLanguage(e.target.value)} disabled={loading} data-testid="select-settings-language">
+                <option value="fr">Français</option>
+                <option value="en">English</option>
+              </select>
             </div>
-
-            <div style={{ marginTop: 24, display: 'flex', justifyContent: 'flex-end' }}>
-              <button type="submit" className="button button-primary" disabled={loading} data-testid="button-save-settings">
-                {loading ? 'Enregistrement...' : 'Enregistrer les modifications'}
-              </button>
+            <div className="field" style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 16 }}>
+              <input type="checkbox" id="notif-toggle" checked={notificationsEnabled} onChange={e => setNotificationsEnabled(e.target.checked)} disabled={loading} style={{ width: 'auto', margin: 0 }} data-testid="checkbox-settings-notifications" />
+              <label htmlFor="notif-toggle" style={{ margin: 0, cursor: 'pointer' }}>Activer les notifications</label>
             </div>
-          </form>
-        </div>
+          </div>
 
-        <div>
           <div className="card card-pad">
             <div className="section-head" style={{ marginBottom: 12 }}>
               <h3 className="section-title">Conformité</h3>
@@ -2859,23 +2866,18 @@ function Settings() {
                 {kycLabel}
               </span>
             </div>
-            <Link href="/app/kyc" className="button button-ghost button-wide" style={{ marginTop: 16 }} data-testid="link-settings-kyc">
+            <Link href="/app/kyc" className="button button-ghost button-wide" style={{ marginTop: 24 }} data-testid="link-settings-kyc">
               Voir ou modifier les informations KYC
             </Link>
           </div>
+        </div>
 
-          <div className="card card-pad" style={{ marginTop: 16 }}>
-            <div className="activity-row" style={{ borderBottom: 0, paddingBottom: 0, paddingTop: 0 }}>
-              <div className="activity-main">
-                <div className="activity-icon" style={{ background: 'hsl(5 59% 49% / 0.1)', color: 'hsl(var(--destructive))' }}><LogOut size={16} /></div>
-                <div>
-                  <div className="activity-name">Déconnexion</div>
-                  <div className="activity-meta">Ferme la session actuelle.</div>
-                </div>
-              </div>
-              <button className="button button-danger button-sm" onClick={signOut} data-testid="button-logout-settings">Déconnexion</button>
-            </div>
+        <div className="settings-danger-zone">
+          <div>
+            <div style={{ fontWeight: 700, color: 'hsl(var(--destructive))', marginBottom: 4 }}>Déconnexion</div>
+            <div style={{ fontSize: 13, color: 'hsl(var(--destructive) / 0.8)' }}>Ferme la session actuelle de manière sécurisée.</div>
           </div>
+          <button className="button button-danger" onClick={signOut} data-testid="button-logout-settings"><LogOut size={15} /> Quitter</button>
         </div>
       </div>
     </main>

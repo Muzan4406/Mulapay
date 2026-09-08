@@ -1777,6 +1777,77 @@ export const useRecordSecurityEvent = <TError = ErrorType<unknown>,
       return useMutation(getRecordSecurityEventMutationOptions(options));
     }
 
+export const getRevokeSecuritySessionUrl = (sessionId: string,) => {
+
+
+
+
+  return `/api/v1/security/sessions/${sessionId}/revoke`
+}
+
+/**
+ * @summary Revokes one of the current user's Clerk sessions
+ */
+export const revokeSecuritySession = async (sessionId: string, options?: Parameters<typeof customFetch>[1]): Promise<OperationResult> => {
+
+  return customFetch<OperationResult>(getRevokeSecuritySessionUrl(sessionId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRevokeSecuritySessionMutationOptions = <TError = ErrorType<NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeSecuritySession>>, TError,{sessionId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof revokeSecuritySession>>, TError,{sessionId: string}, TContext> => {
+
+const mutationKey = ['revokeSecuritySession'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof revokeSecuritySession>>, {sessionId: string}> = (props) => {
+          const {sessionId} = props ?? {};
+
+          return  revokeSecuritySession(sessionId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RevokeSecuritySessionMutationResult = NonNullable<Awaited<ReturnType<typeof revokeSecuritySession>>>
+
+    export type RevokeSecuritySessionMutationError = ErrorType<NotFoundResponse>
+
+    /**
+ * @summary Revokes one of the current user's Clerk sessions
+ */
+export const useRevokeSecuritySession = <TError = ErrorType<NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeSecuritySession>>, TError,{sessionId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof revokeSecuritySession>>,
+        TError,
+        {sessionId: string},
+        TContext
+      > => {
+      return useMutation(getRevokeSecuritySessionMutationOptions(options));
+    }
+
 export const getUpdateProfileUrl = () => {
 
 

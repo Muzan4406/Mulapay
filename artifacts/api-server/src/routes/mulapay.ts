@@ -2677,6 +2677,29 @@ router.post("/v1/security/events", async (req, res) => {
   res.json({ ok: true, message: "Événement enregistré." });
 });
 
+router.post("/v1/security/sessions/:sessionId/revoke", async (req, res) => {
+  const user = await ensureUser(req);
+  const targetSession = await clerkClient.sessions.getSession(req.params.sessionId);
+  if (targetSession.userId !== user.id) {
+    res.status(404).json({ error: "Session introuvable." });
+    return;
+  }
+  const auth = getAuth(req);
+  if (auth.sessionId === targetSession.id) {
+    res.status(400).json({ error: "Utilisez la déconnexion pour fermer la session actuelle." });
+    return;
+  }
+  await clerkClient.sessions.revokeSession(targetSession.id);
+  await db.insert(notifications).values({
+    id: crypto.randomUUID(),
+    userId: user.id,
+    title: "Sécurité du compte",
+    body: "Un appareil connecté a été révoqué.",
+    read: false,
+  });
+  res.json({ ok: true, message: "Appareil déconnecté." });
+});
+
 router.put("/v1/profile", async (req, res) => {
   const user = await ensureUser(req);
   const firstName = typeof req.body?.firstName === "string" ? req.body.firstName.trim() : "";
