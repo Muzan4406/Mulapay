@@ -75,8 +75,8 @@
     "zod": "catalog:"
   },
   "dependencies": {
-    "@clerk/localizations": "^4.16.0",
-    "@clerk/react": "^6.15.0",
+    "@clerk/localizations": "^4.26.1",
+    "@clerk/react": "^6.19.2",
     "@clerk/themes": "^2.4.57",
     "qrcode.react": "^4.2.0"
   }

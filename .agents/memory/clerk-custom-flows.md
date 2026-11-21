@@ -7,6 +7,12 @@ Custom Mulapay auth screens must use the current Clerk React Future resources: `
 
 **Why:** The installed Clerk React SDK exposes the newer Future resource API; the legacy method names may typecheck only when cast loosely but fail at runtime.
 
-**How to apply:** For sign-up use `signUp.create()`, `signUp.password()`, `signUp.verifications.sendEmailCode()`, `verifyEmailCode()`, then `signUp.finalize()`. For password sign-in use `signIn.create()`, `signIn.password()`, then `signIn.finalize()`. For password reset use `resetPasswordEmailCode.sendCode()`, `verifyCode()`, `submitPassword()`, then finalize.
+**How to apply:** For sign-up use `signUp.password()` with email and password, `signUp.verifications.sendEmailCode()`, `verifyEmailCode()`, then `signUp.finalize()`. For password sign-in use `signIn.create()`, `signIn.password()`, then `signIn.finalize()`. For password reset use `resetPasswordEmailCode.sendCode()`, `verifyCode()`, `submitPassword()`, then finalize.
 
 The custom sign-in flow has been confirmed working with an email OTP after password authentication; `needs_second_factor` must not be treated as a failed login.
+
+Treat Clerk's enabled sign-up attributes as a separate contract from Mulapay's profile form. A valid SDK parameter such as `firstName` or `lastName` is rejected by Clerk when that attribute is disabled on the instance.
+
+**Why:** A freshly provisioned instance need not enable native name attributes, even though Mulapay still requires names on its registration form.
+
+**How to apply:** Keep application profile fields in registration metadata and validate them when provisioning the local profile from the authenticated Clerk identity. Metadata is user-editable and must never grant a role, KYC approval, balance, or other privilege; use Clerk's verified email as the email source.

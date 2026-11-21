@@ -3385,14 +3385,24 @@ function SignUpPage() {
     event.preventDefault();
     if (password !== confirmation) { setError('Les deux mots de passe doivent être identiques.'); return; }
     if (!terms) { setError('Veuillez accepter les Conditions d’utilisation et la Politique de confidentialité.'); return; }
+    if (!firstName.trim() || firstName.trim().length > 80 || !lastName.trim() || lastName.trim().length > 80) { setError('Le prénom et le nom doivent contenir entre 1 et 80 caractères.'); return; }
+    if (!phone.trim() || phone.trim().length > 30) { setError('Le numéro de téléphone doit contenir entre 1 et 30 caractères.'); return; }
     setError('');
     setSubmitting(true);
     try {
-      const created = await (signUp as any).create({ firstName, lastName, emailAddress: email, legalAccepted: true, unsafeMetadata: { phone, country, acceptedTermsAt: new Date().toISOString() } });
-      if (created.error) throw created.error;
-      const passwordSet = await (signUp as any).password({ password });
+      const passwordSet = await signUp.password({
+        emailAddress: email.trim(),
+        password,
+        unsafeMetadata: {
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          phone: phone.trim(),
+          country,
+          acceptedTermsAt: new Date().toISOString(),
+        },
+      });
       if (passwordSet.error) throw passwordSet.error;
-      const verification = await (signUp as any).verifications.sendEmailCode();
+      const verification = await signUp.verifications.sendEmailCode();
       if (verification.error) throw verification.error;
       setStep('verification');
     } catch (authError) {
@@ -3406,10 +3416,10 @@ function SignUpPage() {
     setError('');
     setSubmitting(true);
     try {
-      const verification = await (signUp as any).verifications.verifyEmailCode({ code });
+      const verification = await signUp.verifications.verifyEmailCode({ code: code.trim() });
       if (verification.error) throw verification.error;
-      if ((signUp as any).status !== 'complete') { setError('Le code n’a pas encore terminé l’inscription.'); return; }
-      const finalized = await (signUp as any).finalize();
+      if (signUp.status !== 'complete') { setError('Le code n’a pas encore terminé l’inscription.'); return; }
+      const finalized = await signUp.finalize();
       if (finalized.error) throw finalized.error;
       setLocation('/app/kyc');
     } catch (authError) {
@@ -3419,7 +3429,25 @@ function SignUpPage() {
     }
   };
   if (step === 'verification') return <AuthFrame eyebrow="Vérification obligatoire" title="Confirmez votre adresse" subtitle={`Saisissez le code reçu à ${email} pour terminer votre inscription.`} footer={<><span>Vous avez déjà un compte ?</span><Link href="/sign-in">Se connecter</Link></>}><form className="auth-form" onSubmit={verify}>{error && <div className="auth-error">{error}</div>}<label>Code de vérification OTP<input value={code} onChange={event => setCode(event.target.value)} placeholder="123456" inputMode="numeric" autoComplete="one-time-code" required /></label><button className="button button-primary auth-submit" type="submit" disabled={submitting}>{submitting ? 'Vérification…' : 'Vérifier et continuer'} <ChevronRight size={15} /></button><button type="button" className="button button-ghost auth-submit" onClick={() => setStep('form')}>Modifier mes informations</button></form></AuthFrame>;
-  return <AuthFrame eyebrow="Nouveau membre" title="Créer votre compte" subtitle="Un compte unique pour gérer vos wallets dans toute l’Afrique de l’Ouest." footer={<><span>Déjà un compte ?</span><Link href="/sign-in">Se connecter</Link></>}><form className="auth-form" onSubmit={submit}>{error && <div className="auth-error">{error}</div>}<div className="auth-field-grid"><label>Prénom<input value={firstName} onChange={event => setFirstName(event.target.value)} placeholder="Votre prénom" autoComplete="given-name" required /></label><label>Nom<input value={lastName} onChange={event => setLastName(event.target.value)} placeholder="Votre nom" autoComplete="family-name" required /></label></div><label>Adresse e-mail<input type="email" value={email} onChange={event => setEmail(event.target.value)} placeholder="vous@exemple.com" autoComplete="email" required /></label><label>Numéro de téléphone<input type="tel" value={phone} onChange={event => setPhone(event.target.value)} placeholder="+228…" autoComplete="tel" required /></label><label>Pays de résidence<select value={country} onChange={event => setCountry(event.target.value)}>{COUNTRY_OPTIONS.map(option => <option key={option}>{option}</option>)}</select></label><label>Mot de passe<PasswordInput value={password} onChange={setPassword} placeholder="Créer un mot de passe" autoComplete="new-password" show={showPassword} onToggle={() => setShowPassword(value => !value)} /></label><label>Confirmation du mot de passe<PasswordInput value={confirmation} onChange={setConfirmation} placeholder="Confirmer le mot de passe" autoComplete="new-password" show={showPassword} onToggle={() => setShowPassword(value => !value)} /></label><label className="auth-checkbox"><input type="checkbox" checked={terms} onChange={event => setTerms(event.target.checked)} required /><span>J’accepte les <Link href="/terms">Conditions d’utilisation</Link> et la <Link href="/privacy">Politique de confidentialité</Link>.</span></label><button className="button button-primary auth-submit" type="submit" disabled={submitting}>{submitting ? 'Création…' : 'Créer mon compte'} <ChevronRight size={15} /></button></form></AuthFrame>;
+  return (
+    <AuthFrame eyebrow="Nouveau membre" title="Créer votre compte" subtitle="Un compte unique pour gérer vos wallets dans toute l’Afrique de l’Ouest." footer={<><span>Déjà un compte ?</span><Link href="/sign-in">Se connecter</Link></>}>
+      <form className="auth-form" onSubmit={submit}>
+        {error && <div className="auth-error" role="alert">{error}</div>}
+        <div className="auth-field-grid">
+          <label>Prénom<input value={firstName} onChange={event => setFirstName(event.target.value)} placeholder="Votre prénom" autoComplete="given-name" maxLength={80} required /></label>
+          <label>Nom<input value={lastName} onChange={event => setLastName(event.target.value)} placeholder="Votre nom" autoComplete="family-name" maxLength={80} required /></label>
+        </div>
+        <label>Adresse e-mail<input type="email" value={email} onChange={event => setEmail(event.target.value)} placeholder="vous@exemple.com" autoComplete="email" autoCapitalize="none" required /></label>
+        <label>Numéro de téléphone<input type="tel" value={phone} onChange={event => setPhone(event.target.value)} placeholder="+228…" autoComplete="tel" maxLength={30} required /></label>
+        <label>Pays de résidence<select value={country} onChange={event => setCountry(event.target.value)}>{COUNTRY_OPTIONS.map(option => <option key={option}>{option}</option>)}</select></label>
+        <label>Mot de passe<PasswordInput value={password} onChange={setPassword} placeholder="Créer un mot de passe" autoComplete="new-password" show={showPassword} onToggle={() => setShowPassword(value => !value)} /></label>
+        <label>Confirmation du mot de passe<PasswordInput value={confirmation} onChange={setConfirmation} placeholder="Confirmer le mot de passe" autoComplete="new-password" show={showPassword} onToggle={() => setShowPassword(value => !value)} /></label>
+        <label className="auth-checkbox"><input type="checkbox" checked={terms} onChange={event => setTerms(event.target.checked)} required /><span>J’accepte les <Link href="/terms">Conditions d’utilisation</Link> et la <Link href="/privacy">Politique de confidentialité</Link>.</span></label>
+        <div id="clerk-captcha" />
+        <button className="button button-primary auth-submit" type="submit" disabled={submitting}>{submitting ? 'Création…' : 'Créer mon compte'} <ChevronRight size={15} /></button>
+      </form>
+    </AuthFrame>
+  );
 }
 
 function ForgotPasswordPage() {
