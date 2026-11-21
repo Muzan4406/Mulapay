@@ -1,5 +1,6 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
-import { clerkClient, getAuth } from "@clerk/express";
+import { getAuth } from "@clerk/express";
+import { clerkClient } from "../lib/clerk";
 import { createHash, createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { Readable } from "node:stream";
 import { and, desc, eq, gte, inArray, isNull, like, lte, ne, or, sql } from "drizzle-orm";

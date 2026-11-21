@@ -4,6 +4,7 @@ import pinoHttp from "pino-http";
 import { clerkMiddleware } from "@clerk/express";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { clerkClient, clerkConfiguration } from "./lib/clerk";
 
 const app: Express = express();
 
@@ -46,7 +47,8 @@ app.use(
 app.use(express.urlencoded({ extended: true }));
 app.use(
   clerkMiddleware({
-    publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
+    ...clerkConfiguration,
+    clerkClient,
   }),
 );
 

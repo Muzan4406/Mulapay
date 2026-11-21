@@ -11,6 +11,7 @@ Mulapay is a West African wallet platform for managing country wallets, transfer
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — apply Drizzle schema changes; review the target database before running
 - Required secrets: `CLERK_SECRET_KEY`, `CLERK_PUBLISHABLE_KEY`, `VITE_CLERK_PUBLISHABLE_KEY`, and `SUPABASE_DATABASE_URL`. Set the same Clerk publishable key for both publishable-key names. Use Replit Secrets; never commit or share secret values.
+- Preview additionally requires `CLERK_DEV_PUBLISHABLE_KEY` and `CLERK_DEV_SECRET_KEY` from the external Clerk Development instance. Vite's dev server and the development API use these together. Production builds/API use only the live keys above; missing keys fail explicitly rather than falling back to another instance. Password requirements must be configured separately in Clerk Development and Production.
 - Optional Telegram notifications require `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`.
 - API health check: `/api/healthz`
 
