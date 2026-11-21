@@ -1,44 +1,53 @@
-# [Project name]
+# Mulapay
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Mulapay is a West African wallet platform for managing country wallets, transfers, exchanges, payment links, KYC, and operations.
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
+- Start the `artifacts/mulapay: web` and `artifacts/api-server: API Server` workflows to run the app and API in Replit. The web app is at `/`; the API is routed under `/api`.
+- `pnpm install --frozen-lockfile` — install workspace dependencies
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Database env: `SUPABASE_DATABASE_URL` — Supabase Session Pooler connection string (port 5432); `DATABASE_URL` remains the local fallback when Supabase is not configured
+- `pnpm --filter @workspace/db run push` — apply Drizzle schema changes; review the target database before running
+- Required secrets: `CLERK_SECRET_KEY`, `CLERK_PUBLISHABLE_KEY`, `VITE_CLERK_PUBLISHABLE_KEY`, and `SUPABASE_DATABASE_URL`. Set the same Clerk publishable key for both publishable-key names. Use Replit Secrets; never commit or share secret values.
+- Optional Telegram notifications require `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`.
+- API health check: `/api/healthz`
 
 ## Stack
 
-- pnpm workspaces, Node.js 24, TypeScript 5.9
+- pnpm workspaces, Node.js 20, TypeScript 5.9
 - API: Express 5
 - DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
+- Validation: Zod, `drizzle-zod`
 - API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+- Build: esbuild
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/mulapay` — React/Vite web app
+- `artifacts/api-server` — Express API server and routes
+- `lib/api-spec` — OpenAPI contract and generated API client/schema packages
+- `lib/db` — Drizzle schema and database configuration
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Clerk handles web authentication; PostgreSQL persistence uses Drizzle.
+- The API and web app run as separate artifact services, routed under `/api` and `/`.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+The public home page links to Clerk sign-in and account creation. Authenticated application features depend on the configured database and applicable provider settings.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+No additional preferences recorded.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- A new Clerk setup has a separate user store; it does not restore accounts from a previous Clerk instance.
+- The API health check confirms the server is responding, not that every database-backed route or provider integration is configured.
+- Do not run database schema changes against a shared or production database without reviewing the planned changes first.
 
 ## Pointers
 
