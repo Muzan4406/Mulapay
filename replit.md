@@ -33,6 +33,7 @@ Mulapay is a West African wallet platform for managing country wallets, transfer
 ## Architecture decisions
 
 - Clerk handles web authentication; PostgreSQL persistence uses Drizzle.
+- Clerk is now an externally owned instance, configured directly through the stored keys. Do not restore Replit-managed host-derived keys or its Clerk proxy for this setup. External production requires its Clerk domain and DNS configuration to be completed in the owner's Clerk dashboard.
 - The API and web app run as separate artifact services, routed under `/api` and `/`.
 
 ## Product
