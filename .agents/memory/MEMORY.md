@@ -14,3 +14,5 @@
 - [Wallet pending semantics](wallet-pending-semantics.md) — pending is reserved outgoing funds only; incoming deposits must not reduce displayed wallet availability.
 - [Payment link country scope](payment-link-country-scope.md) — payment links support all countries or an explicit country allowlist routed to local wallets.
 - [Account security boundary](account-security.md) — Clerk owns password reverification and sessions; Mulapay stores only a server-hashed PIN in private metadata.
+- [Cancelled tasks and Supabase](cancelled-task-external-state.md) — external database changes can survive task cancellation even when its code was never merged.
+- [Clerk test instance selection](clerk-test-instance-selection.md) — the automated sign-in helper cannot explicitly select the separate development credential pair.

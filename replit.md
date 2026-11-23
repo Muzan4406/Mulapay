@@ -12,7 +12,9 @@ Mulapay is a West African wallet platform for managing country wallets, transfer
 - `pnpm --filter @workspace/db run push` — apply Drizzle schema changes; review the target database before running
 - Required secrets: `CLERK_SECRET_KEY`, `CLERK_PUBLISHABLE_KEY`, `VITE_CLERK_PUBLISHABLE_KEY`, and `SUPABASE_DATABASE_URL`. Set the same Clerk publishable key for both publishable-key names. Use Replit Secrets; never commit or share secret values.
 - Preview additionally requires `CLERK_DEV_PUBLISHABLE_KEY` and `CLERK_DEV_SECRET_KEY` from the external Clerk Development instance. Vite's dev server and the development API use these together. Production builds/API use only the live keys above; missing keys fail explicitly rather than falling back to another instance. Password requirements must be configured separately in Clerk Development and Production.
-- Optional Telegram notifications require `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`.
+- Administration guide: `docs/admin-panel.md`. Telegram can be configured from the admin panel; encrypted storage requires `ADMIN_ENCRYPTION_KEY` (at least 32 characters). Environment-only `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` remain supported.
+- Real merchant e-mails require Resend (`RESEND_API_KEY`) and a verified sender (`MAIL_FROM`). Without these, sends fail explicitly; notifications shown in-app work independently.
+- Existing Supabase administration tables are reused. The additive migration is `lib/db/migrations/20261123_admin_console.sql`; do not drop tables to reconcile a cancelled worker’s schema.
 - API health check: `/api/healthz`
 
 ## Stack

@@ -6,6 +6,17 @@
  * OpenAPI spec version: 0.2.0
  */
 
+export * from './adminAnnouncement';
+export * from './adminCommandInput';
+export * from './adminCommandInputAction';
+export * from './adminCommandInputDirection';
+export * from './adminCommandInputProvider';
+export * from './adminCommandResult';
+export * from './adminConfiguration';
+export * from './adminConsoleRow';
+export * from './adminConsoleState';
+export * from './adminConsoleStateStats';
+export * from './adminDocument';
 export * from './adminPaymentProvider';
 export * from './adminPaymentProviderId';
 export * from './adminPaymentProviders';
@@ -20,6 +31,8 @@ export * from './depositInputMethod';
 export * from './error';
 export * from './exchange';
 export * from './exchangeInput';
+export * from './getAdminConsoleParams';
+export * from './getAdminConsoleSection';
 export * from './healthStatus';
 export * from './idempotencyKeyParameter';
 export * from './kycDocument';

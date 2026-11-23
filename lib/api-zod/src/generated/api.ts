@@ -8,6 +8,404 @@
 import * as zod from 'zod';
 
 
+export const SyncVerifiedProfileEmailResponse = zod.object({
+  "ok": zod.boolean(),
+  "message": zod.string()
+})
+
+
+
+
+
+export const GetAdminConsoleQueryParams = zod.object({
+  "section": zod.enum(['dashboard', 'merchants', 'kyc', 'transactions', 'wallets', 'exchanges', 'providers', 'operators', 'api-keys', 'payment-links', 'blacklist', 'messages', 'notifications', 'settings']),
+  "q": zod.coerce.string().optional(),
+  "status": zod.coerce.string().optional(),
+  "country": zod.coerce.string().optional(),
+  "type": zod.coerce.string().optional(),
+  "page": zod.coerce.number().min(1).optional()
+})
+
+export const getAdminConsoleResponseSettingsPayinFeeMin = 0;
+export const getAdminConsoleResponseSettingsPayinFeeMax = 100;
+
+export const getAdminConsoleResponseSettingsPayoutFeeMin = 0;
+export const getAdminConsoleResponseSettingsPayoutFeeMax = 100;
+
+
+
+
+
+
+
+export const GetAdminConsoleResponse = zod.object({
+  "section": zod.string(),
+  "items": zod.array(zod.object({
+  "id": zod.string(),
+  "userId": zod.string().optional(),
+  "merchantName": zod.string().optional(),
+  "firstName": zod.string().optional(),
+  "lastName": zod.string().optional(),
+  "email": zod.string().optional(),
+  "phone": zod.string().nullish(),
+  "role": zod.string().optional(),
+  "country": zod.string().optional(),
+  "countryCode": zod.string().optional(),
+  "code": zod.string().optional(),
+  "currency": zod.string().optional(),
+  "status": zod.string().optional(),
+  "kycStatus": zod.string().optional(),
+  "payinEnabled": zod.boolean().optional(),
+  "payoutEnabled": zod.boolean().optional(),
+  "payinFee": zod.number().nullish(),
+  "payoutFee": zod.number().nullish(),
+  "balance": zod.number().optional(),
+  "pending": zod.number().optional(),
+  "available": zod.number().optional(),
+  "count": zod.number().optional(),
+  "active": zod.number().optional(),
+  "createdAt": zod.string().optional(),
+  "type": zod.string().optional(),
+  "amount": zod.number().optional(),
+  "fee": zod.number().optional(),
+  "reference": zod.string().optional(),
+  "operator": zod.string().nullish(),
+  "providerOperator": zod.string().optional(),
+  "provider": zod.string().optional(),
+  "enabled": zod.boolean().optional(),
+  "configured": zod.boolean().optional(),
+  "dailyLimit": zod.number().nullish(),
+  "dailyUsed": zod.number().optional(),
+  "dailyRemaining": zod.number().nullish(),
+  "source": zod.string().optional(),
+  "destination": zod.string().optional(),
+  "sourceWalletId": zod.string().nullish(),
+  "destinationWalletId": zod.string().nullish(),
+  "rate": zod.number().optional(),
+  "receivedAmount": zod.number().optional(),
+  "requestedAt": zod.string().optional(),
+  "keyPrefix": zod.string().optional(),
+  "name": zod.string().optional(),
+  "scopes": zod.array(zod.string()).optional(),
+  "lastUsedAt": zod.string().nullish(),
+  "slug": zod.string().optional(),
+  "productName": zod.string().optional(),
+  "description": zod.string().optional(),
+  "payments": zod.number().optional(),
+  "maxPayments": zod.number().nullish(),
+  "amountType": zod.string().optional(),
+  "amountMin": zod.number().optional(),
+  "amountMax": zod.number().optional(),
+  "expiresAt": zod.string().optional(),
+  "reason": zod.string().optional(),
+  "title": zod.string().optional(),
+  "body": zod.string().optional(),
+  "subject": zod.string().optional(),
+  "recipient": zod.string().optional(),
+  "error": zod.string().nullish(),
+  "url": zod.string().optional(),
+  "method": zod.string().optional(),
+  "path": zod.string().optional(),
+  "keyId": zod.string().optional(),
+  "linkId": zod.string().optional(),
+  "responseStatus": zod.number().optional(),
+  "wallets": zod.array(zod.object({
+  "id": zod.string(),
+  "country": zod.string(),
+  "code": zod.string(),
+  "currency": zod.string(),
+  "balance": zod.number(),
+  "pending": zod.number(),
+  "status": zod.string()
+})).optional(),
+  "documents": zod.array(zod.object({
+  "kind": zod.string(),
+  "fileName": zod.string(),
+  "url": zod.string()
+})).optional()
+})),
+  "activity": zod.array(zod.object({
+  "id": zod.string(),
+  "userId": zod.string().optional(),
+  "merchantName": zod.string().optional(),
+  "firstName": zod.string().optional(),
+  "lastName": zod.string().optional(),
+  "email": zod.string().optional(),
+  "phone": zod.string().nullish(),
+  "role": zod.string().optional(),
+  "country": zod.string().optional(),
+  "countryCode": zod.string().optional(),
+  "code": zod.string().optional(),
+  "currency": zod.string().optional(),
+  "status": zod.string().optional(),
+  "kycStatus": zod.string().optional(),
+  "payinEnabled": zod.boolean().optional(),
+  "payoutEnabled": zod.boolean().optional(),
+  "payinFee": zod.number().nullish(),
+  "payoutFee": zod.number().nullish(),
+  "balance": zod.number().optional(),
+  "pending": zod.number().optional(),
+  "available": zod.number().optional(),
+  "count": zod.number().optional(),
+  "active": zod.number().optional(),
+  "createdAt": zod.string().optional(),
+  "type": zod.string().optional(),
+  "amount": zod.number().optional(),
+  "fee": zod.number().optional(),
+  "reference": zod.string().optional(),
+  "operator": zod.string().nullish(),
+  "providerOperator": zod.string().optional(),
+  "provider": zod.string().optional(),
+  "enabled": zod.boolean().optional(),
+  "configured": zod.boolean().optional(),
+  "dailyLimit": zod.number().nullish(),
+  "dailyUsed": zod.number().optional(),
+  "dailyRemaining": zod.number().nullish(),
+  "source": zod.string().optional(),
+  "destination": zod.string().optional(),
+  "sourceWalletId": zod.string().nullish(),
+  "destinationWalletId": zod.string().nullish(),
+  "rate": zod.number().optional(),
+  "receivedAmount": zod.number().optional(),
+  "requestedAt": zod.string().optional(),
+  "keyPrefix": zod.string().optional(),
+  "name": zod.string().optional(),
+  "scopes": zod.array(zod.string()).optional(),
+  "lastUsedAt": zod.string().nullish(),
+  "slug": zod.string().optional(),
+  "productName": zod.string().optional(),
+  "description": zod.string().optional(),
+  "payments": zod.number().optional(),
+  "maxPayments": zod.number().nullish(),
+  "amountType": zod.string().optional(),
+  "amountMin": zod.number().optional(),
+  "amountMax": zod.number().optional(),
+  "expiresAt": zod.string().optional(),
+  "reason": zod.string().optional(),
+  "title": zod.string().optional(),
+  "body": zod.string().optional(),
+  "subject": zod.string().optional(),
+  "recipient": zod.string().optional(),
+  "error": zod.string().nullish(),
+  "url": zod.string().optional(),
+  "method": zod.string().optional(),
+  "path": zod.string().optional(),
+  "keyId": zod.string().optional(),
+  "linkId": zod.string().optional(),
+  "responseStatus": zod.number().optional(),
+  "wallets": zod.array(zod.object({
+  "id": zod.string(),
+  "country": zod.string(),
+  "code": zod.string(),
+  "currency": zod.string(),
+  "balance": zod.number(),
+  "pending": zod.number(),
+  "status": zod.string()
+})).optional(),
+  "documents": zod.array(zod.object({
+  "kind": zod.string(),
+  "fileName": zod.string(),
+  "url": zod.string()
+})).optional()
+})).optional(),
+  "stats": zod.record(zod.string(), zod.number()).optional(),
+  "currencyTotals": zod.array(zod.object({
+  "id": zod.string(),
+  "userId": zod.string().optional(),
+  "merchantName": zod.string().optional(),
+  "firstName": zod.string().optional(),
+  "lastName": zod.string().optional(),
+  "email": zod.string().optional(),
+  "phone": zod.string().nullish(),
+  "role": zod.string().optional(),
+  "country": zod.string().optional(),
+  "countryCode": zod.string().optional(),
+  "code": zod.string().optional(),
+  "currency": zod.string().optional(),
+  "status": zod.string().optional(),
+  "kycStatus": zod.string().optional(),
+  "payinEnabled": zod.boolean().optional(),
+  "payoutEnabled": zod.boolean().optional(),
+  "payinFee": zod.number().nullish(),
+  "payoutFee": zod.number().nullish(),
+  "balance": zod.number().optional(),
+  "pending": zod.number().optional(),
+  "available": zod.number().optional(),
+  "count": zod.number().optional(),
+  "active": zod.number().optional(),
+  "createdAt": zod.string().optional(),
+  "type": zod.string().optional(),
+  "amount": zod.number().optional(),
+  "fee": zod.number().optional(),
+  "reference": zod.string().optional(),
+  "operator": zod.string().nullish(),
+  "providerOperator": zod.string().optional(),
+  "provider": zod.string().optional(),
+  "enabled": zod.boolean().optional(),
+  "configured": zod.boolean().optional(),
+  "dailyLimit": zod.number().nullish(),
+  "dailyUsed": zod.number().optional(),
+  "dailyRemaining": zod.number().nullish(),
+  "source": zod.string().optional(),
+  "destination": zod.string().optional(),
+  "sourceWalletId": zod.string().nullish(),
+  "destinationWalletId": zod.string().nullish(),
+  "rate": zod.number().optional(),
+  "receivedAmount": zod.number().optional(),
+  "requestedAt": zod.string().optional(),
+  "keyPrefix": zod.string().optional(),
+  "name": zod.string().optional(),
+  "scopes": zod.array(zod.string()).optional(),
+  "lastUsedAt": zod.string().nullish(),
+  "slug": zod.string().optional(),
+  "productName": zod.string().optional(),
+  "description": zod.string().optional(),
+  "payments": zod.number().optional(),
+  "maxPayments": zod.number().nullish(),
+  "amountType": zod.string().optional(),
+  "amountMin": zod.number().optional(),
+  "amountMax": zod.number().optional(),
+  "expiresAt": zod.string().optional(),
+  "reason": zod.string().optional(),
+  "title": zod.string().optional(),
+  "body": zod.string().optional(),
+  "subject": zod.string().optional(),
+  "recipient": zod.string().optional(),
+  "error": zod.string().nullish(),
+  "url": zod.string().optional(),
+  "method": zod.string().optional(),
+  "path": zod.string().optional(),
+  "keyId": zod.string().optional(),
+  "linkId": zod.string().optional(),
+  "responseStatus": zod.number().optional(),
+  "wallets": zod.array(zod.object({
+  "id": zod.string(),
+  "country": zod.string(),
+  "code": zod.string(),
+  "currency": zod.string(),
+  "balance": zod.number(),
+  "pending": zod.number(),
+  "status": zod.string()
+})).optional(),
+  "documents": zod.array(zod.object({
+  "kind": zod.string(),
+  "fileName": zod.string(),
+  "url": zod.string()
+})).optional()
+})).optional(),
+  "total": zod.number(),
+  "page": zod.number(),
+  "pageSize": zod.number(),
+  "settings": zod.object({
+  "payinFee": zod.number().min(getAdminConsoleResponseSettingsPayinFeeMin).max(getAdminConsoleResponseSettingsPayinFeeMax).optional(),
+  "payoutFee": zod.number().min(getAdminConsoleResponseSettingsPayoutFeeMin).max(getAdminConsoleResponseSettingsPayoutFeeMax).optional(),
+  "depositMin": zod.number().min(1).optional(),
+  "depositMax": zod.number().min(1).optional(),
+  "withdrawalMin": zod.number().min(1).optional(),
+  "withdrawalMax": zod.number().min(1).optional(),
+  "maintenance": zod.boolean().optional(),
+  "maintenanceMessage": zod.string().optional(),
+  "payinMaintenance": zod.boolean().optional(),
+  "payoutMaintenance": zod.boolean().optional(),
+  "linksMaintenance": zod.boolean().optional(),
+  "apiMaintenance": zod.boolean().optional(),
+  "supportEmail": zod.string().optional(),
+  "supportWhatsapp": zod.string().optional(),
+  "statsSince": zod.string().nullish()
+}),
+  "telegramConfigured": zod.boolean(),
+  "emailConfigured": zod.boolean(),
+  "platformTreasuryAvailable": zod.number().nullish().describe('Null tant qu’aucune trésorerie PSP vérifiée n’est disponible.')
+})
+
+
+
+export const executeAdminCommandBodySettingsPayinFeeMin = 0;
+export const executeAdminCommandBodySettingsPayinFeeMax = 100;
+
+export const executeAdminCommandBodySettingsPayoutFeeMin = 0;
+export const executeAdminCommandBodySettingsPayoutFeeMax = 100;
+
+
+
+
+
+
+
+export const ExecuteAdminCommandBody = zod.object({
+  "action": zod.enum(['merchant_update', 'merchant_suspend', 'merchant_activate', 'merchant_delete', 'wallet_adjust', 'password_reset', 'provider_update', 'route_update', 'key_revoke', 'link_revoke', 'blacklist_add', 'blacklist_remove', 'message_send', 'announcement_create', 'announcement_delete', 'settings_update', 'stats_reset', 'integration_create', 'integration_delete', 'telegram_configure', 'telegram_test', 'exchange_approve', 'exchange_reject', 'kyc_approve', 'kyc_reject']),
+  "targetId": zod.string().optional(),
+  "firstName": zod.string().optional(),
+  "lastName": zod.string().optional(),
+  "email": zod.string().optional(),
+  "country": zod.string().optional(),
+  "payinFee": zod.number().nullish(),
+  "payoutFee": zod.number().nullish(),
+  "payinEnabled": zod.boolean().optional(),
+  "payoutEnabled": zod.boolean().optional(),
+  "walletId": zod.string().optional(),
+  "direction": zod.enum(['credit', 'debit']).optional(),
+  "amount": zod.number().min(1).optional(),
+  "reason": zod.string().optional(),
+  "idempotencyKey": zod.string().optional(),
+  "countryCode": zod.string().optional(),
+  "operator": zod.string().optional(),
+  "providerOperator": zod.string().optional(),
+  "provider": zod.enum(['DRIMPAY', 'ASHTECHPAY']).optional(),
+  "enabled": zod.boolean().optional(),
+  "dailyLimit": zod.number().nullish(),
+  "title": zod.string().optional(),
+  "body": zod.string().optional(),
+  "subject": zod.string().optional(),
+  "recipient": zod.string().optional(),
+  "name": zod.string().optional(),
+  "url": zod.string().optional(),
+  "telegramToken": zod.string().optional(),
+  "telegramChatId": zod.string().optional(),
+  "settings": zod.object({
+  "payinFee": zod.number().min(executeAdminCommandBodySettingsPayinFeeMin).max(executeAdminCommandBodySettingsPayinFeeMax).optional(),
+  "payoutFee": zod.number().min(executeAdminCommandBodySettingsPayoutFeeMin).max(executeAdminCommandBodySettingsPayoutFeeMax).optional(),
+  "depositMin": zod.number().min(1).optional(),
+  "depositMax": zod.number().min(1).optional(),
+  "withdrawalMin": zod.number().min(1).optional(),
+  "withdrawalMax": zod.number().min(1).optional(),
+  "maintenance": zod.boolean().optional(),
+  "maintenanceMessage": zod.string().optional(),
+  "payinMaintenance": zod.boolean().optional(),
+  "payoutMaintenance": zod.boolean().optional(),
+  "linksMaintenance": zod.boolean().optional(),
+  "apiMaintenance": zod.boolean().optional(),
+  "supportEmail": zod.string().optional(),
+  "supportWhatsapp": zod.string().optional(),
+  "statsSince": zod.string().nullish()
+}).optional()
+})
+
+export const ExecuteAdminCommandResponse = zod.object({
+  "ok": zod.boolean(),
+  "message": zod.string()
+})
+
+
+export const ListAnnouncementsResponseItem = zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "body": zod.string(),
+  "createdAt": zod.string()
+})
+export const ListAnnouncementsResponse = zod.array(ListAnnouncementsResponseItem)
+
+
+export const DismissAnnouncementParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const DismissAnnouncementResponse = zod.object({
+  "ok": zod.boolean(),
+  "message": zod.string()
+})
+
+
 /**
  * @summary Returns server health
  */
@@ -29,6 +427,16 @@ export const getBootstrapResponseKycDocumentsItemSizeMax = 10485760;
 
 export const getBootstrapResponseFeePercentageMin = 0;
 export const getBootstrapResponseFeePercentageMax = 100;
+
+export const getBootstrapResponsePlatformPayinFeeMin = 0;
+export const getBootstrapResponsePlatformPayinFeeMax = 100;
+
+export const getBootstrapResponsePlatformPayoutFeeMin = 0;
+export const getBootstrapResponsePlatformPayoutFeeMax = 100;
+
+
+
+
 
 
 
@@ -126,7 +534,24 @@ export const GetBootstrapResponse = zod.object({
   "details": zod.record(zod.string(), zod.string()).optional(),
   "submittedAt": zod.string()
 }),
-  "feePercentage": zod.number().min(getBootstrapResponseFeePercentageMin).max(getBootstrapResponseFeePercentageMax)
+  "feePercentage": zod.number().min(getBootstrapResponseFeePercentageMin).max(getBootstrapResponseFeePercentageMax),
+  "platform": zod.object({
+  "payinFee": zod.number().min(getBootstrapResponsePlatformPayinFeeMin).max(getBootstrapResponsePlatformPayinFeeMax).optional(),
+  "payoutFee": zod.number().min(getBootstrapResponsePlatformPayoutFeeMin).max(getBootstrapResponsePlatformPayoutFeeMax).optional(),
+  "depositMin": zod.number().min(1).optional(),
+  "depositMax": zod.number().min(1).optional(),
+  "withdrawalMin": zod.number().min(1).optional(),
+  "withdrawalMax": zod.number().min(1).optional(),
+  "maintenance": zod.boolean().optional(),
+  "maintenanceMessage": zod.string().optional(),
+  "payinMaintenance": zod.boolean().optional(),
+  "payoutMaintenance": zod.boolean().optional(),
+  "linksMaintenance": zod.boolean().optional(),
+  "apiMaintenance": zod.boolean().optional(),
+  "supportEmail": zod.string().optional(),
+  "supportWhatsapp": zod.string().optional(),
+  "statsSince": zod.string().nullish()
+}).optional()
 })
 
 

@@ -47,6 +47,11 @@ import {
 } from "@workspace/db";
 import { ObjectNotFoundError, ObjectStorageService } from "../lib/objectStorage";
 import { registrationProfileFromClerk } from "../lib/registrationProfile";
+import { logger } from "../lib/logger";
+import { apiUsage, adminAudit, routeReservations } from "@workspace/db";
+import { assertMerchantAccess, assertProviderEnabled, finishRouteReservation, getAdminConfiguration, merchantFee, OperationalError, reserveRoute } from "../services/adminConfiguration";
+import { decideExchange, decideKyc } from "../services/adminDecisions";
+import { executeConsoleCommand } from "../services/adminCommands";
 import {
   countryCodeForName,
   DrimPayError,
@@ -212,7 +217,9 @@ async function resolvePaymentProvider(countryCode: string, operator: string) {
   if (!route) return null;
   const provider = route.provider as PaymentProvider;
   if (provider !== "DRIMPAY" && provider !== "ASHTECHPAY") throw new Error("PAYMENT_PROVIDER_INVALID");
-  return { provider, operator: route?.providerOperator ?? operator };
+  await assertProviderEnabled(provider);
+  if (!(provider === "DRIMPAY" ? isDrimPayConfigured() : isAshtechPayConfigured())) throw new OperationalError("Le service de paiement n’est pas encore configuré.", 503);
+  return { provider, operator: route.providerOperator, routeId: route.id };
 }
 
 async function handleDrimPayWebhook(req: Request, res: Response) {
@@ -258,16 +265,15 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
       target: [paymentProviderWebhookEvents.provider, paymentProviderWebhookEvents.eventId],
     }).returning();
     if (!event) return { found: true, duplicate: true };
-    const transaction = await tx.query.transactions.findFirst({
-      where: and(
+    const [transaction] = await tx.select().from(transactions).where(and(
         eq(transactions.paymentProvider, "DRIMPAY"),
         or(
           eq(transactions.reference, payload.reference!),
           eq(transactions.providerReference, payload.reference!),
+          eq(transactions.providerOrderId, payload.reference!),
           ...(payload.order_id ? [eq(transactions.providerOrderId, payload.order_id)] : []),
         ),
-      ),
-    });
+      )).for("update");
     if (!transaction) return { found: false };
     const nextStatus = providerStatusToTransactionStatus(payload.status!);
     const currentIsTerminal = ["Completed", "Failed", "Expired", "Cancelled", "Reversed"].includes(transaction.status);
@@ -303,6 +309,7 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
         if (!updatedWallets.length) throw new Error("WITHDRAWAL_BALANCE_UNAVAILABLE");
         await tx.update(transactions).set({
           status: "Completed",
+          settledAt: new Date(),
           netAmount: payload.amount,
           merchantAmount: payload.amount,
         }).where(eq(transactions.id, transaction.id));
@@ -356,6 +363,7 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
           .where(eq(wallets.id, wallet.id));
       }
       await tx.update(transactions).set({ status: nextStatus }).where(eq(transactions.id, transaction.id));
+      if (["Failed", "Expired", "Cancelled"].includes(nextStatus) && transaction.providerOrderId) await tx.update(routeReservations).set({ state: "RELEASED" }).where(eq(routeReservations.requestKey, transaction.providerOrderId));
       if (["Failed", "Expired", "Cancelled"].includes(nextStatus)) {
         await tx.insert(notifications).values({
           id: crypto.randomUUID(),
@@ -387,7 +395,7 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
           balance: sql`${wallets.balance} + ${merchantAmount}`,
         })
         .where(eq(wallets.id, wallet.id));
-      await tx.update(transactions).set({ status: "Completed", netAmount: merchantAmount }).where(eq(transactions.id, transaction.id));
+      await tx.update(transactions).set({ status: "Completed", settledAt: new Date(), netAmount: merchantAmount }).where(eq(transactions.id, transaction.id));
       await tx.insert(ledgerEntries).values({
         id: crypto.randomUUID(),
         userId: transaction.userId,
@@ -440,6 +448,7 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
     }
 
     await tx.update(transactions).set({ status: nextStatus }).where(eq(transactions.id, transaction.id));
+    if (["Failed", "Expired", "Cancelled"].includes(nextStatus) && transaction.providerOrderId) await tx.update(routeReservations).set({ state: "RELEASED" }).where(eq(routeReservations.requestKey, transaction.providerOrderId));
     if (["Failed", "Expired", "Cancelled"].includes(nextStatus)) {
       await tx.insert(notifications).values({
         id: crypto.randomUUID(),
@@ -500,6 +509,18 @@ function respondWithPaymentProviderError(res: Response, error: DrimPayError | As
 }
 
 type DrimPayOutgoingKind = "Withdrawal" | "Transfer";
+function definitiveProviderFailure(error: unknown) {
+  return (error instanceof DrimPayError || error instanceof AshtechPayError) &&
+    error.statusCode >= 400 && error.statusCode < 500 && ![408, 409, 425, 429].includes(error.statusCode);
+}
+async function failIncomingInitiation(orderId: string, error: unknown) {
+  if (!definitiveProviderFailure(error)) return;
+  await db.transaction(async tx => {
+    const failed = await tx.update(transactions).set({ status: "Failed" })
+      .where(and(eq(transactions.providerOrderId, orderId), eq(transactions.status, "Pending"))).returning({ id: transactions.id });
+    if (failed.length) await tx.update(routeReservations).set({ state: "RELEASED" }).where(eq(routeReservations.requestKey, orderId));
+  });
+}
 
 async function submitDrimPayOutgoing(input: {
   userId: string;
@@ -507,6 +528,7 @@ async function submitDrimPayOutgoing(input: {
   amount: number;
   countryCode: string;
   operator: string;
+  routeId: string;
   phone: string;
   idempotencyKey: string | undefined;
   kind: DrimPayOutgoingKind;
@@ -535,11 +557,12 @@ async function submitDrimPayOutgoing(input: {
     };
   }
 
-  const settings = await getPlatformSettings();
-  const estimatedFee = calculateMulapayNetAmount(input.amount, Number(settings.feePercentage)).platformFee;
+  const estimatedFee = calculateMulapayNetAmount(input.amount, await merchantFee(input.userId, "payout")).platformFee;
   const estimatedTotal = input.amount + estimatedFee;
   const mulapayReference = createMulapayReference(input.kind === "Transfer" ? "TRF" : "WD");
   let localTransaction: typeof transactions.$inferSelect | undefined;
+  await reserveRoute(input.routeId, input.userId, input.amount, orderId);
+  let providerSubmitted = false;
   try {
     if (!isDrimPayConfigured()) {
       throw new DrimPayError("Le service payout DrimPay n’est pas encore configuré.", 503, "DRIMPAY_NOT_CONFIGURED");
@@ -572,12 +595,15 @@ async function submitDrimPayOutgoing(input: {
         reference: mulapayReference,
         providerReference: null,
         providerOrderId: orderId,
+        routeId: input.routeId,
+        operator: input.operator,
         fee: estimatedFee,
         netAmount: input.amount,
         merchantAmount: input.amount,
       }).returning();
     });
 
+    providerSubmitted = true;
     const provider = await initiatePayout({
       amount: input.amount,
       currency: input.wallet.currency,
@@ -608,12 +634,14 @@ async function submitDrimPayOutgoing(input: {
       totalDebited: estimatedTotal,
     };
   } catch (error) {
-    if (localTransaction && (error instanceof DrimPayError ? error.statusCode < 500 : false)) {
+    if (!providerSubmitted) await finishRouteReservation(orderId, "RELEASED");
+    if (localTransaction && definitiveProviderFailure(error)) {
       await db.transaction(async (tx) => {
         await tx.update(wallets)
           .set({ pending: sql`GREATEST(${wallets.pending} - ${estimatedTotal}, 0)` })
           .where(eq(wallets.id, input.wallet.id));
         await tx.update(transactions).set({ status: "Failed" }).where(eq(transactions.id, localTransaction!.id));
+        await tx.update(routeReservations).set({ state: "RELEASED" }).where(eq(routeReservations.requestKey, orderId));
         await tx.insert(notifications).values({
           id: crypto.randomUUID(),
           userId: input.userId,
@@ -666,15 +694,14 @@ async function handleAshtechPayWebhook(req: Request, res: Response) {
       target: [paymentProviderWebhookEvents.provider, paymentProviderWebhookEvents.eventId],
     }).returning();
     if (!event) return { found: true, duplicate: true };
-    const transaction = await tx.query.transactions.findFirst({
-      where: and(
+    const [transaction] = await tx.select().from(transactions).where(and(
         eq(transactions.paymentProvider, "ASHTECHPAY"),
         or(
           eq(transactions.reference, payload.reference!),
           eq(transactions.providerReference, payload.reference!),
+          eq(transactions.providerOrderId, payload.reference!),
         ),
-      ),
-    });
+      )).for("update");
     if (!transaction) return { found: false, duplicate: false };
     const nextStatus = ashtechStatusToTransactionStatus(payload.status!);
     const currentIsTerminal = ["Completed", "Failed", "Expired", "Cancelled", "Reversed"].includes(transaction.status);
@@ -699,7 +726,7 @@ async function handleAshtechPayWebhook(req: Request, res: Response) {
       await tx.update(wallets).set({
         balance: sql`${wallets.balance} + ${merchantAmount}`,
       }).where(eq(wallets.id, wallet.id));
-      await tx.update(transactions).set({ status: "Completed", netAmount: merchantAmount }).where(eq(transactions.id, transaction.id));
+      await tx.update(transactions).set({ status: "Completed", settledAt: new Date(), netAmount: merchantAmount }).where(eq(transactions.id, transaction.id));
       await tx.insert(ledgerEntries).values({
         id: crypto.randomUUID(),
         userId: transaction.userId,
@@ -725,6 +752,7 @@ async function handleAshtechPayWebhook(req: Request, res: Response) {
     }
 
     await tx.update(transactions).set({ status: nextStatus }).where(eq(transactions.id, transaction.id));
+    if (["Failed", "Expired", "Cancelled"].includes(nextStatus) && transaction.providerOrderId) await tx.update(routeReservations).set({ state: "RELEASED" }).where(eq(routeReservations.requestKey, transaction.providerOrderId));
     if (["Failed", "Expired", "Cancelled"].includes(nextStatus)) {
       await tx.insert(notifications).values({
         id: crypto.randomUUID(),
@@ -776,7 +804,7 @@ async function reconcileAshtechTransaction(transaction: typeof transactions.$inf
 
   try {
     return await db.transaction(async (tx) => {
-      const current = await tx.query.transactions.findFirst({ where: eq(transactions.id, transaction.id) });
+      const [current] = await tx.select().from(transactions).where(eq(transactions.id, transaction.id)).for("update");
       if (!current || !["Pending", "Processing"].includes(current.status)) return current ?? transaction;
       const wallet = await tx.query.wallets.findFirst({ where: eq(wallets.id, current.walletId ?? "") });
       if (!wallet) throw new Error("WALLET_NOT_FOUND");
@@ -796,6 +824,7 @@ async function reconcileAshtechTransaction(transaction: typeof transactions.$inf
         await tx.update(wallets).set({ balance: sql`${wallets.balance} + ${merchantAmount}` }).where(eq(wallets.id, wallet.id));
         await tx.update(transactions).set({
           status: "Completed",
+          settledAt: new Date(),
           netAmount: merchantAmount,
         }).where(eq(transactions.id, current.id));
         await tx.insert(ledgerEntries).values({
@@ -819,6 +848,7 @@ async function reconcileAshtechTransaction(transaction: typeof transactions.$inf
       }
 
       await tx.update(transactions).set({ status: "Failed" }).where(eq(transactions.id, current.id));
+      if (current.providerOrderId) await tx.update(routeReservations).set({ state: "RELEASED" }).where(eq(routeReservations.requestKey, current.providerOrderId));
       return { ...current, status: "Failed" };
     });
   } catch (error) {
@@ -861,7 +891,7 @@ async function reconcileDrimPayTransaction(transaction: typeof transactions.$inf
 
   try {
     return await db.transaction(async (tx) => {
-      const current = await tx.query.transactions.findFirst({ where: eq(transactions.id, transaction.id) });
+      const [current] = await tx.select().from(transactions).where(eq(transactions.id, transaction.id)).for("update");
       if (!current || !["Pending", "Processing"].includes(current.status)) return current ?? transaction;
       const wallet = await tx.query.wallets.findFirst({ where: eq(wallets.id, current.walletId ?? "") });
       if (!wallet) throw new Error("WALLET_NOT_FOUND");
@@ -881,6 +911,7 @@ async function reconcileDrimPayTransaction(transaction: typeof transactions.$inf
         await tx.update(wallets).set({ balance: sql`${wallets.balance} + ${merchantAmount}` }).where(eq(wallets.id, wallet.id));
         await tx.update(transactions).set({
           status: "Completed",
+          settledAt: new Date(),
           netAmount: merchantAmount,
         }).where(eq(transactions.id, current.id));
         await tx.insert(ledgerEntries).values({
@@ -909,6 +940,7 @@ async function reconcileDrimPayTransaction(transaction: typeof transactions.$inf
 
       if (["Failed", "Expired", "Cancelled"].includes(nextStatus)) {
         await tx.update(transactions).set({ status: nextStatus }).where(eq(transactions.id, current.id));
+        if (["Failed", "Expired", "Cancelled"].includes(nextStatus) && current.providerOrderId) await tx.update(routeReservations).set({ state: "RELEASED" }).where(eq(routeReservations.requestKey, current.providerOrderId));
         await tx.insert(notifications).values({
           id: crypto.randomUUID(),
           userId: current.userId,
@@ -955,7 +987,7 @@ async function resolveApiKeyUserId(req: Request) {
   });
    if (!stored) return null;
   await db.update(apiKeys).set({ lastUsedAt: new Date() }).where(eq(apiKeys.id, stored.id));
-   return { userId: stored.userId, scopes: stored.scopes };
+   return { userId: stored.userId, scopes: stored.scopes, keyId: stored.id };
 }
 
 function requiredApiScope(req: Request) {
@@ -992,6 +1024,10 @@ router.use(async (req, res, next) => {
   }
    const apiKey = await resolveApiKeyUserId(req);
    if (apiKey) {
+     res.on("finish", () => {
+       void db.insert(apiUsage).values({ id: crypto.randomUUID(), keyId: apiKey.keyId, method: req.method, path: req.path, status: res.statusCode })
+         .catch(() => logger.warn("Unable to record API usage"));
+     });
      const apiUser = await db.query.users.findFirst({ where: eq(users.id, apiKey.userId) });
      if (isPartnerApiPath(req) && (!apiUser || !isKycVerified(apiUser))) {
        res.status(403).json({
@@ -1001,6 +1037,10 @@ router.use(async (req, res, next) => {
        return;
      }
      const requiredScope = requiredApiScope(req);
+     if (!requiredScope) {
+       res.status(403).json({ error: "Cette route nécessite une session utilisateur et n’est pas accessible avec une clé API." });
+       return;
+     }
      if (requiredScope && !apiKey.scopes.includes(requiredScope)) {
        res.status(403).json({ error: `Cette clé API n’a pas le scope requis : ${requiredScope}.`, code: "INSUFFICIENT_SCOPE" });
        return;
@@ -1015,6 +1055,22 @@ router.use(async (req, res, next) => {
     res.status(401).json({ error: "Authentification requise." });
     return;
   }
+});
+
+router.use(async (req, _res, next) => {
+  // Provider confirmations and reconciliation are never blocked by maintenance.
+  if (req.path.startsWith("/v1/webhooks/") || req.path.startsWith("/v1/public/payment-links/")) return next();
+  const id = currentUserId(req);
+  if (!id) return next();
+  const mode = (req as MulapayRequest).mulapayAuthMode;
+  if (mode === "api_key") await assertMerchantAccess(id, "api");
+  const amount = req.method === "POST" && typeof req.body?.amount === "number" ? req.body.amount : undefined;
+  const service = req.method === "POST" && req.path === "/v1/deposits" ? "payin"
+    : req.method === "POST" && ["/v1/withdrawals", "/v1/transfers"].includes(req.path) ? "payout"
+      : req.path.startsWith("/v1/payment-links") ? "links"
+        : req.method === "POST" && req.path === "/v1/exchanges" ? "exchange" : undefined;
+  await assertMerchantAccess(id, service, amount);
+  next();
 });
 
 const COUNTRY_WALLETS = [
@@ -1055,6 +1111,7 @@ async function ensureUser(req: Request) {
   }
 
   const createdUser = await db.query.users.findFirst({ where: eq(users.id, id) });
+  await assertMerchantAccess(id);
   const hasRegistrationNotification = await db.query.notifications.findFirst({
     where: and(eq(notifications.userId, id), eq(notifications.title, "Nouvelle inscription")),
   });
@@ -1263,7 +1320,7 @@ router.post("/v1/api-keys", async (req, res) => {
 router.delete("/v1/api-keys/:id", async (req, res) => {
   const user = await ensureClerkUser(req);
   if (!requireVerifiedKyc(user, res, "l’API partenaire")) return;
-  const [deleted] = await db.delete(apiKeys)
+  const [deleted] = await db.update(apiKeys).set({ revokedAt: new Date() })
     .where(and(eq(apiKeys.id, req.params.id), eq(apiKeys.userId, user.id)))
     .returning({ id: apiKeys.id });
   if (!deleted) {
@@ -1356,10 +1413,10 @@ async function bootstrap(req: Request) {
   await expireAndReconcilePending(user.id);
   const [userTransactions, userExchanges, userLinks, userNotifications, userKyc, settings] = await Promise.all([
     db.select().from(transactions).where(eq(transactions.userId, user.id)).orderBy(desc(transactions.createdAt)),
-    user.role === "ADMIN"
+    ["ADMIN", "SUPER_ADMIN"].includes(user.role)
       ? db.select().from(exchanges).orderBy(desc(exchanges.requestedAt))
       : db.select().from(exchanges).where(eq(exchanges.userId, user.id)).orderBy(desc(exchanges.requestedAt)),
-    db.select().from(paymentLinks).where(eq(paymentLinks.userId, user.id)).orderBy(desc(paymentLinks.createdAt)),
+    db.select().from(paymentLinks).where(and(eq(paymentLinks.userId, user.id), ne(paymentLinks.status, "Deleted"))).orderBy(desc(paymentLinks.createdAt)),
     db.select().from(notifications).where(eq(notifications.userId, user.id)).orderBy(desc(notifications.createdAt)),
     db.query.kycVerifications.findFirst({ where: eq(kycVerifications.userId, user.id), orderBy: desc(kycVerifications.submittedAt) }),
     getPlatformSettings(),
@@ -1374,11 +1431,16 @@ async function bootstrap(req: Request) {
     links: userLinks.map((link) => presentPaymentLink(req, link)),
     notifications: userNotifications.map((notification) => ({ id: notification.id, title: notification.title, body: notification.body, read: notification.read, createdAt: notification.createdAt.toISOString() })),
     kyc: userKyc ? formatKyc(userKyc) : { id: "none", userId: user.id, name: `${user.firstName} ${user.lastName}`, country: user.country, status: user.kycStatus, documents: [], details: {}, submittedAt: nowLabel() },
-    feePercentage: Number(settings.feePercentage),
+    feePercentage: await merchantFee(user.id, "payin"),
+    platform: await getAdminConfiguration(),
   });
 }
 
 async function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  if (!getAuth(req).userId) {
+    res.status(401).json({ error: "Une session administrateur est requise." });
+    return;
+  }
   const user = await ensureUser(req);
   if (user.role !== "ADMIN" && user.role !== "SUPER_ADMIN") {
     res.status(403).json({ error: "Admin access required" });
@@ -1389,6 +1451,14 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
 
 router.get("/v1/bootstrap", async (req, res) => {
   res.json(await bootstrap(req));
+});
+router.post("/v1/profile/sync-email", async (req, res) => {
+  const user = await ensureClerkUser(req);
+  const identity = await clerkClient.users.getUser(user.id);
+  const primary = identity.emailAddresses.find(e => e.id === identity.primaryEmailAddressId && e.verification?.status === "verified");
+  if (!primary) throw new OperationalError("L’adresse principale doit d’abord être vérifiée dans Clerk.", 409);
+  await db.update(users).set({ email: primary.emailAddress.toLowerCase() }).where(eq(users.id, user.id));
+  res.json({ ok: true, message: "Votre adresse principale vérifiée a été synchronisée." });
 });
 
 router.post("/v1/transfers", async (req, res) => {
@@ -1458,6 +1528,7 @@ router.post("/v1/transfers", async (req, res) => {
       amount: input.amount,
       countryCode,
       operator: providerSelection.operator,
+      routeId: providerSelection.routeId,
       phone: recipientMatch[1],
       idempotencyKey: req.header("Idempotency-Key"),
       kind: "Transfer",
@@ -1587,6 +1658,7 @@ router.patch("/v1/exchanges/:id/decision", requireAdmin, async (req, res) => {
     res.status(400).json({ error: "La décision doit être APPROVED ou REJECTED." });
     return;
   }
+  if (input.decision === "REJECTED" && !input.reason?.trim()) throw new OperationalError("Indiquez le motif du rejet.", 400);
 
   try {
     const result = await db.transaction(async (tx) => {
@@ -1622,7 +1694,8 @@ router.patch("/v1/exchanges/:id/decision", requireAdmin, async (req, res) => {
         await tx.update(wallets)
           .set({ pending: sql`GREATEST(${wallets.pending} - ${claimed.amount}, 0)` })
           .where(eq(wallets.id, sourceWallet.id));
-        await tx.update(exchanges).set({ status: "REJECTED" }).where(eq(exchanges.id, claimed.id));
+        await tx.update(exchanges).set({ status: "REJECTED", decidedBy: getAuth(req).userId, decidedAt: new Date(), decisionReason: input.reason }).where(eq(exchanges.id, claimed.id));
+        await tx.insert(adminAudit).values({ id: crypto.randomUUID(), actorId: getAuth(req).userId!, action: "exchange_reject", targetId: claimed.id, reason: input.reason });
         await tx.insert(notifications).values({
           id: crypto.randomUUID(),
           userId: claimed.userId,
@@ -1651,7 +1724,8 @@ router.patch("/v1/exchanges/:id/decision", requireAdmin, async (req, res) => {
       await tx.update(wallets)
         .set({ balance: sql`${wallets.balance} + ${claimed.receivedAmount}` })
         .where(eq(wallets.id, destinationWallet.id));
-      await tx.update(exchanges).set({ status: "COMPLETED" }).where(eq(exchanges.id, claimed.id));
+      await tx.update(exchanges).set({ status: "COMPLETED", decidedBy: getAuth(req).userId, decidedAt: new Date(), decisionReason: input.reason }).where(eq(exchanges.id, claimed.id));
+      await tx.insert(adminAudit).values({ id: crypto.randomUUID(), actorId: getAuth(req).userId!, action: "exchange_approve", targetId: claimed.id, reason: input.reason });
       await tx.insert(ledgerEntries).values([
         {
           id: crypto.randomUUID(),
@@ -1806,6 +1880,7 @@ router.get("/v1/public/payment-links/:token", async (req, res) => {
     res.status(404).json({ error: "Lien de paiement introuvable." });
     return;
   }
+  await assertMerchantAccess(link.userId, "links");
   const expired = Boolean(link.expiresAt) && new Date(link.expiresAt).getTime() <= Date.now();
   const exhausted = link.maxPayments !== null && link.payments >= link.maxPayments;
   if (link.status !== "Active" || expired || exhausted) {
@@ -1861,6 +1936,8 @@ router.post("/v1/public/payment-links/:token/payments", async (req, res) => {
     res.status(404).json({ error: "Lien de paiement introuvable." });
     return;
   }
+  await assertMerchantAccess(link.userId, "links");
+  await assertMerchantAccess(link.userId, "payin", input.amount);
   const expired = Boolean(link.expiresAt) && new Date(link.expiresAt).getTime() <= Date.now();
   const exhausted = link.maxPayments !== null && link.payments >= link.maxPayments;
   if (link.status !== "Active" || expired || exhausted) {
@@ -1919,8 +1996,7 @@ router.post("/v1/public/payment-links/:token/payments", async (req, res) => {
     });
     return;
   }
-  const settings = await getPlatformSettings();
-  const mulapayAmount = calculateMulapayNetAmount(input.amount, Number(settings.feePercentage));
+  const mulapayAmount = calculateMulapayNetAmount(input.amount, await merchantFee(link.userId, "payin"));
   const providerSelection = await resolvePaymentProvider(countryCode, input.operator);
   if (!providerSelection) {
     res.status(503).json({ error: "Aucun routage de paiement actif n’est configuré pour ce pays et cet opérateur." });
@@ -1939,6 +2015,14 @@ router.post("/v1/public/payment-links/:token/payments", async (req, res) => {
     res.status(200).json({ ok: true, message: "Cette demande de paiement existe déjà.", reference: existing.reference, status: existing.status, paymentUrl: existing.paymentUrl, expiresAt: existing.expiresAt?.toISOString() ?? null, fee: existing.fee, netAmount: existing.netAmount, platformFee: existing.platformFee, merchantAmount: existing.merchantAmount });
     return;
   }
+  await reserveRoute(providerSelection.routeId, link.userId, input.amount, orderId, async tx => {
+    await tx.insert(transactions).values({
+      id: crypto.randomUUID(), userId: link.userId, walletId: ownerWallet.id, type: "Payment", paymentProvider: providerSelection.provider,
+      routeId: providerSelection.routeId, operator: input.operator, status: "Pending", amount: input.amount,
+      netAmount: mulapayAmount.merchantAmount, fee: mulapayAmount.platformFee, platformFee: mulapayAmount.platformFee, merchantAmount: mulapayAmount.merchantAmount,
+      currency: ownerWallet.currency, country: ownerWallet.country, counterparty: `Paiement par lien · ${link.productName}`, reference: mulapayReference, providerOrderId: orderId,
+    });
+  });
   try {
     let normalizedProvider: {
       reference: string;
@@ -1995,29 +2079,12 @@ router.post("/v1/public/payment-links/:token/payments", async (req, res) => {
       };
     }
     await db.transaction(async (tx) => {
-      await tx.insert(transactions).values({
-        id: crypto.randomUUID(),
-        userId: link.userId,
-        walletId: ownerWallet.id,
-        type: "Payment",
-        paymentProvider: providerSelection.provider,
-        // Le crédit du ledger intervient après confirmation fournisseur vérifiée.
-        status: "Pending",
-        amount: input.amount,
-        netAmount: mulapayAmount.merchantAmount,
+      await tx.update(transactions).set({
         paymentUrl: normalizedProvider.paymentUrl,
         expiresAt: normalizedProvider.expiresAt,
-        fee: mulapayAmount.platformFee,
-        platformFee: mulapayAmount.platformFee,
-        merchantAmount: mulapayAmount.merchantAmount,
-        currency: ownerWallet.currency,
-        country: ownerWallet.country,
-        counterparty: `Paiement par lien · ${link.productName}`,
-        reference: mulapayReference,
         providerReference: normalizedProvider.reference,
-        providerOrderId: orderId,
         providerTransactionId: normalizedProvider.transactionId,
-      });
+      }).where(eq(transactions.providerOrderId, orderId));
       await tx.insert(notifications).values({
         id: crypto.randomUUID(),
         userId: link.userId,
@@ -2028,6 +2095,7 @@ router.post("/v1/public/payment-links/:token/payments", async (req, res) => {
     });
     res.status(201).json({ ok: true, message: normalizedProvider.paymentUrl ? "Ouvrez le lien de paiement pour confirmer." : "Confirmez le paiement sur votre téléphone.", reference: mulapayReference, status: "Pending", paymentUrl: normalizedProvider.paymentUrl, expiresAt: normalizedProvider.expiresAt?.toISOString() ?? null, fee: mulapayAmount.platformFee, netAmount: mulapayAmount.merchantAmount, platformFee: mulapayAmount.platformFee, merchantAmount: mulapayAmount.merchantAmount });
   } catch (error) {
+    await failIncomingInitiation(orderId, error);
     if (error instanceof AshtechPayOtpRequiredError) {
       res.status(400).json({ error: "Le code OTP opérateur est requis pour continuer.", code: "OTP_REQUIRED", otpRequired: true });
       return;
@@ -2086,7 +2154,7 @@ router.get("/v1/public/payment-links/:token/payments/:reference", async (req, re
 
 router.get("/v1/payment-links", async (req, res) => {
   const user = await ensureUser(req);
-  const links = await db.select().from(paymentLinks).where(eq(paymentLinks.userId, user.id)).orderBy(desc(paymentLinks.createdAt));
+  const links = await db.select().from(paymentLinks).where(and(eq(paymentLinks.userId, user.id), ne(paymentLinks.status, "Deleted"))).orderBy(desc(paymentLinks.createdAt));
   res.json(links.map((link) => presentPaymentLink(req, link)));
 });
 
@@ -2099,6 +2167,7 @@ router.patch("/v1/payment-links/:id", async (req, res) => {
     res.status(404).json({ error: "Lien de paiement introuvable." });
     return;
   }
+  if (existing.adminRevokedAt) throw new OperationalError("Ce lien a été révoqué définitivement par l’administration.", 409);
   if (input.amountType === "FIXED" && (!input.amount || input.amount <= 0)) {
     res.status(400).json({ error: "Un montant fixe supérieur à zéro est requis." });
     return;
@@ -2171,7 +2240,7 @@ router.patch("/v1/payment-links/:id", async (req, res) => {
 
 router.delete("/v1/payment-links/:id", async (req, res) => {
   const user = await ensureUser(req);
-  const [deleted] = await db.delete(paymentLinks)
+  const [deleted] = await db.update(paymentLinks).set({ status: "Deleted" })
     .where(and(eq(paymentLinks.id, req.params.id), eq(paymentLinks.userId, user.id)))
     .returning({ id: paymentLinks.id });
   if (!deleted) {
@@ -2224,8 +2293,7 @@ router.post("/v1/deposits", async (req, res) => {
     res.status(400).json({ error: "Le wallet sélectionné ne correspond pas au pays du dépôt." });
     return;
   }
-  const settings = await getPlatformSettings();
-  const mulapayAmount = calculateMulapayNetAmount(validatedAmount, Number(settings.feePercentage));
+  const mulapayAmount = calculateMulapayNetAmount(validatedAmount, await merchantFee(user.id, "payin"));
   const mulapayReference = createMulapayReference("DEP");
   const providerSelection = await resolvePaymentProvider(countryCode, input.operator);
   if (!providerSelection) {
@@ -2259,6 +2327,14 @@ router.post("/v1/deposits", async (req, res) => {
     return;
   }
 
+  await reserveRoute(providerSelection.routeId, user.id, validatedAmount, orderId, async tx => {
+    await tx.insert(transactions).values({
+      id: crypto.randomUUID(), userId: user.id, walletId: wallet.id, type: "Deposit", paymentProvider: providerSelection.provider,
+      routeId: providerSelection.routeId, operator: input.operator, status: "Pending", amount: validatedAmount,
+      netAmount: mulapayAmount.merchantAmount, fee: mulapayAmount.platformFee, platformFee: mulapayAmount.platformFee, merchantAmount: mulapayAmount.merchantAmount,
+      currency: wallet.currency, country: wallet.country, counterparty: `Dépôt Mobile Money · ${input.operator}`, reference: mulapayReference, providerOrderId: orderId,
+    });
+  });
   try {
     let normalizedProvider: {
       reference: string;
@@ -2315,29 +2391,12 @@ router.post("/v1/deposits", async (req, res) => {
       };
     }
     await db.transaction(async (tx) => {
-      await tx.insert(transactions).values({
-        id: crypto.randomUUID(),
-        userId: user.id,
-        walletId: wallet.id,
-        type: "Deposit",
-        paymentProvider: providerSelection.provider,
-        // Le crédit du ledger intervient après confirmation fournisseur vérifiée.
-        status: "Pending",
-        amount: validatedAmount,
-        netAmount: mulapayAmount.merchantAmount,
-        platformFee: mulapayAmount.platformFee,
-        merchantAmount: mulapayAmount.merchantAmount,
+      await tx.update(transactions).set({
         paymentUrl: normalizedProvider.paymentUrl,
         expiresAt: normalizedProvider.expiresAt,
-        fee: mulapayAmount.platformFee,
-        currency: wallet.currency,
-        country: wallet.country,
-        counterparty: `Dépôt Mobile Money · ${input.operator}`,
-        reference: mulapayReference,
         providerReference: normalizedProvider.reference,
-        providerOrderId: orderId,
         providerTransactionId: normalizedProvider.transactionId,
-      });
+      }).where(eq(transactions.providerOrderId, orderId));
       await tx.insert(notifications).values({
         id: crypto.randomUUID(),
         userId: user.id,
@@ -2359,6 +2418,7 @@ router.post("/v1/deposits", async (req, res) => {
       merchantAmount: mulapayAmount.merchantAmount,
     });
   } catch (error) {
+    await failIncomingInitiation(orderId, error);
     if (error instanceof AshtechPayOtpRequiredError) {
       res.status(400).json({
         error: "Le code OTP opérateur est requis pour continuer.",
@@ -2557,11 +2617,12 @@ router.post("/v1/withdrawals", async (req, res) => {
     return;
   }
 
-  const settings = await getPlatformSettings();
-  const estimatedFee = calculateMulapayNetAmount(requestedAmount, Number(settings.feePercentage)).platformFee;
+  const estimatedFee = calculateMulapayNetAmount(requestedAmount, await merchantFee(user.id, "payout")).platformFee;
   const estimatedTotal = requestedAmount + estimatedFee;
   const mulapayReference = createMulapayReference("WD");
   let localTransaction: typeof transactions.$inferSelect | undefined;
+  await reserveRoute(providerSelection.routeId, user.id, requestedAmount, orderId);
+  let providerSubmitted = false;
   try {
     if (!isDrimPayConfigured()) {
       throw new DrimPayError("Le service payout DrimPay n’est pas encore configuré.", 503, "DRIMPAY_NOT_CONFIGURED");
@@ -2592,6 +2653,8 @@ router.post("/v1/withdrawals", async (req, res) => {
         reference: mulapayReference,
         providerReference: null,
         providerOrderId: orderId,
+        routeId: providerSelection.routeId,
+        operator: input.operator,
         fee: estimatedFee,
         netAmount: requestedAmount,
         merchantAmount: requestedAmount,
@@ -2605,6 +2668,7 @@ router.post("/v1/withdrawals", async (req, res) => {
       read: false,
     });
 
+    providerSubmitted = true;
     const provider = await initiatePayout({
       amount: requestedAmount,
       currency: wallet.currency,
@@ -2636,12 +2700,14 @@ router.post("/v1/withdrawals", async (req, res) => {
       totalDebited: estimatedTotal,
     });
   } catch (error) {
-    if (localTransaction && (error instanceof DrimPayError ? error.statusCode < 500 : false)) {
+    if (!providerSubmitted) await finishRouteReservation(orderId, "RELEASED");
+    if (localTransaction && definitiveProviderFailure(error)) {
       await db.transaction(async (tx) => {
         await tx.update(wallets)
           .set({ pending: sql`GREATEST(${wallets.pending} - ${estimatedTotal}, 0)` })
           .where(eq(wallets.id, wallet.id));
         await tx.update(transactions).set({ status: "Failed" }).where(eq(transactions.id, localTransaction!.id));
+        await tx.update(routeReservations).set({ state: "RELEASED" }).where(eq(routeReservations.requestKey, orderId));
         await tx.insert(notifications).values({
           id: crypto.randomUUID(),
           userId: user.id,
@@ -2897,6 +2963,8 @@ router.get("/v1/admin/payment-provider-routes", requireAdmin, async (_req, res) 
 });
 
 router.put("/v1/admin/payment-provider-routes", requireAdmin, async (req, res) => {
+  const actor = await ensureUser(req);
+  if (actor.role !== "SUPER_ADMIN") throw new OperationalError("Cette action nécessite le rôle SUPER_ADMIN.");
   const input = req.body as {
     countryCode?: string;
     country?: string;
@@ -2948,14 +3016,15 @@ router.put("/v1/admin/payment-provider-routes", requireAdmin, async (req, res) =
       updatedAt: new Date(),
     },
   }).returning();
+  await db.insert(adminAudit).values({ id: crypto.randomUUID(), actorId: actor.id, action: "route_update", targetId: route.id });
   res.json(route);
 });
 
 router.patch("/v1/admin/settings", requireAdmin, async (req, res) => {
   const input = UpdateAdminSettingsBody.parse(req.body);
-  const settings = await getPlatformSettings();
-  const [updated] = await db.update(platformSettings).set({ feePercentage: input.feePercentage.toFixed(2), updatedAt: new Date() }).where(eq(platformSettings.id, settings.id)).returning();
-  res.json(UpdateAdminSettingsResponse.parse({ feePercentage: Number(updated.feePercentage) }));
+  const actor = await ensureUser(req);
+  await executeConsoleCommand(actor, { action: "settings_update", settings: { payinFee: input.feePercentage } }, requestOrigin(req));
+  res.json(UpdateAdminSettingsResponse.parse({ feePercentage: input.feePercentage }));
 });
 
 router.get("/v1/admin/kyc", requireAdmin, async (_req, res) => {
@@ -2996,21 +3065,7 @@ router.get("/v1/admin/kyc/:id/documents/:kind", requireAdmin, async (req, res) =
 router.patch("/v1/admin/kyc/:id/decision", requireAdmin, async (req, res) => {
   const params = DecideKycParams.parse(req.params);
   const input = DecideKycBody.parse(req.body);
-  const status = input.decision === "REVIEW" ? "A_REVOIR" : input.decision === "VERIFIED" || input.decision === "APPROVED" ? "VERIFIE" : "REFUSE";
-  const existing = await db.query.kycVerifications.findFirst({ where: eq(kycVerifications.id, params.id) });
-  if (!existing) {
-    res.status(404).json({ error: "Dossier KYC introuvable." });
-    return;
-  }
-  await db.update(kycVerifications).set({ status }).where(eq(kycVerifications.id, params.id));
-  await db.update(users).set({ kycStatus: status }).where(eq(users.id, existing.userId));
-  await db.insert(notifications).values({
-    id: crypto.randomUUID(),
-    userId: existing.userId,
-    title: status === "VERIFIE" ? "KYC approuvé" : status === "A_REVOIR" ? "Informations KYC requises" : "KYC refusé",
-    body: input.reason || (status === "A_REVOIR" ? "Des informations supplémentaires sont nécessaires pour terminer votre vérification." : "Votre dossier a été traité par l’équipe conformité."),
-    read: false,
-  });
+  await decideKyc(getAuth(req).userId!, params.id, input.decision === "REVIEW" ? "review" : ["VERIFIED", "APPROVED"].includes(input.decision), input.reason);
   res.json(DecideKycResponse.parse({ ok: true, message: "Décision KYC enregistrée.", reference: null }));
 });
 

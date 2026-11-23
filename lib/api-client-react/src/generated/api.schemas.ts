@@ -5,6 +5,254 @@
  * Mulapay wallet, ledger, KYC and operations API
  * OpenAPI spec version: 0.2.0
  */
+export interface AdminConfiguration {
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  payinFee?: number;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  payoutFee?: number;
+  /** @minimum 1 */
+  depositMin?: number;
+  /** @minimum 1 */
+  depositMax?: number;
+  /** @minimum 1 */
+  withdrawalMin?: number;
+  /** @minimum 1 */
+  withdrawalMax?: number;
+  maintenance?: boolean;
+  maintenanceMessage?: string;
+  payinMaintenance?: boolean;
+  payoutMaintenance?: boolean;
+  linksMaintenance?: boolean;
+  apiMaintenance?: boolean;
+  supportEmail?: string;
+  supportWhatsapp?: string;
+  /** @nullable */
+  statsSince?: string | null;
+}
+
+export interface AdminAnnouncement {
+  id: string;
+  title: string;
+  body: string;
+  createdAt: string;
+}
+
+export interface Wallet {
+  id: string;
+  country: string;
+  code: string;
+  currency: string;
+  balance: number;
+  pending: number;
+  status: string;
+}
+
+export interface AdminDocument {
+  kind: string;
+  fileName: string;
+  url: string;
+}
+
+export interface AdminConsoleRow {
+  id: string;
+  userId?: string;
+  merchantName?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  /** @nullable */
+  phone?: string | null;
+  role?: string;
+  country?: string;
+  countryCode?: string;
+  code?: string;
+  currency?: string;
+  status?: string;
+  kycStatus?: string;
+  payinEnabled?: boolean;
+  payoutEnabled?: boolean;
+  /** @nullable */
+  payinFee?: number | null;
+  /** @nullable */
+  payoutFee?: number | null;
+  balance?: number;
+  pending?: number;
+  available?: number;
+  count?: number;
+  active?: number;
+  createdAt?: string;
+  type?: string;
+  amount?: number;
+  fee?: number;
+  reference?: string;
+  /** @nullable */
+  operator?: string | null;
+  providerOperator?: string;
+  provider?: string;
+  enabled?: boolean;
+  configured?: boolean;
+  /** @nullable */
+  dailyLimit?: number | null;
+  dailyUsed?: number;
+  /** @nullable */
+  dailyRemaining?: number | null;
+  source?: string;
+  destination?: string;
+  /** @nullable */
+  sourceWalletId?: string | null;
+  /** @nullable */
+  destinationWalletId?: string | null;
+  rate?: number;
+  receivedAmount?: number;
+  requestedAt?: string;
+  keyPrefix?: string;
+  name?: string;
+  scopes?: string[];
+  /** @nullable */
+  lastUsedAt?: string | null;
+  slug?: string;
+  productName?: string;
+  description?: string;
+  payments?: number;
+  /** @nullable */
+  maxPayments?: number | null;
+  amountType?: string;
+  amountMin?: number;
+  amountMax?: number;
+  expiresAt?: string;
+  reason?: string;
+  title?: string;
+  body?: string;
+  subject?: string;
+  recipient?: string;
+  /** @nullable */
+  error?: string | null;
+  url?: string;
+  method?: string;
+  path?: string;
+  keyId?: string;
+  linkId?: string;
+  responseStatus?: number;
+  wallets?: Wallet[];
+  documents?: AdminDocument[];
+}
+
+export type AdminConsoleStateStats = {[key: string]: number};
+
+export interface AdminConsoleState {
+  section: string;
+  items: AdminConsoleRow[];
+  activity?: AdminConsoleRow[];
+  stats?: AdminConsoleStateStats;
+  currencyTotals?: AdminConsoleRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+  settings: AdminConfiguration;
+  telegramConfigured: boolean;
+  emailConfigured: boolean;
+  /**
+     * Null tant qu’aucune trésorerie PSP vérifiée n’est disponible.
+     * @nullable
+     */
+  platformTreasuryAvailable?: number | null;
+}
+
+export type AdminCommandInputAction = typeof AdminCommandInputAction[keyof typeof AdminCommandInputAction];
+
+
+export const AdminCommandInputAction = {
+  merchant_update: 'merchant_update',
+  merchant_suspend: 'merchant_suspend',
+  merchant_activate: 'merchant_activate',
+  merchant_delete: 'merchant_delete',
+  wallet_adjust: 'wallet_adjust',
+  password_reset: 'password_reset',
+  provider_update: 'provider_update',
+  route_update: 'route_update',
+  key_revoke: 'key_revoke',
+  link_revoke: 'link_revoke',
+  blacklist_add: 'blacklist_add',
+  blacklist_remove: 'blacklist_remove',
+  message_send: 'message_send',
+  announcement_create: 'announcement_create',
+  announcement_delete: 'announcement_delete',
+  settings_update: 'settings_update',
+  stats_reset: 'stats_reset',
+  integration_create: 'integration_create',
+  integration_delete: 'integration_delete',
+  telegram_configure: 'telegram_configure',
+  telegram_test: 'telegram_test',
+  exchange_approve: 'exchange_approve',
+  exchange_reject: 'exchange_reject',
+  kyc_approve: 'kyc_approve',
+  kyc_reject: 'kyc_reject',
+} as const;
+
+export type AdminCommandInputDirection = typeof AdminCommandInputDirection[keyof typeof AdminCommandInputDirection];
+
+
+export const AdminCommandInputDirection = {
+  credit: 'credit',
+  debit: 'debit',
+} as const;
+
+export type AdminCommandInputProvider = typeof AdminCommandInputProvider[keyof typeof AdminCommandInputProvider];
+
+
+export const AdminCommandInputProvider = {
+  DRIMPAY: 'DRIMPAY',
+  ASHTECHPAY: 'ASHTECHPAY',
+} as const;
+
+export interface AdminCommandInput {
+  action: AdminCommandInputAction;
+  targetId?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  country?: string;
+  /** @nullable */
+  payinFee?: number | null;
+  /** @nullable */
+  payoutFee?: number | null;
+  payinEnabled?: boolean;
+  payoutEnabled?: boolean;
+  walletId?: string;
+  direction?: AdminCommandInputDirection;
+  /** @minimum 1 */
+  amount?: number;
+  reason?: string;
+  idempotencyKey?: string;
+  countryCode?: string;
+  operator?: string;
+  providerOperator?: string;
+  provider?: AdminCommandInputProvider;
+  enabled?: boolean;
+  /** @nullable */
+  dailyLimit?: number | null;
+  title?: string;
+  body?: string;
+  subject?: string;
+  recipient?: string;
+  name?: string;
+  url?: string;
+  telegramToken?: string;
+  telegramChatId?: string;
+  settings?: AdminConfiguration;
+}
+
+export interface AdminCommandResult {
+  ok: boolean;
+  message: string;
+}
+
 export interface HealthStatus {
   status: string;
 }
@@ -67,16 +315,6 @@ export interface ProfileInput {
   phone?: string | null;
   language: ProfileInputLanguage;
   notificationsEnabled: boolean;
-}
-
-export interface Wallet {
-  id: string;
-  country: string;
-  code: string;
-  currency: string;
-  balance: number;
-  pending: number;
-  status: string;
 }
 
 export interface Transaction {
@@ -293,6 +531,7 @@ export interface Bootstrap {
      * @maximum 100
      */
   feePercentage: number;
+  platform?: AdminConfiguration;
 }
 
 export interface AdminSettings {
@@ -701,4 +940,36 @@ export type ProviderUnavailableResponse = Error;
  * Stable unique key for one payment attempt. Reuse it only when safely retrying the same request.
  */
 export type IdempotencyKeyParameter = string;
+
+export type GetAdminConsoleParams = {
+section: GetAdminConsoleSection;
+q?: string;
+status?: string;
+country?: string;
+type?: string;
+/**
+ * @minimum 1
+ */
+page?: number;
+};
+
+export type GetAdminConsoleSection = typeof GetAdminConsoleSection[keyof typeof GetAdminConsoleSection];
+
+
+export const GetAdminConsoleSection = {
+  dashboard: 'dashboard',
+  merchants: 'merchants',
+  kyc: 'kyc',
+  transactions: 'transactions',
+  wallets: 'wallets',
+  exchanges: 'exchanges',
+  providers: 'providers',
+  operators: 'operators',
+  'api-keys': 'api-keys',
+  'payment-links': 'payment-links',
+  blacklist: 'blacklist',
+  messages: 'messages',
+  notifications: 'notifications',
+  settings: 'settings',
+} as const;
 

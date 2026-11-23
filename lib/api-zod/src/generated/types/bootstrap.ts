@@ -5,6 +5,7 @@
  * Mulapay wallet, ledger, KYC and operations API
  * OpenAPI spec version: 0.2.0
  */
+import type { AdminConfiguration } from './adminConfiguration';
 import type { Exchange } from './exchange';
 import type { KycVerification } from './kycVerification';
 import type { Notification } from './notification';
@@ -26,4 +27,5 @@ export interface Bootstrap {
      * @maximum 100
      */
   feePercentage: number;
+  platform?: AdminConfiguration;
 }

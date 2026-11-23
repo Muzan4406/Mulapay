@@ -14,6 +14,72 @@ tags:
   - name: payin
   - name: public
 paths:
+  /v1/profile/sync-email:
+    post:
+      operationId: syncVerifiedProfileEmail
+      tags: [wallet]
+      responses:
+        "200":
+          description: Adresse principale vérifiée synchronisée depuis Clerk
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminCommandResult" }
+  /v1/admin/console:
+    get:
+      operationId: getAdminConsole
+      tags: [admin]
+      parameters:
+        - { name: section, in: query, required: true, schema: { type: string, enum: [dashboard, merchants, kyc, transactions, wallets, exchanges, providers, operators, api-keys, payment-links, blacklist, messages, notifications, settings] } }
+        - { name: q, in: query, schema: { type: string } }
+        - { name: status, in: query, schema: { type: string } }
+        - { name: country, in: query, schema: { type: string } }
+        - { name: type, in: query, schema: { type: string } }
+        - { name: page, in: query, schema: { type: number, minimum: 1 } }
+      responses:
+        "200":
+          description: Administration réelle, par section et paginée
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminConsoleState" }
+  /v1/admin/console/commands:
+    post:
+      operationId: executeAdminCommand
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminCommandInput" }
+      responses:
+        "200":
+          description: Action enregistrée
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminCommandResult" }
+  /v1/announcements:
+    get:
+      operationId: listAnnouncements
+      tags: [wallet]
+      responses:
+        "200":
+          description: Publications actives non fermées
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AdminAnnouncement" }
+  /v1/announcements/{id}/dismiss:
+    post:
+      operationId: dismissAnnouncement
+      tags: [wallet]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Publication fermée pour ce compte
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminCommandResult" }
   /healthz:
     get:
       operationId: healthCheck
@@ -674,6 +740,7 @@ paths:
                 items:
                   $ref: "#/components/schemas/Transaction"
 components:
+  # Administration console contracts never contain stored credential values.
   securitySchemes:
     MulapayApiKey:
       type: http
@@ -727,6 +794,185 @@ components:
           schema:
             $ref: "#/components/schemas/Error"
   schemas:
+    AdminConfiguration:
+      type: object
+      properties:
+        payinFee: { type: number, minimum: 0, maximum: 100 }
+        payoutFee: { type: number, minimum: 0, maximum: 100 }
+        depositMin: { type: number, minimum: 1 }
+        depositMax: { type: number, minimum: 1 }
+        withdrawalMin: { type: number, minimum: 1 }
+        withdrawalMax: { type: number, minimum: 1 }
+        maintenance: { type: boolean }
+        maintenanceMessage: { type: string }
+        payinMaintenance: { type: boolean }
+        payoutMaintenance: { type: boolean }
+        linksMaintenance: { type: boolean }
+        apiMaintenance: { type: boolean }
+        supportEmail: { type: string }
+        supportWhatsapp: { type: string }
+        statsSince: { type: ["string", "null"] }
+    AdminAnnouncement:
+      type: object
+      required: [id, title, body, createdAt]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        body: { type: string }
+        createdAt: { type: string }
+    AdminConsoleRow:
+      type: object
+      required: [id]
+      properties:
+        id: { type: string }
+        userId: { type: string }
+        merchantName: { type: string }
+        firstName: { type: string }
+        lastName: { type: string }
+        email: { type: string }
+        phone: { type: ["string", "null"] }
+        role: { type: string }
+        country: { type: string }
+        countryCode: { type: string }
+        code: { type: string }
+        currency: { type: string }
+        status: { type: string }
+        kycStatus: { type: string }
+        payinEnabled: { type: boolean }
+        payoutEnabled: { type: boolean }
+        payinFee: { type: ["number", "null"] }
+        payoutFee: { type: ["number", "null"] }
+        balance: { type: number }
+        pending: { type: number }
+        available: { type: number }
+        count: { type: number }
+        active: { type: number }
+        createdAt: { type: string }
+        type: { type: string }
+        amount: { type: number }
+        fee: { type: number }
+        reference: { type: string }
+        operator: { type: ["string", "null"] }
+        providerOperator: { type: string }
+        provider: { type: string }
+        enabled: { type: boolean }
+        configured: { type: boolean }
+        dailyLimit: { type: ["number", "null"] }
+        dailyUsed: { type: number }
+        dailyRemaining: { type: ["number", "null"] }
+        source: { type: string }
+        destination: { type: string }
+        sourceWalletId: { type: ["string", "null"] }
+        destinationWalletId: { type: ["string", "null"] }
+        rate: { type: number }
+        receivedAmount: { type: number }
+        requestedAt: { type: string }
+        keyPrefix: { type: string }
+        name: { type: string }
+        scopes: { type: array, items: { type: string } }
+        lastUsedAt: { type: ["string", "null"] }
+        slug: { type: string }
+        productName: { type: string }
+        description: { type: string }
+        payments: { type: number }
+        maxPayments: { type: ["number", "null"] }
+        amountType: { type: string }
+        amountMin: { type: number }
+        amountMax: { type: number }
+        expiresAt: { type: string }
+        reason: { type: string }
+        title: { type: string }
+        body: { type: string }
+        subject: { type: string }
+        recipient: { type: string }
+        error: { type: ["string", "null"] }
+        url: { type: string }
+        method: { type: string }
+        path: { type: string }
+        keyId: { type: string }
+        linkId: { type: string }
+        responseStatus: { type: number }
+        wallets:
+          type: array
+          items: { $ref: "#/components/schemas/Wallet" }
+        documents:
+          type: array
+          items: { $ref: "#/components/schemas/AdminDocument" }
+    AdminDocument:
+      type: object
+      required: [kind, fileName, url]
+      properties:
+        kind: { type: string }
+        fileName: { type: string }
+        url: { type: string }
+    AdminConsoleState:
+      type: object
+      required: [section, items, total, page, pageSize, settings, telegramConfigured, emailConfigured]
+      properties:
+        section: { type: string }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AdminConsoleRow" }
+        activity:
+          type: array
+          items: { $ref: "#/components/schemas/AdminConsoleRow" }
+        stats:
+          type: object
+          additionalProperties: { type: number }
+        currencyTotals:
+          type: array
+          items: { $ref: "#/components/schemas/AdminConsoleRow" }
+        total: { type: number }
+        page: { type: number }
+        pageSize: { type: number }
+        settings: { $ref: "#/components/schemas/AdminConfiguration" }
+        telegramConfigured: { type: boolean }
+        emailConfigured: { type: boolean }
+        platformTreasuryAvailable:
+          type: ["number", "null"]
+          description: Null tant qu’aucune trésorerie PSP vérifiée n’est disponible.
+    AdminCommandInput:
+      type: object
+      required: [action]
+      properties:
+        action:
+          type: string
+          enum: [merchant_update, merchant_suspend, merchant_activate, merchant_delete, wallet_adjust, password_reset, provider_update, route_update, key_revoke, link_revoke, blacklist_add, blacklist_remove, message_send, announcement_create, announcement_delete, settings_update, stats_reset, integration_create, integration_delete, telegram_configure, telegram_test, exchange_approve, exchange_reject, kyc_approve, kyc_reject]
+        targetId: { type: string }
+        firstName: { type: string }
+        lastName: { type: string }
+        email: { type: string }
+        country: { type: string }
+        payinFee: { type: ["number", "null"] }
+        payoutFee: { type: ["number", "null"] }
+        payinEnabled: { type: boolean }
+        payoutEnabled: { type: boolean }
+        walletId: { type: string }
+        direction: { type: string, enum: [credit, debit] }
+        amount: { type: number, minimum: 1 }
+        reason: { type: string }
+        idempotencyKey: { type: string }
+        countryCode: { type: string }
+        operator: { type: string }
+        providerOperator: { type: string }
+        provider: { type: string, enum: [DRIMPAY, ASHTECHPAY] }
+        enabled: { type: boolean }
+        dailyLimit: { type: ["number", "null"] }
+        title: { type: string }
+        body: { type: string }
+        subject: { type: string }
+        recipient: { type: string }
+        name: { type: string }
+        url: { type: string }
+        telegramToken: { type: string }
+        telegramChatId: { type: string }
+        settings: { $ref: "#/components/schemas/AdminConfiguration" }
+    AdminCommandResult:
+      type: object
+      required: [ok, message]
+      properties:
+        ok: { type: boolean }
+        message: { type: string }
     HealthStatus:
       type: object
       required: [status]
@@ -905,6 +1151,7 @@ components:
           items: { $ref: "#/components/schemas/Notification" }
         kyc: { $ref: "#/components/schemas/KycVerification" }
         feePercentage: { type: number, minimum: 0, maximum: 100 }
+        platform: { $ref: "#/components/schemas/AdminConfiguration" }
     AdminSettings:
       type: object
       required: [feePercentage]

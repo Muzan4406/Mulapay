@@ -1,7 +1,8 @@
-import { and, asc, count, desc, eq, gt, gte, inArray, sql, sum } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, gte, inArray, isNull, sql, sum } from "drizzle-orm";
 import { db } from "@workspace/db";
-import { exchanges, notifications, transactions, users, wallets } from "@workspace/db";
+import { exchanges, notifications, transactions, users, wallets, telegramDeliveries } from "@workspace/db";
 import { logger } from "../lib/logger";
+import { getTelegramConfiguration as telegramConfig } from "./adminConfiguration";
 
 const TELEGRAM_API = "https://api.telegram.org";
 const MAX_MESSAGE_LENGTH = 3900;
@@ -9,21 +10,13 @@ let workerStartedAt: Date | null = null;
 let polling = false;
 let commandPolling = false;
 let updateOffset: number | undefined;
-const deliveredNotificationIds = new Set<string>();
-
-function telegramConfig() {
-  const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
-  const chatId = process.env.TELEGRAM_CHAT_ID?.trim();
-  if (!token || !chatId) return null;
-  return { token, chatId };
-}
 
 function telegramText(value: string) {
   return value.replace(/\s+/g, " ").trim();
 }
 
 async function sendTelegramMessage(text: string) {
-  const config = telegramConfig();
+  const config = await telegramConfig();
   if (!config) return false;
   const response = await fetch(`${TELEGRAM_API}/bot${config.token}/sendMessage`, {
     method: "POST",
@@ -33,10 +26,10 @@ async function sendTelegramMessage(text: string) {
       text: text.slice(0, MAX_MESSAGE_LENGTH),
       disable_web_page_preview: true,
     }),
+    signal: AbortSignal.timeout(10_000),
   });
   if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(`Telegram sendMessage failed (${response.status}): ${detail.slice(0, 300)}`);
+    throw new Error(`Telegram sendMessage failed (${response.status})`);
   }
   const payload = await response.json() as { ok?: boolean; description?: string };
   if (!payload.ok) throw new Error(payload.description ?? "Telegram rejected the message.");
@@ -44,14 +37,14 @@ async function sendTelegramMessage(text: string) {
 }
 
 async function fetchTelegramUpdates() {
-  const config = telegramConfig();
+  const config = await telegramConfig();
   if (!config) return [];
   const params = new URLSearchParams({
     timeout: "1",
     allowed_updates: JSON.stringify(["message"]),
   });
   if (updateOffset !== undefined) params.set("offset", String(updateOffset));
-  const response = await fetch(`${TELEGRAM_API}/bot${config.token}/getUpdates?${params.toString()}`);
+  const response = await fetch(`${TELEGRAM_API}/bot${config.token}/getUpdates?${params.toString()}`, { signal: AbortSignal.timeout(10_000) });
   if (!response.ok) throw new Error(`Telegram getUpdates failed (${response.status})`);
   const payload = await response.json() as {
     ok?: boolean;
@@ -69,15 +62,17 @@ async function fetchTelegramUpdates() {
 }
 
 async function handleTelegramCommands() {
-  if (commandPolling || !telegramConfig()) return;
+  if (commandPolling) return;
   commandPolling = true;
   try {
+    const config = await telegramConfig();
+    if (!config) return;
     const updates = await fetchTelegramUpdates();
     for (const update of updates) {
       updateOffset = update.update_id + 1;
       const chatId = update.message?.chat?.id;
       const text = update.message?.text?.trim();
-      if (!chatId || String(chatId) !== telegramConfig()?.chatId || !text?.startsWith("/")) continue;
+      if (!chatId || String(chatId) !== config.chatId || !text?.startsWith("/")) continue;
       const command = text.split(/\s+/, 1)[0].split("@", 1)[0].toLowerCase();
       if (command === "/aide" || command === "/start") {
         await sendTelegramMessage([
@@ -187,18 +182,23 @@ async function handleTelegramCommands() {
         await sendTelegramMessage(lines.length ? `🕘 5 derniers événements\n${lines.join("\n")}` : "🕘 Aucun événement récent.");
       }
     }
-  } catch (error) {
-    logger.error({ error }, "Telegram command polling failed");
+  } catch {
+    logger.warn("Telegram command polling failed");
   } finally {
     commandPolling = false;
   }
 }
 
 async function deliverNewNotifications() {
-  if (polling || !workerStartedAt || !telegramConfig()) return;
+  if (polling || !workerStartedAt) return;
   polling = true;
   try {
-    const pending = await db
+    const config = await telegramConfig();
+    if (!config) return;
+    await db.transaction(async tx => {
+    const lock = await tx.execute(sql`select pg_try_advisory_xact_lock(hashtext('mulapay-telegram-delivery')) as acquired`);
+    if (!lock.rows[0]?.acquired) return;
+    const pending = await tx
       .select({
         id: notifications.id,
         userId: notifications.userId,
@@ -211,12 +211,12 @@ async function deliverNewNotifications() {
       })
       .from(notifications)
       .innerJoin(users, eq(notifications.userId, users.id))
-      .where(gt(notifications.createdAt, workerStartedAt))
+      .leftJoin(telegramDeliveries, eq(telegramDeliveries.notificationId, notifications.id))
+      .where(and(gte(notifications.createdAt, config.activatedAt ? new Date(config.activatedAt) : workerStartedAt!), isNull(telegramDeliveries.notificationId)))
       .orderBy(asc(notifications.createdAt))
-      .limit(50);
+      .limit(1);
 
     for (const notification of pending) {
-      if (deliveredNotificationIds.has(notification.id)) continue;
       const account = [notification.firstName, notification.lastName].filter(Boolean).join(" ") || "Compte Mulapay";
       const message = [
         "🔔 Mulapay",
@@ -227,15 +227,16 @@ async function deliverNewNotifications() {
         `Date : ${notification.createdAt.toISOString()}`,
       ].join("\n");
       try {
-        await sendTelegramMessage(message);
-        deliveredNotificationIds.add(notification.id);
-      } catch (error) {
-        logger.error({ error, notificationId: notification.id }, "Telegram notification delivery failed");
+        const sent = await sendTelegramMessage(message);
+        if (sent) await tx.insert(telegramDeliveries).values({ notificationId: notification.id }).onConflictDoNothing();
+      } catch {
+        logger.warn({ notificationId: notification.id }, "Telegram notification delivery not confirmed");
         break;
       }
     }
-  } catch (error) {
-    logger.error({ error }, "Telegram notification polling failed");
+    });
+  } catch {
+    logger.warn("Telegram notification polling failed");
   } finally {
     polling = false;
   }
@@ -244,13 +245,9 @@ async function deliverNewNotifications() {
 export function startTelegramNotificationWorker() {
   if (workerStartedAt) return;
   workerStartedAt = new Date();
-  if (!telegramConfig()) {
-    logger.warn("Telegram notifications disabled: TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is missing");
-    return;
-  }
   void deliverNewNotifications();
   setInterval(() => void deliverNewNotifications(), 3000);
   void handleTelegramCommands();
   setInterval(() => void handleTelegramCommands(), 1500);
-  logger.info("Telegram notification worker started");
+  logger.info("Telegram worker ready; delivery requires a configured bot");
 }

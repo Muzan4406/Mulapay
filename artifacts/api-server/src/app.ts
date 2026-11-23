@@ -5,6 +5,8 @@ import { clerkMiddleware } from "@clerk/express";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { clerkClient, clerkConfiguration } from "./lib/clerk";
+import { adminConsoleRouter, announcementsRouter } from "./routes/adminConsole";
+import { OperationalError } from "./services/adminConfiguration";
 
 const app: Express = express();
 
@@ -52,9 +54,19 @@ app.use(
   }),
 );
 
+app.use("/api/v1/admin/console", adminConsoleRouter);
+app.use("/api/v1/announcements", announcementsRouter);
 app.use("/api", router);
 
 app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  if (error instanceof OperationalError) {
+    res.status(error.status).json({ error: error.message });
+    return;
+  }
+  if (error instanceof Error && error.name === "ZodError") {
+    res.status(400).json({ error: "Les données saisies ne respectent pas les valeurs attendues." });
+    return;
+  }
   if (error instanceof Error && error.message === "AUTHENTICATION_REQUIRED") {
     res.status(401).json({ error: "Authentification requise." });
     return;

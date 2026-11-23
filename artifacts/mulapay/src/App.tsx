@@ -1,4 +1,5 @@
 import { createContext, type ChangeEvent, type FormEvent, type ReactNode, useContext, useEffect, useRef, useState } from 'react';
+import { VerifiedEmailSettings } from './components/verified-email-settings';
 import {
   Activity, ArrowDown, ArrowDownLeft, ArrowLeft, ArrowRightLeft, ArrowRight, ArrowUpRight, Banknote, Bell, CalendarDays, Check, CheckCircle2,
   ChevronDown, ChevronRight, CircleAlert, Clock3, Copy, Download, Eye, FileCheck2, Globe2, History, Info, KeyRound, Laptop, LayoutDashboard,
@@ -47,6 +48,9 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import NotFound from '@/pages/not-found';
+import { AdminPanel } from '@/admin/AdminPanel';
+import { MerchantAnnouncements } from '@/components/merchant-announcements';
+import { BootstrapErrorPage, MerchantSupport } from '@/components/merchant-support';
 
 type Wallet = { id: string; country: string; code: string; currency: string; balance: number; pending: number; status: string };
 type Transaction = { id: string; type: string; status: string; amount: number; currency: string; country: string; counterparty: string; createdAt: string; reference: string };
@@ -803,7 +807,7 @@ function QrPage() {
 }
 
 const Payments = PaymentLinks;
-const Support = NotFound;
+const Support = MerchantSupport;
 
 function ApiAccess() {
   const { toast } = useStore();
@@ -1773,6 +1777,7 @@ function Security() {
   return (
     <main className="page-wrap">
       <PageIntro eyebrow="Sécurité du compte" title="Accès et appareils" subtitle="Gérez vos méthodes de connexion, surveillez vos appareils et protégez vos données." />
+      <VerifiedEmailSettings />
 
       <div className="dashboard-grid account-security-grid">
         <div>
@@ -3118,9 +3123,6 @@ function KycRequiredPage({ feature }: { feature: string }) {
   return <main className="page-wrap"><PageIntro eyebrow="Accès protégé" title={`${feature} réservé aux comptes vérifiés`} subtitle="La vérification KYC protège vos fonds et les partenaires qui utilisent Mulapay." /><div className="card card-pad kyc-access-card"><div className="kyc-access-icon"><LockKeyhole size={24} /></div><div><h2 className="section-title">Terminez votre vérification d’identité</h2><p className="section-note">Après validation de votre dossier, les retraits, l’API partenaire et sa documentation seront automatiquement disponibles.</p><button className="button button-primary" onClick={() => setLocation('/app/kyc')} data-testid="button-start-kyc-access"><FileCheck2 size={15} /> Ouvrir la vérification KYC</button></div></div></main>;
 }
 
-function ApiUnavailablePage({ onRetry }: { onRetry: () => void }) {
-  return <main className="page-wrap"><div className="card card-pad api-unavailable"><CircleAlert size={28} /><div><h1 className="section-title">Mulapay est momentanément indisponible</h1><p className="section-note">Les données réelles de votre compte n’ont pas pu être chargées. Aucun solde ou statut de démonstration n’est affiché.</p><button className="button button-primary" type="button" onClick={onRetry}>Réessayer</button></div></div></main>;
-}
 
 function RoutedApp() {
   const [location, setLocation] = useLocation();
@@ -3181,7 +3183,7 @@ function RoutedApp() {
   };
   if (!isLoaded || bootstrapQuery.isLoading) return <MulapayLoadingScreen />;
   if (!isSignedIn) return <Redirect to="/" />;
-  if (bootstrapQuery.isError || !data) return <ApiUnavailablePage onRetry={() => void bootstrapQuery.refetch()} />;
+  if (bootstrapQuery.isError || !data) return <BootstrapErrorPage error={bootstrapQuery.error} onRetry={() => void bootstrapQuery.refetch()} onSignOut={() => { void signOut({ redirectUrl: `${basePath}/sign-in` }); }} />;
   const admin = location.startsWith('/admin') && hasAdminAccess;
   if (location.startsWith('/admin') && !admin) return <Redirect to="/app" />;
   const Kyc = RealKyc;
@@ -3192,12 +3194,13 @@ function RoutedApp() {
         : location === '/app/api-docs' || location === '/app/documents' ? 'la documentation API'
           : null
   );
+  if (admin) return <StoreContext.Provider value={store}><AdminPanel /></StoreContext.Provider>;
   const content = admin
     ? <Switch><Route path="/admin" component={AdminOverview} /><Route path="/admin/kyc" component={AdminKycReview} /><Route path="/admin/exchanges" component={AdminExchanges} /><Route path="/admin/transactions" component={AdminTransactions} /><Route component={NotFound} /></Switch>
     : gatedPath
       ? <KycRequiredPage feature={gatedPath} />
       : <Switch><Route path="/app" component={Overview} /><Route path="/app/wallets" component={Wallets} /><Route path="/app/deposit" component={Deposit} /><Route path="/app/withdrawal" component={Withdrawal} /><Route path="/app/transactions" component={TransactionsLegacy} /><Route path="/app/transfer" component={Transfer} /><Route path="/app/receive" component={Receive} /><Route path="/app/exchange" component={Exchange} /><Route path="/app/payments" component={Payments} /><Route path="/app/payment-links" component={PaymentLinks} /><Route path="/app/qr" component={QrPage} /><Route path="/app/api" component={ApiAccess} /><Route path="/app/api-docs" component={ApiPayinDocs} /><Route path="/app/documents" component={ApiPayinDocs} /><Route path="/app/notifications" component={NotificationsPage} /><Route path="/app/kyc" component={RealKyc} /><Route path="/app/security" component={Security} /><Route path="/app/support" component={Support} /><Route path="/app/settings" component={Settings} /><Route component={NotFound} /></Switch>;
-  return <StoreContext.Provider value={store}><Shell admin={admin} onNotifications={() => setNotificationsOpen(v => !v)}>{content}</Shell>{notificationsOpen && <Notifications onClose={() => setNotificationsOpen(false)} />}{toastText && <div className="toast" data-testid="status-toast">{toastText}</div>}</StoreContext.Provider>;
+  return <StoreContext.Provider value={store}><Shell admin={admin} onNotifications={() => setNotificationsOpen(v => !v)}>{content}</Shell><MerchantAnnouncements enabled={!admin && location === '/app'} />{notificationsOpen && <Notifications onClose={() => setNotificationsOpen(false)} />}{toastText && <div className="toast" data-testid="status-toast">{toastText}</div>}</StoreContext.Provider>;
 }
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
