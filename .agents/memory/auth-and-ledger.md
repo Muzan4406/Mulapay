@@ -14,3 +14,9 @@ Public payment-link read routes must bypass the authenticated Mulapay middleware
 **Why:** The Mulapay router applies authentication before its business routes; a public link otherwise returns 401 even when the route itself is intended to be unauthenticated.
 
 **How to apply:** Place the narrow `/v1/public/payment-links/` bypass before Clerk/API-key resolution and keep all owner, wallet, ledger, and management routes behind authentication.
+
+Merchant suspension or deletion must preserve financial histories. Resetting administrator statistics must not delete financial records or change wallet balances.
+
+**Why:** The user explicitly requires both protections in the administrator specification; administrative cleanup must not erase accounting evidence.
+
+**How to apply:** Disable account access and retain accounting references when removing merchants; implement statistics resets as reporting-period changes rather than deleting transactions or ledger entries.
