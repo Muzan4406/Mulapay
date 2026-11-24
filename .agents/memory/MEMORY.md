@@ -16,3 +16,4 @@
 - [Account security boundary](account-security.md) — Clerk owns password reverification and sessions; Mulapay stores only a server-hashed PIN in private metadata.
 - [Cancelled tasks and Supabase](cancelled-task-external-state.md) — external database changes can survive task cancellation even when its code was never merged.
 - [Clerk test instance selection](clerk-test-instance-selection.md) — the automated sign-in helper cannot explicitly select the separate development credential pair.
+- [Plesk build environment](plesk-build-environment.md) — Plesk's command runner may not pass Node.js runtime variables or parse inline shell assignments; use a local ignored env file for build-only public keys.
