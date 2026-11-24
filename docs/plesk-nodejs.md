@@ -20,14 +20,18 @@ Installez pnpm 10 pour l’utilisateur du site si Plesk ne fournit pas déjà `p
 
 Dans **Plesk → Node.js** :
 
-- Version : **Node.js 20.x**.
+- Version : **Node.js 20.x recommandé** (version du workspace Replit). Le Node.js **26.13.1** affiché dans ta capture respecte les contraintes déclarées de Vite, Clerk, Express et pg, mais le build local a été vérifié sous Node 20.20.0, pas sur Plesk.
 - Racine de l’application : racine du dépôt Git.
-- Fichier de démarrage : `plesk-start.mjs`.
+- Fichier de démarrage : `app.js`.
 - Racine des documents : `artifacts/mulapay/dist/public`.
 - Mode : production.
 - Activez SSL pour le domaine avant d’activer les paiements ou les webhooks.
 - Ne définissez pas un port fixe dans le code. L’application écoute le `PORT` fourni par Plesk/Passenger.
 - Après un pull réussi, utilisez **Restart App**.
+
+Dans la capture actuelle, `/httpdocs` correspond bien à la racine du dépôt si elle contient `package.json` et `pnpm-lock.yaml`. Le champ Startup File indique `app.js` comme manquant parce que cette version n’est pas encore présente dans le dépôt téléchargé par Plesk. Après le push et le pull du correctif, le fichier `/httpdocs/app.js` sera fourni.
+
+Le Document Root affiché (`/httpdocs/artifacts/mulapay/public`) est le dossier source des fichiers publics, pas le résultat Vite. Après le build, le bon dossier est `/httpdocs/artifacts/mulapay/dist/public`. Il est créé par `scripts/plesk-build.sh`; configure cette racine après la première compilation si le sélecteur Plesk ne permet pas de choisir un dossier encore absent.
 
 Ajoutez ces variables d’environnement dans la configuration Node.js Plesk :
 
