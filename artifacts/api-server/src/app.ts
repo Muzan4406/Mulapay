@@ -1,5 +1,8 @@
 import express, { type Express } from "express";
 import cors from "cors";
+import { existsSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import pinoHttp from "pino-http";
 import { clerkMiddleware } from "@clerk/express";
 import router from "./routes";
@@ -57,6 +60,26 @@ app.use(
 app.use("/api/v1/admin/console", adminConsoleRouter);
 app.use("/api/v1/announcements", announcementsRouter);
 app.use("/api", router);
+
+if (process.env.PLESK_SERVE_FRONTEND === "true") {
+  const appDirectory = path.dirname(fileURLToPath(import.meta.url));
+  const frontendDirectory = process.env.MULAPAY_FRONTEND_DIR
+    ? path.resolve(process.env.MULAPAY_FRONTEND_DIR)
+    : path.resolve(appDirectory, "../../mulapay/dist/public");
+  const indexFile = path.join(frontendDirectory, "index.html");
+
+  if (!existsSync(indexFile)) {
+    throw new Error(`Mulapay frontend build was not found at ${frontendDirectory}. Run pnpm run build:plesk before starting the app.`);
+  }
+
+  app.use(express.static(frontendDirectory, { index: false, maxAge: "1h" }));
+  app.get(/^\/(?!api(?:\/|$)).*/, (_req, res, next) => {
+    res.setHeader("Cache-Control", "no-cache");
+    res.sendFile(indexFile, (error) => {
+      if (error) next(error);
+    });
+  });
+}
 
 app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (error instanceof OperationalError) {
