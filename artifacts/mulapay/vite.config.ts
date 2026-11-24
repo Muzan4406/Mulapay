@@ -31,7 +31,7 @@ export default defineConfig(async ({ command, isPreview }) => {
   // production builds even when development secrets exist in the workspace.
   const publishableKey = development
     ? process.env.CLERK_DEV_PUBLISHABLE_KEY
-    : process.env.VITE_CLERK_PUBLISHABLE_KEY;
+    : process.env.VITE_CLERK_PUBLISHABLE_KEY || process.env.CLERK_PUBLISHABLE_KEY;
   if (!publishableKey?.startsWith(development ? 'pk_test_' : 'pk_live_')) {
     throw new Error(`Configure the Clerk ${development ? 'development' : 'production'} publishable key.`);
   }

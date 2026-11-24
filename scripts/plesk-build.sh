@@ -15,10 +15,14 @@ run_pnpm() {
   fi
 }
 
+if [ -z "${VITE_CLERK_PUBLISHABLE_KEY:-}" ] && [ -n "${CLERK_PUBLISHABLE_KEY:-}" ]; then
+  export VITE_CLERK_PUBLISHABLE_KEY="$CLERK_PUBLISHABLE_KEY"
+fi
+
 case "${VITE_CLERK_PUBLISHABLE_KEY:-}" in
   pk_live_*) ;;
   *)
-    echo "Set the production VITE_CLERK_PUBLISHABLE_KEY in the Plesk build environment before building." >&2
+    echo "The build command did not receive a production publishable key. Set VITE_CLERK_PUBLISHABLE_KEY (or pass CLERK_PUBLISHABLE_KEY) in the build process." >&2
     exit 1
     ;;
 esac
