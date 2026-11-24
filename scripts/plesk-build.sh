@@ -19,23 +19,47 @@ if [ -z "${VITE_CLERK_PUBLISHABLE_KEY:-}" ] && [ -n "${CLERK_PUBLISHABLE_KEY:-}"
   export VITE_CLERK_PUBLISHABLE_KEY="$CLERK_PUBLISHABLE_KEY"
 fi
 
-PLESK_VITE_ENV_FILE="$ROOT_DIR/artifacts/mulapay/.env.production"
-if [ -z "${VITE_CLERK_PUBLISHABLE_KEY:-}" ] && [ -f "$PLESK_VITE_ENV_FILE" ]; then
-  VITE_CLERK_PUBLISHABLE_KEY=$(awk -F= '
-    $1 == "VITE_CLERK_PUBLISHABLE_KEY" {
+read_publishable_key() {
+  awk -F= '
+    {
+      name = $1
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", name)
+      if (name != "VITE_CLERK_PUBLISHABLE_KEY") next
       sub(/^[^=]*=/, "")
       gsub(/\r/, "")
+      sub(/^[[:space:]]+/, "")
+      sub(/[[:space:]]+$/, "")
+      if ((substr($0, 1, 1) == "\"" && substr($0, length($0), 1) == "\"") ||
+          (substr($0, 1, 1) == "\047" && substr($0, length($0), 1) == "\047")) {
+        $0 = substr($0, 2, length($0) - 2)
+      }
       print
       exit
     }
-  ' "$PLESK_VITE_ENV_FILE")
-  export VITE_CLERK_PUBLISHABLE_KEY
+  ' "$1"
+}
+
+if [ -z "${VITE_CLERK_PUBLISHABLE_KEY:-}" ]; then
+  for PLESK_VITE_ENV_FILE in "$ROOT_DIR/.env.production" "$ROOT_DIR/artifacts/mulapay/.env.production"; do
+    if [ -f "$PLESK_VITE_ENV_FILE" ]; then
+      VITE_CLERK_PUBLISHABLE_KEY=$(read_publishable_key "$PLESK_VITE_ENV_FILE")
+      if [ -n "$VITE_CLERK_PUBLISHABLE_KEY" ]; then
+        export VITE_CLERK_PUBLISHABLE_KEY
+        break
+      fi
+    fi
+  done
 fi
 
-case "${VITE_CLERK_PUBLISHABLE_KEY:-}" in
+if [ -z "${VITE_CLERK_PUBLISHABLE_KEY:-}" ]; then
+  echo "No Clerk publishable key reached the build. Set VITE_CLERK_PUBLISHABLE_KEY or add it to /httpdocs/.env.production." >&2
+  exit 1
+fi
+
+case "$VITE_CLERK_PUBLISHABLE_KEY" in
   pk_live_*) ;;
   *)
-    echo "No valid production Clerk publishable key reached the build. Set VITE_CLERK_PUBLISHABLE_KEY, set CLERK_PUBLISHABLE_KEY, or add it to artifacts/mulapay/.env.production." >&2
+    echo "The Clerk publishable key must be a production key beginning with pk_live_." >&2
     exit 1
     ;;
 esac
