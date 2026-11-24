@@ -5,29 +5,27 @@ import { defineConfig } from 'vite';
 
 import runtimeErrorOverlay from '@replit/vite-plugin-runtime-error-modal';
 
-const rawPort = process.env.PORT;
-
-if (!rawPort) {
-  throw new Error(
-    'PORT environment variable is required but was not provided.',
-  );
-}
-
-const port = Number(rawPort);
-
-if (Number.isNaN(port) || port <= 0) {
-  throw new Error(`Invalid PORT value: "${rawPort}"`);
-}
-
-const basePath = process.env.BASE_PATH;
-
-if (!basePath) {
-  throw new Error(
-    'BASE_PATH environment variable is required but was not provided.',
-  );
-}
-
 export default defineConfig(async ({ command, isPreview }) => {
+  const isBuild = command === 'build';
+  const rawPort = process.env.PORT ?? (isBuild ? '3000' : undefined);
+  if (!rawPort) {
+    throw new Error(
+      'PORT environment variable is required when running the Vite server.',
+    );
+  }
+
+  const port = Number(rawPort);
+  if (Number.isNaN(port) || port <= 0) {
+    throw new Error(`Invalid PORT value: "${rawPort}"`);
+  }
+
+  const basePath = process.env.BASE_PATH ?? (isBuild ? '/' : undefined);
+  if (!basePath) {
+    throw new Error(
+      'BASE_PATH environment variable is required when running the Vite server.',
+    );
+  }
+
   const development = command === 'serve' && !isPreview;
   // Only the publishable key is exposed to browser code. Keep live keys for
   // production builds even when development secrets exist in the workspace.

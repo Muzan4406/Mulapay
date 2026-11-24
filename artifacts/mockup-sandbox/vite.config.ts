@@ -27,7 +27,22 @@ if (!basePath) {
   );
 }
 
-export default defineConfig({
+export default defineConfig(({ command }) => {
+  const isBuild = command === "build";
+  const rawPort = process.env.PORT ?? (isBuild ? "3000" : undefined);
+  if (!rawPort) {
+    throw new Error("PORT environment variable is required when running the Vite server.");
+  }
+  const port = Number(rawPort);
+  if (Number.isNaN(port) || port <= 0) {
+    throw new Error(`Invalid PORT value: "${rawPort}"`);
+  }
+  const basePath = process.env.BASE_PATH ?? (isBuild ? "/" : undefined);
+  if (!basePath) {
+    throw new Error("BASE_PATH environment variable is required when running the Vite server.");
+  }
+
+  return {
   base: basePath,
   plugins: [
     mockupPreviewPlugin(),
@@ -68,4 +83,5 @@ export default defineConfig({
     host: "0.0.0.0",
     allowedHosts: true,
   },
+  };
 });
