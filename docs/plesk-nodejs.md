@@ -12,7 +12,7 @@ Ce dépôt est un workspace pnpm : l’application web et l’API doivent être 
 sh scripts/plesk-build.sh
 ```
 
-Le script installe les dépendances du workspace avec pnpm, construit le client Mulapay et l’API, et s’arrête avec une erreur explicite si la clé publique Clerk de production n’est pas disponible pendant le build.
+Le script installe les dépendances du workspace avec pnpm, construit le client Mulapay et l’API, et s’arrête avec une erreur explicite si la clé publique Clerk de production n’est pas disponible pendant le build. Le workspace approuve explicitement les scripts d’installation de `@clerk/shared` et `esbuild`, dont pnpm a besoin pour préparer Clerk et construire le serveur.
 
 Installez pnpm 10 pour l’utilisateur du site si Plesk ne fournit pas déjà `pnpm` ou Corepack. Le projet utilise pnpm et son installation racine refuse volontairement npm/yarn.
 

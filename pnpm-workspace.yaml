@@ -69,10 +69,19 @@ catalog:
 autoInstallPeers: false
 
 onlyBuiltDependencies:
+  - '@clerk/shared'
   - '@swc/core'
   - esbuild
   - msw
   - unrs-resolver
+
+# pnpm 12+ uses allowBuilds for the same explicit build-script approvals.
+allowBuilds:
+  '@clerk/shared': true
+  '@swc/core': true
+  esbuild: true
+  msw: true
+  unrs-resolver: true
 
 overrides:
   # replit uses linux-x64 only, we can exclude all other platforms
