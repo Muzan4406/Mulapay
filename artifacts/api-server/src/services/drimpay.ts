@@ -1,3 +1,5 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
+
 export type DrimPayPayinInput = {
   amount: number;
   currency: string;
@@ -47,11 +49,13 @@ export type DrimPayPayoutInput = {
 export type DrimPayPayoutResponse = {
   id?: string;
   reference: string;
-  order_id: string;
+  external_ref?: string;
+  order_id?: string;
   status: string;
   amount: number;
   fee: number;
-  total_debited: number;
+  total_debit: number;
+  net_amount?: number;
   currency: string;
   country_code: string;
   operator: string;
@@ -102,13 +106,31 @@ const DRIMPAY_BASE_URL = "https://drimpay.com/api/v2";
 
 const OPERATOR_SLUGS: Record<string, string> = {
   "Mixx by Yas": "tmoney",
+  TMoney: "tmoney",
   "Moov Money": "moov",
   "MTN MoMo": "mtn",
+  "MTN Mobile Money": "mtn",
+  "MTN Money": "mtn",
+  MTN: "mtn",
   "Orange Money": "orange",
+  Orange: "orange",
   Wave: "wave",
+  "Wave Money": "wave",
+  Celtiis: "celtiis",
+  Free: "free",
+  "Free Money": "free",
   "Airtel Money": "airtel",
   Wizall: "wizall",
   Vodacom: "vodacom",
+};
+
+const DRIMPAY_COUNTRY_OPERATORS: Record<string, Set<string>> = {
+  TG: new Set(["tmoney", "moov"]),
+  BJ: new Set(["mtn", "moov", "celtiis"]),
+  BF: new Set(["orange", "moov", "wave"]),
+  ML: new Set(["orange", "moov"]),
+  SN: new Set(["orange", "wave", "free"]),
+  CI: new Set(["mtn", "orange", "wave", "moov"]),
 };
 
 export const COUNTRY_CODES: Record<string, string> = {
@@ -129,7 +151,13 @@ export function countryCodeForName(country: string) {
 }
 
 export function operatorSlugForName(operator: string) {
-  return OPERATOR_SLUGS[operator];
+  const trimmed = operator.trim();
+  return OPERATOR_SLUGS[trimmed] ?? (Object.values(OPERATOR_SLUGS).includes(trimmed.toLowerCase()) ? trimmed.toLowerCase() : undefined);
+}
+
+export function isDrimPayRouteSupported(countryCode: string, operator: string) {
+  const slug = operatorSlugForName(operator);
+  return Boolean(slug && DRIMPAY_COUNTRY_OPERATORS[countryCode]?.has(slug));
 }
 
 export function drimPayWebhookUrl() {
@@ -137,7 +165,13 @@ export function drimPayWebhookUrl() {
   if (!url) {
     throw new DrimPayConfigurationError("DRIMPAY_WEBHOOK_URL n’est pas configurée.");
   }
-  if (!url.startsWith("https://")) {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new DrimPayConfigurationError("DRIMPAY_WEBHOOK_URL doit être une URL HTTPS publique.");
+  }
+  if (parsed.protocol !== "https:" || !parsed.hostname || parsed.username || parsed.password) {
     throw new DrimPayConfigurationError("DRIMPAY_WEBHOOK_URL doit être une URL HTTPS publique.");
   }
   return url;
@@ -156,17 +190,52 @@ function apiKey() {
 
 export function isDrimPayConfigured() {
   try {
+    if (process.env.NODE_ENV !== "production") return false;
     apiKey();
     drimPayWebhookUrl();
+    if (!process.env.DRIMPAY_WEBHOOK_SECRET?.trim()) {
+      throw new DrimPayConfigurationError("Le secret webhook DrimPay correspondant à la clé API n’est pas configuré.");
+    }
     return true;
   } catch {
     return false;
   }
 }
 
+export function verifyDrimPayWebhookSignature(
+  header: string | undefined,
+  rawBody: Buffer,
+  secret = process.env.DRIMPAY_WEBHOOK_SECRET,
+  timestampHeader?: string,
+) {
+  if (!secret || !header) return false;
+  const values = new Map<string, string>();
+  for (const part of header.split(",")) {
+    const [key, value] = part.trim().split("=", 2);
+    if (!key || !value || values.has(key)) return false;
+    values.set(key, value);
+  }
+  const timestamp = values.get("t");
+  const signature = values.get("v1");
+  if (!timestamp || !/^\d{10}$/.test(timestamp) || !signature || !/^[a-f0-9]{64}$/i.test(signature)) return false;
+  if (timestampHeader !== undefined && timestampHeader !== timestamp) return false;
+  if (Math.abs(Date.now() / 1000 - Number(timestamp)) > 300) return false;
+  const expected = createHmac("sha256", secret).update(`${timestamp}.${rawBody.toString("utf8")}`).digest();
+  const provided = Buffer.from(signature, "hex");
+  return provided.length === expected.length && timingSafeEqual(provided, expected);
+}
+
+function assertLiveRuntime() {
+  if (process.env.NODE_ENV !== "production") {
+    throw new DrimPayConfigurationError("Les appels à DrimPay Production sont désactivés hors de l’environnement de production.");
+  }
+}
+
 async function request<T>(path: string, init: RequestInit = {}) {
+  assertLiveRuntime();
   const response = await fetch(`${DRIMPAY_BASE_URL}${path}`, {
     ...init,
+    signal: init.signal ?? AbortSignal.timeout(20_000),
     headers: {
       Authorization: `Bearer ${apiKey()}`,
       "Content-Type": "application/json",
@@ -201,7 +270,7 @@ export function normalizeDrimPayOperator(operator: string) {
 
 export async function initiatePayin(input: DrimPayPayinInput) {
   const operator = normalizeDrimPayOperator(input.operator);
-  return request<DrimPayPayinResponse>("/payin/initiate", {
+  const response = await request<DrimPayPayinResponse>("/payin/initiate", {
     method: "POST",
     body: JSON.stringify({
       amount: input.amount,
@@ -217,11 +286,29 @@ export async function initiatePayin(input: DrimPayPayinInput) {
       ...(input.metadata ? { metadata: input.metadata } : {}),
     }),
   });
+  if (
+    response.mode !== "live" ||
+    !response.reference ||
+    response.order_id !== input.orderId ||
+    response.amount !== input.amount ||
+    response.currency !== input.currency ||
+    response.country_code !== input.countryCode ||
+    operatorSlugForName(response.operator) !== operator ||
+    !Number.isSafeInteger(response.fee) ||
+    response.fee < 0 ||
+    !Number.isSafeInteger(response.net_amount) ||
+    response.net_amount <= 0 ||
+    response.net_amount > response.amount ||
+    !Number.isFinite(Date.parse(response.expires_at))
+  ) {
+    throw new DrimPayError("La réponse Pay-in DrimPay ne correspond pas à la demande de production.", 502, "INVALID_PAYIN_RESPONSE");
+  }
+  return response;
 }
 
 export async function initiatePayout(input: DrimPayPayoutInput) {
   const operator = normalizeDrimPayOperator(input.operator);
-  return request<DrimPayPayoutResponse>("/payout/send", {
+  const response = await request<DrimPayPayoutResponse>("/payout/initiate", {
     method: "POST",
     body: JSON.stringify({
       amount: input.amount,
@@ -229,16 +316,36 @@ export async function initiatePayout(input: DrimPayPayoutInput) {
       country_code: input.countryCode,
       operator,
       phone: input.phone,
-      order_id: input.orderId,
+      external_ref: input.orderId,
       webhook_url: input.webhookUrl,
       ...(input.description ? { description: input.description } : {}),
       ...(input.metadata ? { metadata: input.metadata } : {}),
     }),
   });
+  if (
+    response.mode !== "live" ||
+    !response.reference ||
+    (response.external_ref ?? response.order_id) !== input.orderId ||
+    response.amount !== input.amount ||
+    response.currency !== input.currency ||
+    response.country_code !== input.countryCode ||
+    operatorSlugForName(response.operator) !== operator ||
+    !Number.isSafeInteger(response.fee) ||
+    response.fee < 0 ||
+    !Number.isSafeInteger(response.total_debit) ||
+    response.total_debit < response.amount
+  ) {
+    throw new DrimPayError("La réponse Payout DrimPay ne correspond pas à la demande de production.", 502, "INVALID_PAYOUT_RESPONSE");
+  }
+  return response;
 }
 
 export async function getPayin(reference: string) {
   return request<DrimPayPayinResponse>(`/payin/${encodeURIComponent(reference)}`);
+}
+
+export async function getPayout(reference: string) {
+  return request<DrimPayPayoutResponse>(`/payout/${encodeURIComponent(reference)}`);
 }
 
 export function providerStatusToTransactionStatus(status: string) {

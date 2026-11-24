@@ -59,9 +59,11 @@ import {
   getPayin,
   initiatePayin,
   initiatePayout,
+  isDrimPayRouteSupported,
   isDrimPayConfigured,
-  operatorSlugForName,
   providerStatusToTransactionStatus,
+  verifyDrimPayWebhookSignature,
+  operatorSlugForName,
 } from "../services/drimpay";
 import {
   AshtechPayError,
@@ -169,26 +171,8 @@ function withdrawalPayloadMatchesWallet(
   return (
     wallet.code === payload.country_code &&
     transaction.currency === payload.currency &&
-    Boolean(expectedOperator && operatorSlugForName(expectedOperator) === payload.operator)
+    Boolean(expectedOperator && operatorSlugForName(expectedOperator) === operatorSlugForName(payload.operator))
   );
-}
-
-function parseDrimPayWebhookSignature(header: string | undefined, rawBody: Buffer) {
-  const secret = process.env.DRIMPAY_WEBHOOK_SECRET;
-  if (!secret || !header) return false;
-  const values = Object.fromEntries(
-    header.split(",").map((part) => {
-      const [key, value] = part.trim().split("=", 2);
-      return [key, value];
-    }),
-  );
-  const timestamp = Number(values.t);
-  const signature = values.v1;
-  if (!Number.isInteger(timestamp) || !signature || Math.abs(Date.now() / 1000 - timestamp) > 300) return false;
-  const expected = createHmac("sha256", secret).update(`${timestamp}.${rawBody.toString("utf8")}`).digest("hex");
-  const provided = Buffer.from(signature, "hex");
-  const calculated = Buffer.from(expected, "hex");
-  return provided.length === calculated.length && timingSafeEqual(provided, calculated);
 }
 
 function parseAshtechPayWebhookSignature(headers: { signature?: string; timestamp?: string }, rawBody: Buffer) {
@@ -217,6 +201,12 @@ async function resolvePaymentProvider(countryCode: string, operator: string) {
   if (!route) return null;
   const provider = route.provider as PaymentProvider;
   if (provider !== "DRIMPAY" && provider !== "ASHTECHPAY") throw new Error("PAYMENT_PROVIDER_INVALID");
+  if (provider === "DRIMPAY" && !isDrimPayRouteSupported(countryCode, route.providerOperator)) {
+    throw new OperationalError("L’opérateur n’est pas pris en charge par DrimPay pour ce pays.", 503);
+  }
+  if (provider === "ASHTECHPAY" && !isAshtechPayOperatorSupported(countryCode, route.providerOperator)) {
+    throw new OperationalError("L’opérateur n’est pas pris en charge par AshtechPay pour ce pays.", 503);
+  }
   await assertProviderEnabled(provider);
   if (!(provider === "DRIMPAY" ? isDrimPayConfigured() : isAshtechPayConfigured())) throw new OperationalError("Le service de paiement n’est pas encore configuré.", 503);
   return { provider, operator: route.providerOperator, routeId: route.id };
@@ -224,7 +214,12 @@ async function resolvePaymentProvider(countryCode: string, operator: string) {
 
 async function handleDrimPayWebhook(req: Request, res: Response) {
   const rawBody = (req as Request & { rawBody?: Buffer }).rawBody;
-  if (!rawBody || !parseDrimPayWebhookSignature(req.header("X-DrimPay-Signature"), rawBody)) {
+  if (!rawBody || !verifyDrimPayWebhookSignature(
+    req.header("X-DrimPay-Signature"),
+    rawBody,
+    process.env.DRIMPAY_WEBHOOK_SECRET,
+    req.header("X-DrimPay-Timestamp"),
+  )) {
     res.status(401).json({ error: "Signature de confirmation invalide ou expirée." });
     return;
   }
@@ -232,11 +227,13 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
   const payload = req.body as {
     event?: string;
     reference?: string;
+    external_ref?: string;
     order_id?: string;
     status?: string;
+    mode?: string;
     amount?: number;
     fee?: number;
-    total_debited?: number;
+    total_debit?: number;
     net_amount?: number;
     currency?: string;
     country_code?: string;
@@ -246,6 +243,7 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
   if (
     !payload.reference ||
     !payload.status ||
+    payload.mode !== "live" ||
     typeof payload.amount !== "number" ||
     !payload.currency ||
     !payload.country_code ||
@@ -272,6 +270,7 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
           eq(transactions.providerReference, payload.reference!),
           eq(transactions.providerOrderId, payload.reference!),
           ...(payload.order_id ? [eq(transactions.providerOrderId, payload.order_id)] : []),
+          ...(payload.external_ref ? [eq(transactions.providerOrderId, payload.external_ref)] : []),
         ),
       )).for("update");
     if (!transaction) return { found: false };
@@ -380,7 +379,7 @@ async function handleDrimPayWebhook(req: Request, res: Response) {
       const wallet = await tx.query.wallets.findFirst({ where: eq(wallets.id, transaction.walletId ?? "") });
       if (!wallet) throw new Error("WALLET_NOT_FOUND");
       if (
-        !depositPayloadMatchesWallet(transaction, wallet, payload.country_code!, payload.currency!, "DRIMPAY") ||
+        !depositPayloadMatchesWallet(transaction, wallet, payload.country_code!, payload.currency!, "DRIMPAY", payload.operator!) ||
         payload.amount !== transaction.amount
       ) {
         return { found: true, walletMismatch: true };
@@ -485,11 +484,14 @@ function depositPayloadMatchesWallet(
   countryCode: string,
   currency: string,
   provider: PaymentProvider,
+  providerOperator?: string,
 ) {
-  if (transaction.type !== "Deposit") return true;
+  if (transaction.type !== "Deposit" && transaction.type !== "Payment") return true;
   if (wallet.code !== countryCode) return false;
   if (provider === "ASHTECHPAY") return ashtechPayCurrencyForCountry(wallet.code) === currency;
-  return transaction.currency === currency;
+  const expectedOperator = transaction.operator ? operatorSlugForName(transaction.operator) : undefined;
+  const receivedOperator = providerOperator ? operatorSlugForName(providerOperator) : undefined;
+  return transaction.currency === currency && Boolean(expectedOperator && receivedOperator && expectedOperator === receivedOperator);
 }
 
 function respondWithPaymentProviderError(res: Response, error: DrimPayError | AshtechPayError, provider: PaymentProvider) {
@@ -615,7 +617,7 @@ async function submitDrimPayOutgoing(input: {
       description: `${input.kind === "Withdrawal" ? "Retrait" : "Transfert"} Mulapay · ${input.wallet.country}`,
       metadata: { mulapay_user_id: input.userId, mulapay_wallet_id: input.wallet.id },
     });
-    if (provider.amount !== input.amount || provider.total_debited <= 0) {
+    if (provider.amount !== input.amount || provider.total_debit < input.amount) {
       throw new DrimPayError("La réponse payout DrimPay est incohérente. L’opération reste en attente de vérification.", 502, "INVALID_PAYOUT_RESPONSE");
     }
 
@@ -883,8 +885,10 @@ async function reconcileDrimPayTransaction(transaction: typeof transactions.$inf
 
   const nextStatus = providerStatusToTransactionStatus(provider.status);
   if (
+    provider.mode !== "live" ||
     nextStatus === "Pending" ||
-    (provider.reference !== transaction.providerReference && provider.order_id !== transaction.providerOrderId)
+    provider.reference !== transaction.providerReference ||
+    provider.order_id !== transaction.providerOrderId
   ) {
     return transaction;
   }
@@ -899,7 +903,7 @@ async function reconcileDrimPayTransaction(transaction: typeof transactions.$inf
       if (nextStatus === "Completed") {
         const merchantAmount = current.merchantAmount ?? provider.net_amount;
         if (
-          !depositPayloadMatchesWallet(current, wallet, provider.country_code, provider.currency, "DRIMPAY") ||
+          !depositPayloadMatchesWallet(current, wallet, provider.country_code, provider.currency, "DRIMPAY", provider.operator) ||
           provider.amount !== current.amount ||
           provider.net_amount <= 0 ||
           provider.net_amount > provider.amount ||
@@ -2680,7 +2684,7 @@ router.post("/v1/withdrawals", async (req, res) => {
       description: `Retrait Mulapay · ${wallet.country}`,
       metadata: { mulapay_user_id: user.id, mulapay_wallet_id: wallet.id },
     });
-    if (provider.amount !== requestedAmount || provider.total_debited <= 0) {
+    if (provider.amount !== requestedAmount || provider.total_debit < requestedAmount) {
       throw new DrimPayError("La réponse payout DrimPay est incohérente. Le retrait reste en attente de vérification.", 502, "INVALID_PAYOUT_RESPONSE");
     }
 

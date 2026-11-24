@@ -238,9 +238,9 @@ const mobileMoneyCountryOptions = [
   { code: 'TG', country: 'Togo', flagSrc: 'togo.png', dialCode: '+228', operators: [{ name: 'Mixx by Yas', src: 'mixx_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }] },
   { code: 'BJ', country: 'Bénin', flagSrc: 'benin.png', dialCode: '+229', operators: [{ name: 'MTN MoMo', src: 'mtn-momo_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }] },
   { code: 'CI', country: 'Côte d’Ivoire', flagSrc: 'cote-divoire.png', dialCode: '+225', operators: [{ name: 'Orange Money', src: 'orange-money_no_bg.png' }, { name: 'MTN MoMo', src: 'mtn-momo_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }, { name: 'Wave', src: 'wave_no_bg.png' }] },
-  { code: 'BF', country: 'Burkina Faso', flagSrc: 'burkina-faso.png', dialCode: '+226', operators: [{ name: 'Orange Money', src: 'orange-money_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }, { name: 'Airtel Money', src: 'airtel-money_no_bg.png' }] },
+  { code: 'BF', country: 'Burkina Faso', flagSrc: 'burkina-faso.png', dialCode: '+226', operators: [{ name: 'Orange Money', src: 'orange-money_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }, { name: 'Wave', src: 'wave_no_bg.png' }] },
   { code: 'SN', country: 'Sénégal', flagSrc: 'senegal.png', dialCode: '+221', operators: [{ name: 'Wave', src: 'wave_no_bg.png' }, { name: 'Orange Money', src: 'orange-money_no_bg.png' }] },
-  { code: 'ML', country: 'Mali', flagSrc: 'mali.png', dialCode: '+223', operators: [{ name: 'Orange Money', src: 'orange-money_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }, { name: 'Airtel Money', src: 'airtel-money_no_bg.png' }] },
+  { code: 'ML', country: 'Mali', flagSrc: 'mali.png', dialCode: '+223', operators: [{ name: 'Orange Money', src: 'orange-money_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }] },
   { code: 'NE', country: 'Niger', flagSrc: 'niger.png', dialCode: '+227', operators: [{ name: 'Airtel Money', src: 'airtel-money_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }, { name: 'Orange Money', src: 'orange-money_no_bg.png' }] },
 ];
 
@@ -1007,9 +1007,9 @@ Idempotency-Key: commande-unique-123`}</pre>
         <div><strong>Togo</strong><span>Mixx by Yas · Moov Money</span></div>
         <div><strong>Bénin</strong><span>MTN MoMo · Moov Money</span></div>
         <div><strong>Côte d’Ivoire</strong><span>Orange Money · MTN MoMo · Wave · Moov Money</span></div>
-        <div><strong>Burkina Faso</strong><span>Orange Money · Moov Money · Telecel</span></div>
-        <div><strong>Sénégal</strong><span>Orange Money · Wave · Wizall</span></div>
-        <div><strong>Mali</strong><span>Orange Money · Moov Money · MTN MoMo</span></div>
+        <div><strong>Burkina Faso</strong><span>Orange Money · Moov Money · Wave</span></div>
+        <div><strong>Sénégal</strong><span>Orange Money · Wave</span></div>
+        <div><strong>Mali</strong><span>Orange Money · Moov Money</span></div>
       </div>
       <p className="section-note" style={{ marginTop: 14 }}>La disponibilité d’un pays ou d’un opérateur peut dépendre de l’activation de votre compte.</p>
     </div>
@@ -1077,7 +1077,7 @@ function ApiPayinDocs() {
   ];
   const fields = [
     ['walletId', 'Identifiant du wallet Mulapay du pays concerné.', 'Requis'],
-    ['amount', 'Montant strictement positif ; l’API attend un montant entier dans la devise du wallet.', 'Requis'],
+    ['amount', 'Montant entier dans la devise du wallet, dans les limites minimum et maximum affichées dans vos paramètres Mulapay.', 'Requis'],
     ['method', 'Valeur attendue : mobile_money.', 'Requis'],
     ['country', 'Pays du wallet. Le pays doit être activé pour les dépôts sur votre compte ; le Niger est actuellement indisponible pour ce flux.', 'Requis'],
     ['operator', 'Opérateur Mobile Money activé pour le pays sélectionné. La disponibilité dépend du routage Mulapay.', 'Requis'],
@@ -1100,7 +1100,7 @@ function ApiPayinDocs() {
     ['status', 'Statut métier Mulapay. Seul Completed confirme le règlement.'],
     ['amount', 'Montant de l’opération lorsqu’il est retourné par l’endpoint concerné.'],
     ['currency', 'Devise de l’opération lorsqu’elle est retournée par l’endpoint concerné.'],
-    ['fee', 'Frais retournés par Mulapay pour l’opération.'],
+    ['fee', 'Frais Mulapay appliqués à cette opération ; les frais d’un prestataire interne ne sont pas exposés.'],
     ['netAmount', 'Montant net retourné par Mulapay après les frais applicables.'],
     ['platformFee', 'Frais Mulapay retournés pour l’opération ; aucun taux n’est à recalculer côté partenaire.'],
     ['merchantAmount', 'Montant destiné au wallet du marchand lorsqu’il est retourné.'],
@@ -1112,8 +1112,10 @@ function ApiPayinDocs() {
     ['400', 'Requête invalide', 'Champ manquant, montant invalide, wallet incompatible, téléphone mal formé, OTP requis ou service refusé.'],
     ['401', 'Non authentifié', 'Clé Mulapay absente, invalide ou révoquée.'],
     ['404', 'Introuvable', 'Référence, dépôt, retrait, paiement ou lien demandé inconnu.'],
-    ['409', 'Conflit', 'Ressource déjà traitée ou impossible à modifier dans son état actuel.'],
+    ['403', 'Accès refusé', 'La clé ne possède pas le scope nécessaire ou le compte ne peut pas utiliser cette opération.'],
+    ['409', 'Conflit', 'Opération déjà traitée, clé d’idempotence incompatible ou ressource impossible à modifier dans son état actuel.'],
     ['410', 'Lien indisponible', 'Réponse réservée aux routes publiques lorsqu’un lien est désactivé, expiré ou épuisé.'],
+    ['429', 'Limite atteinte', 'Trop de requêtes. Attendez avant de réessayer avec la même clé d’idempotence.'],
     ['503', 'Service indisponible', 'Le canal de paiement n’est pas disponible temporairement. Réessayez avec la même clé lorsque l’opération est rejouable.'],
   ];
   const withdrawalFields = [
@@ -1141,7 +1143,7 @@ function ApiPayinDocs() {
 
         <section id="overview" className="docs-hero card">
           <div className="docs-hero-copy"><span className="docs-kicker">Paiements automatiques</span><h2>Une intégration claire, de la demande à la confirmation.</h2><p>Votre serveur appelle l’API Mulapay avec une clé sécurisée. Mulapay fournit une référence unique et vous permet de suivre l’opération jusqu’à son statut final.</p><div className="docs-hero-actions"><a href="#quickstart" className="button button-primary">Démarrer l’intégration <ArrowRight size={15} /></a><a href="#create-deposit" className="button button-ghost">Voir l’exemple</a></div></div>
-          <div className="docs-hero-visual"><div className="docs-hero-orbit" /><img src={dashboardIcon('documents.png')} alt="" className="docs-hero-illustration" /><div className="docs-hero-status"><span className="docs-production-dot" /> API opérationnelle</div></div>
+          <div className="docs-hero-visual"><div className="docs-hero-orbit" /><img src={dashboardIcon('documents.png')} alt="" className="docs-hero-illustration" /><div className="docs-hero-status"><span className="docs-production-dot" /> Suivi des paiements</div></div>
         </section>
 
         <section className="docs-steps card">
@@ -1151,9 +1153,6 @@ function ApiPayinDocs() {
 
         <section id="authentication" className="docs-section">
           <div className="docs-section-heading"><div><span className="docs-kicker">01 · Sécurité</span><h2>Authentification</h2><p>Les appels partenaires sont effectués depuis votre backend avec une clé API active.</p></div><LockKeyhole size={19} /></div>
-          <div className="docs-two-column"><div className="card card-pad"><h3>En-têtes</h3><pre className="api-code">{`Authorization: Bearer mp_live_votre_cle
-Content-Type: application/json
-Idempotency-Key: commande-unique-123`}</pre><p className="docs-inline-note"><ShieldCheck size={14} /> <code>Authorization</code> est requis pour les routes partenaires. <code>Idempotency-Key</code> est recommandé pour les créations rejouables, avec une longueur maximale de 128 caractères.</p><p className="docs-inline-note">Ne placez jamais la clé dans le navigateur, une application mobile distribuée ou un dépôt public.</p></div><div className="card card-pad docs-callout-card"><span className="docs-callout-icon"><ShieldCheck size={16} /></span><h3>Clés à durée de vie contrôlée</h3><p>Créez une clé distincte par application. Vous pouvez la révoquer depuis l’espace API sans modifier les autres intégrations.</p><Link href="/app/api" className="docs-text-link">Gérer mes clés <ArrowRight size={14} /></Link></div></div>
           <div className="docs-two-column"><div className="card card-pad"><h3>En-têtes</h3><pre className="api-code">{`Authorization: Bearer mp_live_votre_cle
 Content-Type: application/json
 Idempotency-Key: commande-unique-123`}</pre><p className="docs-inline-note"><ShieldCheck size={14} /> <code>Authorization</code> est requis pour les routes partenaires. <code>Idempotency-Key</code> est recommandé pour les créations rejouables, avec une longueur maximale de 128 caractères.</p><p className="docs-inline-note">Les clés possèdent des scopes. Une clé sans le scope demandé reçoit <code>403</code> avec <code>code: INSUFFICIENT_SCOPE</code>.</p><p className="docs-inline-note">Ne placez jamais la clé dans le navigateur, une application mobile distribuée ou un dépôt public.</p></div><div className="card card-pad docs-callout-card"><span className="docs-callout-icon"><ShieldCheck size={16} /></span><h3>Clés à durée de vie contrôlée</h3><p>Créez une clé distincte par application. Vous pouvez la révoquer depuis l’espace API sans modifier les autres intégrations.</p><Link href="/app/api" className="docs-text-link">Gérer mes clés <ArrowRight size={14} /></Link></div></div>
@@ -1174,7 +1173,7 @@ Idempotency-Key: commande-unique-123`}</pre><p className="docs-inline-note"><Shi
     "kycStatus": "NON_VERIFIE"
   },
   "wallets": [{
-    "id": "uuid-du-wallet",
+  "id": "wallet_togo_id",
     "country": "Togo",
     "code": "TG",
     "currency": "XOF",
@@ -1204,14 +1203,14 @@ Idempotency-Key: commande-unique-123`}</pre><p className="docs-inline-note"><Shi
   -H "Content-Type: application/json" \\
   -H "Idempotency-Key: commande-unique-123" \\
   -d '{
-    "walletId": "uuid-du-wallet-recupere-avec-bootstrap",
+    "walletId": "wallet_id_recupere_avec_bootstrap",
     "amount": 10000,
     "method": "mobile_money",
     "country": "Togo",
     "operator": "Mixx by Yas",
     "phone": "+22890000000"
   }'`}</pre></div><div><div className="docs-code-label">JavaScript côté serveur</div><pre className="api-code">{`const payload = {
-  walletId: "uuid-du-wallet-recupere-avec-bootstrap",
+  walletId: "wallet_id_recupere_avec_bootstrap",
   amount: 10000,
   method: "mobile_money",
   country: "Togo",
@@ -1231,7 +1230,7 @@ const response = await fetch(
   }
 );`}</pre></div></div>
            <div className="card card-pad" style={{ marginTop: 18 }}><h3>Exemples complémentaires</h3><div className="docs-code-grid" style={{ marginTop: 16 }}><div><div className="docs-code-label">PHP côté serveur</div><pre className="api-code">{`$payload = [
-  "walletId" => "uuid-du-wallet-recupere-avec-bootstrap",
+  "walletId" => "wallet_id_recupere_avec_bootstrap",
   "amount" => 10000,
   "method" => "mobile_money",
   "country" => "Togo",
@@ -1253,7 +1252,7 @@ $response = curl_exec($ch);
           curl_close($ch);`}</pre></div><div><div className="docs-code-label">Python côté serveur</div><pre className="api-code">{`import requests
 
 payload = {
-    "walletId": "uuid-du-wallet-recupere-avec-bootstrap",
+    "walletId": "wallet_id_recupere_avec_bootstrap",
     "amount": 10000,
     "method": "mobile_money",
     "country": "Togo",
@@ -1339,7 +1338,8 @@ data = response.json()`}</pre></div></div></div>
 
         <section id="coverage" className="docs-section">
           <div className="docs-section-heading"><div><span className="docs-kicker">08 · Disponibilité</span><h2>Pays & opérateurs</h2><p>La disponibilité effective dépend des pays et opérateurs activés sur votre compte Mulapay.</p></div></div>
-          <div className="card card-pad docs-coverage-grid"><div><strong>Togo</strong><span>Mixx by Yas · Moov Money</span></div><div><strong>Bénin</strong><span>MTN MoMo · Moov Money</span></div><div><strong>Côte d’Ivoire</strong><span>Orange Money · MTN MoMo · Wave · Moov Money</span></div><div><strong>Burkina Faso</strong><span>Orange Money · Moov Money · Telecel</span></div><div><strong>Sénégal</strong><span>Orange Money · Wave · Wizall</span></div><div><strong>Mali</strong><span>Orange Money · Moov Money · MTN MoMo</span></div></div>
+          <div className="card card-pad docs-coverage-grid"><div><strong>Togo</strong><span>Mixx by Yas · Moov Money</span></div><div><strong>Bénin</strong><span>MTN MoMo · Moov Money</span></div><div><strong>Côte d’Ivoire</strong><span>Orange Money · MTN MoMo · Wave · Moov Money</span></div><div><strong>Burkina Faso</strong><span>Orange Money · Moov Money · Airtel Money</span></div><div><strong>Sénégal</strong><span>Orange Money · Wave</span></div><div><strong>Mali</strong><span>Orange Money · Moov Money · Airtel Money</span></div></div>
+          <p className="docs-inline-note"><Info size={14} /> Le Niger n’est pas encore disponible pour les dépôts API. Dans les autres pays, seuls les opérateurs activés dans le routage de votre compte peuvent être utilisés.</p>
           <div className="docs-two-column docs-align-start" style={{ marginTop: 18 }}>
             <div className="card card-pad"><h3>Quand demander un OTP opérateur ?</h3><p className="section-note" style={{ marginTop: 8 }}>Le champ <code>operatorOtp</code> est requis pour les dépôts Orange Money dans les pays suivants :</p><div className="docs-coverage-grid" style={{ marginTop: 14 }}><div><strong>Côte d’Ivoire</strong><span>Orange Money · OTP requis</span></div><div><strong>Sénégal</strong><span>Orange Money · OTP requis</span></div><div><strong>Burkina Faso</strong><span>Orange Money · OTP requis</span></div><div><strong>Mali</strong><span>Orange Money · OTP requis</span></div></div><p className="docs-inline-note" style={{ marginTop: 14 }}><Info size={14} /> Le code est collecté auprès du client selon le parcours affiché par l’opérateur, puis envoyé dans la requête Mulapay.</p><pre className="api-code" style={{ marginTop: 14 }}>{`{
   "operator": "Orange Money",
@@ -1368,7 +1368,7 @@ data = response.json()`}</pre></div></div></div>
   "amountType": "FIXED",
   "amountMin": 300,
   "amountMax": 500000,
-  "walletId": "uuid-du-wallet",
+  "walletId": "wallet_id_recupere_avec_bootstrap",
   "customerFields": ["full_name", "email", "phone"],
   "expiresAt": "2026-12-31T23:59:59.000Z",
   "maxPayments": 1,
@@ -1385,7 +1385,7 @@ data = response.json()`}</pre></div></div></div>
   "amount": 10000,
   "currency": "XOF",
   "description": "Paiement de la commande",
-  "walletId": "uuid-du-wallet",
+  "walletId": "wallet_id_recupere_avec_bootstrap",
   "amountType": "FIXED",
   "amountMin": 300,
   "amountMax": 500000,
@@ -1426,7 +1426,7 @@ data = response.json()`}</pre></div></div></div>
             <div className="docs-endpoint-bar"><span className="api-method">POST</span><code>/api/v1/withdrawals</code><span>Demander un retrait Mobile Money</span></div>
             <div className="docs-two-column docs-align-start" style={{ marginTop: 16 }}>
               <div className="card card-pad"><h3>Corps de la requête</h3><div className="docs-field-list">{withdrawalFields.map(([name, description, requirement]) => <div key={name}><code>{name}</code><p>{description}</p><span className="docs-required">{requirement}</span></div>)}</div><pre className="api-code" style={{ marginTop: 16 }}>{`{
-  "walletId": "uuid-du-wallet",
+  "walletId": "wallet_id_recupere_avec_bootstrap",
   "amount": 10000,
   "country": "Togo",
   "operator": "Mixx by Yas",

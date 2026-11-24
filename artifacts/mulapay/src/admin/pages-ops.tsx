@@ -32,7 +32,7 @@ function RouteForm({ onDone }: { onDone?: () => void }) {
     <Field label="Nom de l’opérateur"><input required value={f.operator} onChange={e => setF(v => ({ ...v, operator: e.target.value }))} placeholder="Ex. Moov Money" data-testid="input-route-operator" /></Field>
     <Field label="Code opérateur agrégateur" hint="Vide = nom de l’opérateur"><input value={f.providerOperator} onChange={e => setF(v => ({ ...v, providerOperator: e.target.value }))} data-testid="input-route-provider-operator" /></Field>
     <Field label="Agrégateur"><select value={f.provider} onChange={e => setF(v => ({ ...v, provider: e.target.value as AdminCommandInputProvider }))} data-testid="select-route-provider">{PROVIDERS.map(p => <option key={p}>{p}</option>)}</select></Field>
-    <Field label="Limite journalière (XOF)" hint="Vide = illimitée"><input type="number" min={0} value={f.dailyLimit} onChange={e => setF(v => ({ ...v, dailyLimit: e.target.value }))} data-testid="input-route-limit" /></Field>
+    <Field label="Limite journalière (XOF)" hint="Vide = illimitée"><input type="number" min={1} value={f.dailyLimit} onChange={e => setF(v => ({ ...v, dailyLimit: e.target.value }))} data-testid="input-route-limit" /></Field>
     <div className="ad-form-end"><button className="ad-btn ad-btn-primary" disabled={pending} data-testid="button-route-create"><Plus size={14} /> Ajouter l’opérateur</button></div>
   </form>;
 }
@@ -50,7 +50,9 @@ export function AdminProviders() {
     <SuperNotice show={!isSuper} />
     <DataState isLoading={providers.isLoading} error={providers.error} empty={(providers.data?.items.length ?? 0) === 0} onRetry={() => void providers.refetch()} emptyTitle="Aucun agrégateur" rows={2}>
       <div className="ad-provider-grid">{providers.data?.items.map(p => <div className={`ad-provider ${p.enabled ? 'on' : ''}`} key={p.id} data-testid={`card-provider-${p.id}`}>
-        <div><span className="ad-eyebrow">{p.id}</span><h3>{p.name ?? p.id}</h3><p>{p.configured ? 'Identifiants serveur configurés' : 'Identifiants serveur manquants'}</p></div>
+        <div><span className="ad-eyebrow">{p.id}</span><h3>{p.name ?? p.id}</h3><p>{p.configured ? 'Identifiants serveur configurés' : 'Identifiants serveur manquants'}</p>
+          {p.id === 'DRIMPAY' && !p.configured && <p className="ad-dim ad-small">Production uniquement : clé API live, secret webhook associé à cette clé et URL HTTPS publique requis. Aucun mode de test n’est activé. <a href="https://docs.drimpay.com/fr/docs/payin" target="_blank" rel="noreferrer">Guide officiel DrimPay</a></p>}
+        </div>
         <div className="ad-provider-foot"><StatusPill status={p.enabled ? 'enabled' : 'disabled'} /><button className={`ad-btn sm ${p.enabled ? 'ad-btn-warn' : 'ad-btn-primary'}`} disabled={!isSuper || (!p.configured && !p.enabled)} onClick={() => setToggle(p)} data-testid={`button-provider-toggle-${p.id}`}>{p.enabled ? 'Désactiver' : 'Activer'}</button></div>
       </div>)}</div>
     </DataState>
@@ -79,7 +81,7 @@ function RouteRow({ row }: { row: AdminConsoleRow }) {
       <Field label="Opérateur"><input value={f.operator} onChange={e => setF(p => ({ ...p, operator: e.target.value }))} data-testid={`input-route-operator-${row.id}`} /></Field>
       <Field label="Code agrégateur"><input value={f.providerOperator} onChange={e => setF(p => ({ ...p, providerOperator: e.target.value }))} /></Field>
       <Field label="Agrégateur"><select value={f.provider} onChange={e => setF(p => ({ ...p, provider: e.target.value as AdminCommandInputProvider }))} data-testid={`select-route-provider-${row.id}`}>{PROVIDERS.map(p => <option key={p}>{p}</option>)}</select></Field>
-      <Field label="Limite / jour (XOF)" hint="Vide = illimitée"><input type="number" min={0} value={f.dailyLimit} onChange={e => setF(p => ({ ...p, dailyLimit: e.target.value }))} data-testid={`input-route-limit-${row.id}`} /></Field>
+      <Field label="Limite / jour (XOF)" hint="Vide = illimitée"><input type="number" min={1} value={f.dailyLimit} onChange={e => setF(p => ({ ...p, dailyLimit: e.target.value }))} data-testid={`input-route-limit-${row.id}`} /></Field>
     </div>
     <div className="ad-route-foot"><LimitBar row={row} /><button className="ad-btn ad-btn-primary sm" disabled={!dirty || pending} onClick={() => void run({ action: 'route_update', targetId: row.id, country: row.country, countryCode: row.countryCode, operator: f.operator.trim(), providerOperator: f.providerOperator.trim(), provider: f.provider, enabled: f.enabled, dailyLimit: f.dailyLimit === '' ? null : Number(f.dailyLimit) })} data-testid={`button-route-save-${row.id}`}><Save size={13} /> Enregistrer les modifications</button></div>
   </div>;

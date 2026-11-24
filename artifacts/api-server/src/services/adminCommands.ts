@@ -10,7 +10,7 @@ import { clerkClient } from "../lib/clerk";
 import { COUNTRIES, encryptAdminSecret, getAdminConfiguration, getTelegramConfiguration, normalizePhone, profilePhone, OperationalError } from "./adminConfiguration";
 import { emailIsConfigured, queueMerchantMail } from "./merchantMail";
 import { decideExchange, decideKyc } from "./adminDecisions";
-import { isDrimPayConfigured, operatorSlugForName } from "./drimpay";
+import { isDrimPayConfigured, isDrimPayRouteSupported, operatorSlugForName } from "./drimpay";
 import { isAshtechPayConfigured, isAshtechPayOperatorSupported } from "./ashtechpay";
 
 const text = (v: string | undefined, label: string, max = 200) => {
@@ -147,6 +147,9 @@ export async function executeConsoleCommand(actor: MulapayUser, input: AdminComm
     const operator = text(input.operator, "Opérateur", 80);
     const providerOperator = text(input.providerOperator, "Opérateur fournisseur", 80);
     if (!country || input.country !== country.country || !input.provider) throw new OperationalError("Association pays/code/agrégateur invalide.", 400);
+    if (input.provider === "DRIMPAY" && !isDrimPayRouteSupported(countryCode, providerOperator)) {
+      throw new OperationalError("Cet opérateur n’est pas pris en charge par DrimPay dans le pays sélectionné.", 400);
+    }
     if (input.dailyLimit != null && (!Number.isSafeInteger(input.dailyLimit) || input.dailyLimit < 1 || input.dailyLimit > 2_000_000_000)) throw new OperationalError("Plafond journalier invalide.", 400);
     if (input.provider === "DRIMPAY" && !operatorSlugForName(providerOperator) || input.provider === "ASHTECHPAY" && !isAshtechPayOperatorSupported(countryCode, providerOperator)) throw new OperationalError("Opérateur non pris en charge par cet agrégateur pour ce pays.", 400);
     if (input.enabled && !(input.provider === "DRIMPAY" ? isDrimPayConfigured() : isAshtechPayConfigured())) throw new OperationalError("Les identifiants de cet agrégateur ne sont pas configurés.", 503);

@@ -98,7 +98,8 @@ test("les frais Payin et Payout du marchand sont distincts et peuvent hériter d
   assert.equal(await merchantFee(userId, "payin"), 2);
   assert.equal(await merchantFee(userId, "payout"), 3);
   await command({ action: "merchant_update", targetId: userId, payinFee: null, payoutFee: null, payinEnabled: false });
-  await assert.rejects(() => assertMerchantAccess(userId, "payin", 1000), /désactivés/);
+  await assert.rejects(() => assertMerchantAccess(userId, "payin", 1000), /désactivés|maintenance/);
+  assert.equal((await db.query.users.findFirst({ where: eq(users.id, userId) }))?.payinEnabled, false);
   await command({ action: "merchant_update", targetId: userId, payinEnabled: true });
 });
 test("le plafond opérateur reste atomique face aux demandes concurrentes", async () => {

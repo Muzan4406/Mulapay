@@ -41,6 +41,19 @@ Chaque couple pays/opérateur a un routage, un agrégateur, un état et un plafo
 
 L’arrêt d’un agrégateur, la désactivation d’une route, les restrictions du marchand et les maintenances sont appliqués aux demandes réelles, y compris à l’API et aux liens publics. Ils ne bloquent jamais les confirmations des transactions déjà soumises. Les PSP restent des détails internes, absents de la documentation partenaire.
 
+### DrimPay — production uniquement
+
+L’intégration suit la documentation officielle [DrimPay Pay-in](https://docs.drimpay.com/fr/docs/payin) et [DrimPay Pay-out](https://docs.drimpay.com/fr/docs/payout). Elle ne propose aucun mode Sandbox.
+
+- API de production : `https://drimpay.com/api/v2`.
+- Pay-in : `POST /payin/initiate`; suivi : `GET /payin/:reference`. `order_id` sert de référence idempotente.
+- Pay-out : `POST /payout/initiate`; suivi : `GET /payout/:reference`. Mulapay transmet la référence interne sous `external_ref`.
+- La clé serveur doit commencer par `dp_live_sk_`. Le webhook doit avoir une URL HTTPS publique.
+- Le secret de signature webhook est distinct de la clé API et doit correspondre à cette clé DrimPay. La signature `X-DrimPay-Signature` couvre le timestamp et le corps HTTP brut avec HMAC-SHA256. Mulapay refuse les événements expirés, mal formés ou qui n’indiquent pas le mode `live`.
+- Le routage DrimPay refuse les opérateurs/pays absents du contrat documenté : TG, BJ, BF, ML, SN et CI, avec validation de l’opérateur pour chaque pays.
+
+Les trois paramètres serveur requis sont `DRIMPAY_API_KEY`, `DRIMPAY_WEBHOOK_SECRET` et `DRIMPAY_WEBHOOK_URL`. Le bouton d’activation reste bloqué tant qu’ils ne sont pas tous configurés. Même avec ces valeurs, l’API DrimPay Live ne peut pas être appelée depuis l’aperçu de développement ; elle s’active uniquement en production.
+
 Une révocation administrative de lien ou de clé est définitive. Les suppressions de liens/clés par les marchands conservent les enregistrements historiques. La liste noire utilise des numéros internationaux normalisés et s’applique également aux nouveaux comptes correspondants.
 
 ## Messages e-mail
@@ -70,7 +83,7 @@ Vérifications :
 
 ```sh
 pnpm run typecheck
-NODE_ENV=development pnpm --filter @workspace/scripts exec tsx --test ../artifacts/api-server/src/services/adminConsole.test.ts ../artifacts/api-server/src/lib/registrationProfile.test.ts ../artifacts/api-server/src/lib/clerkConfiguration.test.ts
+NODE_ENV=development pnpm --filter @workspace/scripts exec tsx --test ../artifacts/api-server/src/services/adminConsole.test.ts ../artifacts/api-server/src/services/drimpay.test.ts ../artifacts/api-server/src/lib/registrationProfile.test.ts ../artifacts/api-server/src/lib/clerkConfiguration.test.ts
 ```
 
 Les tests de service utilisent uniquement leurs propres comptes synthétiques et n’appellent ni PSP ni service d’e-mail. Les tests financiers et de concurrence sont nettoyés sans toucher aux comptes réels.
