@@ -54,7 +54,7 @@ Ajoutez ces variables d’environnement dans la configuration Node.js Plesk :
 | `TELEGRAM_BOT_TOKEN` et `TELEGRAM_CHAT_ID` | Pour Telegram | Notifications administrateur |
 | `LOG_LEVEL` | Non | Niveau de journalisation; défaut `info` |
 
-La clé publique Clerk est nécessaire **au moment du build**, car Vite l’intègre au client web. Le script lit `VITE_CLERK_PUBLISHABLE_KEY`, ou `CLERK_PUBLISHABLE_KEY` si Plesk ne transmet pas la variable Vite. Si l’action de déploiement n’hérite pas des variables de l’onglet Environment, passe la clé publique directement dans la commande de build, par exemple `VITE_CLERK_PUBLISHABLE_KEY=pk_live_VOTRE_CLE_PUBLIQUE pnpm run build:plesk`. Cette clé est publique; ne mets jamais `CLERK_SECRET_KEY`, les clés Supabase serveur ou les secrets PSP dans la commande ou le build du navigateur.
+La clé publique Clerk est nécessaire **au moment du build**, car Vite l’intègre au client web. Le script lit `VITE_CLERK_PUBLISHABLE_KEY`, ou `CLERK_PUBLISHABLE_KEY` si Plesk ne transmet pas la variable Vite. Si le panneau **Run Node.js commands** ne transmet pas les variables d’environnement, crée dans le Gestionnaire de fichiers Plesk `/httpdocs/artifacts/mulapay/.env.production` avec une seule ligne non citée : `VITE_CLERK_PUBLISHABLE_KEY=pk_live_VOTRE_CLE_PUBLIQUE`. Puis lance normalement `pnpm run build:plesk`. Ce fichier est ignoré par Git; ne le pousse pas. La clé publique peut être intégrée au navigateur, mais n’ajoute jamais `CLERK_SECRET_KEY`, les clés Supabase serveur ou les secrets PSP à ce fichier.
 
 Ne copiez aucun secret dans GitHub, dans un fichier suivi par Git ou dans le code. Ajoutez les valeurs dans les variables d’environnement Plesk; ne changez pas `ADMIN_ENCRYPTION_KEY` si des réglages chiffrés existent déjà.
 
@@ -72,4 +72,4 @@ Ne copiez aucun secret dans GitHub, dans un fichier suivi par Git ou dans le cod
 3. Cliquez **Restart App** dans Node.js.
 4. Vérifiez le site, la connexion Clerk, l’API et les journaux Plesk avant d’activer les paiements réels.
 
-Si le build indique que `VITE_CLERK_PUBLISHABLE_KEY` manque, ajoutez-la à l’environnement de l’action de déploiement; la variable définie uniquement pour le processus Node.js peut ne pas être héritée par l’action Git selon la configuration Plesk.
+Si le build indique qu’aucune clé publique Clerk de production n’est disponible, vérifiez qu’elle commence par `pk_live_` et qu’elle est définie dans l’environnement du processus de build, ou créez le fichier `.env.production` indiqué ci-dessus. Le champ **Run Node.js commands** peut interpréter une affectation `NOM=valeur` comme le nom d’une commande au lieu d’une variable shell : dans ce cas, lancez seulement `pnpm run build:plesk`.

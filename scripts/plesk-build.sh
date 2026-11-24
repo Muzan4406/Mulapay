@@ -19,10 +19,23 @@ if [ -z "${VITE_CLERK_PUBLISHABLE_KEY:-}" ] && [ -n "${CLERK_PUBLISHABLE_KEY:-}"
   export VITE_CLERK_PUBLISHABLE_KEY="$CLERK_PUBLISHABLE_KEY"
 fi
 
+PLESK_VITE_ENV_FILE="$ROOT_DIR/artifacts/mulapay/.env.production"
+if [ -z "${VITE_CLERK_PUBLISHABLE_KEY:-}" ] && [ -f "$PLESK_VITE_ENV_FILE" ]; then
+  VITE_CLERK_PUBLISHABLE_KEY=$(awk -F= '
+    $1 == "VITE_CLERK_PUBLISHABLE_KEY" {
+      sub(/^[^=]*=/, "")
+      gsub(/\r/, "")
+      print
+      exit
+    }
+  ' "$PLESK_VITE_ENV_FILE")
+  export VITE_CLERK_PUBLISHABLE_KEY
+fi
+
 case "${VITE_CLERK_PUBLISHABLE_KEY:-}" in
   pk_live_*) ;;
   *)
-    echo "The build command did not receive a production publishable key. Set VITE_CLERK_PUBLISHABLE_KEY (or pass CLERK_PUBLISHABLE_KEY) in the build process." >&2
+    echo "No valid production Clerk publishable key reached the build. Set VITE_CLERK_PUBLISHABLE_KEY, set CLERK_PUBLISHABLE_KEY, or add it to artifacts/mulapay/.env.production." >&2
     exit 1
     ;;
 esac
