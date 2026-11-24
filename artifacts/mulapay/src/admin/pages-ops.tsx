@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import type { AdminConsoleRow, AdminCommandInputProvider } from '@workspace/api-client-react';
 import { COUNTRIES, fmtDate, fmtMoney, useAdminCommand, useConsole, useDebounced, useIsSuperAdmin } from './lib';
 import { ConfirmDialog, Country, DataState, Field, PageHead, Pager, Panel, SearchBox, StatusPill, SuperNotice, Toggle, Toolbar } from './ui';
+import { routeOperatorOptions } from './route-options';
 
 const PROVIDERS: AdminCommandInputProvider[] = ['DRIMPAY', 'ASHTECHPAY'];
 
@@ -24,16 +25,35 @@ function LimitBar({ row }: { row: AdminConsoleRow }) {
 
 function RouteForm({ onDone }: { onDone?: () => void }) {
   const { run, pending: busy } = useAdminCommand();
-  const pending = busy || !useIsSuperAdmin();
-  const [f, setF] = useState({ countryCode: 'TG', operator: '', providerOperator: '', provider: 'DRIMPAY' as AdminCommandInputProvider, dailyLimit: '', enabled: true });
+  const isSuper = useIsSuperAdmin();
+  const pending = busy || !isSuper;
+  const [f, setF] = useState({ countryCode: 'TG', operator: 'Mixx by Yas', providerOperator: 'tmoney', provider: 'DRIMPAY' as AdminCommandInputProvider, dailyLimit: '', enabled: false });
   const country = COUNTRIES.find(c => c.code === f.countryCode)!;
-  return <form className="ad-form-grid three" onSubmit={async e => { e.preventDefault(); const ok = await run({ action: 'route_update', countryCode: f.countryCode, country: country.name, operator: f.operator.trim(), providerOperator: (f.providerOperator || f.operator).trim(), provider: f.provider, enabled: f.enabled, dailyLimit: f.dailyLimit === '' ? null : Number(f.dailyLimit) }); if (ok) { setF(v => ({ ...v, operator: '', providerOperator: '', dailyLimit: '' })); onDone?.(); } }}>
-    <Field label="Pays"><select value={f.countryCode} onChange={e => setF(v => ({ ...v, countryCode: e.target.value }))} data-testid="select-route-country">{COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}</select></Field>
-    <Field label="Nom de l’opérateur"><input required value={f.operator} onChange={e => setF(v => ({ ...v, operator: e.target.value }))} placeholder="Ex. Moov Money" data-testid="input-route-operator" /></Field>
-    <Field label="Code opérateur agrégateur" hint="Vide = nom de l’opérateur"><input value={f.providerOperator} onChange={e => setF(v => ({ ...v, providerOperator: e.target.value }))} data-testid="input-route-provider-operator" /></Field>
-    <Field label="Agrégateur"><select value={f.provider} onChange={e => setF(v => ({ ...v, provider: e.target.value as AdminCommandInputProvider }))} data-testid="select-route-provider">{PROVIDERS.map(p => <option key={p}>{p}</option>)}</select></Field>
+  const options = routeOperatorOptions(f.provider, f.countryCode);
+  const selected = options.find(option => option.operator === f.operator && option.providerOperator === f.providerOperator);
+  const selectContext = (countryCode: string, provider: AdminCommandInputProvider) => {
+    const first = routeOperatorOptions(provider, countryCode)[0];
+    setF(v => ({ ...v, countryCode, provider, operator: first?.operator ?? '', providerOperator: first?.providerOperator ?? '' }));
+  };
+  return <form className="ad-form-grid three" onSubmit={async e => {
+    e.preventDefault();
+    if (!selected) return;
+    const ok = await run({ action: 'route_update', countryCode: f.countryCode, country: country.name, operator: selected.operator, providerOperator: selected.providerOperator, provider: f.provider, enabled: f.enabled, dailyLimit: f.dailyLimit === '' ? null : Number(f.dailyLimit) });
+    if (ok) { setF(v => ({ ...v, dailyLimit: '' })); onDone?.(); }
+  }}>
+    <Field label="Pays"><select value={f.countryCode} onChange={e => selectContext(e.target.value, f.provider)} data-testid="select-route-country">{COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}</select></Field>
+    <Field label="Agrégateur"><select value={f.provider} onChange={e => selectContext(f.countryCode, e.target.value as AdminCommandInputProvider)} data-testid="select-route-provider">{PROVIDERS.map(p => <option key={p} value={p}>{p}</option>)}</select></Field>
+    <Field label="Opérateur Mulapay"><select required value={selected?.providerOperator ?? ''} onChange={e => {
+      const option = options.find(item => item.providerOperator === e.target.value);
+      setF(v => ({ ...v, operator: option?.operator ?? '', providerOperator: option?.providerOperator ?? '' }));
+    }} data-testid="input-route-operator" disabled={options.length === 0}>
+      <option value="" disabled>{options.length ? 'Choisir un opérateur' : 'Aucun opérateur disponible'}</option>
+      {options.map(option => <option key={option.providerOperator} value={option.providerOperator}>{option.operator} · {option.providerOperator}</option>)}
+    </select></Field>
+    <Field label={`Code exact ${f.provider === 'DRIMPAY' ? 'DrimPay' : 'AshtechPay'}`} hint="Rempli automatiquement; ne pas modifier"><input readOnly value={selected?.providerOperator ?? ''} data-testid="input-route-provider-operator" /></Field>
     <Field label="Limite journalière (XOF)" hint="Vide = illimitée"><input type="number" min={1} value={f.dailyLimit} onChange={e => setF(v => ({ ...v, dailyLimit: e.target.value }))} data-testid="input-route-limit" /></Field>
-    <div className="ad-form-end"><button className="ad-btn ad-btn-primary" disabled={pending} data-testid="button-route-create"><Plus size={14} /> Ajouter l’opérateur</button></div>
+    <div className="ad-form-end"><button className="ad-btn ad-btn-primary" type="submit" disabled={pending || !selected} data-testid="button-route-create"><Plus size={14} /> Ajouter l’opérateur</button></div>
+    <p className="ad-route-help">Le code affiché est envoyé exactement à l’agrégateur. Toute nouvelle route est créée désactivée; activez-la après avoir configuré le fournisseur.</p>
   </form>;
 }
 
@@ -72,24 +92,39 @@ export function AdminProviders() {
 
 function RouteRow({ row }: { row: AdminConsoleRow }) {
   const { run, pending: busy } = useAdminCommand();
-  const pending = busy || !useIsSuperAdmin();
+  const isSuper = useIsSuperAdmin();
+  const pending = busy || !isSuper;
   const [f, setF] = useState({ operator: row.operator ?? '', providerOperator: row.providerOperator ?? '', provider: (row.provider ?? 'DRIMPAY') as AdminCommandInputProvider, dailyLimit: row.dailyLimit == null ? '' : String(row.dailyLimit), enabled: !!row.enabled });
-  const dirty = f.operator !== (row.operator ?? '') || f.providerOperator !== (row.providerOperator ?? '') || f.provider !== row.provider || f.dailyLimit !== (row.dailyLimit == null ? '' : String(row.dailyLimit)) || f.enabled !== !!row.enabled;
+  const options = routeOperatorOptions(f.provider, row.countryCode ?? '');
+  const selected = options.find(option => option.operator === f.operator && option.providerOperator === f.providerOperator);
+  const dirty = f.operator !== (row.operator ?? '') || f.providerOperator !== (row.providerOperator ?? '') || f.provider !== (row.provider ?? 'DRIMPAY') || f.dailyLimit !== (row.dailyLimit == null ? '' : String(row.dailyLimit)) || f.enabled !== !!row.enabled;
   return <div className={`ad-route-card ${dirty ? 'dirty' : ''}`} data-testid={`card-route-${row.id}`}>
     <div className="ad-route-head"><Country value={row.country ?? row.countryCode} /><Toggle label={f.enabled ? 'Actif' : 'Inactif'} checked={f.enabled} onChange={v => setF(p => ({ ...p, enabled: v }))} testId={`toggle-route-${row.id}`} /></div>
     <div className="ad-form-grid four">
-      <Field label="Opérateur"><input value={f.operator} onChange={e => setF(p => ({ ...p, operator: e.target.value }))} data-testid={`input-route-operator-${row.id}`} /></Field>
-      <Field label="Code agrégateur"><input value={f.providerOperator} onChange={e => setF(p => ({ ...p, providerOperator: e.target.value }))} /></Field>
-      <Field label="Agrégateur"><select value={f.provider} onChange={e => setF(p => ({ ...p, provider: e.target.value as AdminCommandInputProvider }))} data-testid={`select-route-provider-${row.id}`}>{PROVIDERS.map(p => <option key={p}>{p}</option>)}</select></Field>
+      <Field label="Opérateur Mulapay"><select value={selected?.providerOperator ?? ''} onChange={e => {
+        const option = options.find(item => item.providerOperator === e.target.value);
+        setF(p => ({ ...p, operator: option?.operator ?? '', providerOperator: option?.providerOperator ?? '' }));
+      }} data-testid={`input-route-operator-${row.id}`} disabled={options.length === 0}>
+        {!selected && <option value="">Choisir un opérateur valide</option>}
+        {options.map(option => <option key={option.providerOperator} value={option.providerOperator}>{option.operator} · {option.providerOperator}</option>)}
+      </select></Field>
+      <Field label={`Code exact ${f.provider === 'DRIMPAY' ? 'DrimPay' : 'AshtechPay'}`}><input readOnly value={selected?.providerOperator ?? ''} /></Field>
+      <Field label="Agrégateur"><select value={f.provider} onChange={e => {
+        const provider = e.target.value as AdminCommandInputProvider;
+        const nextOptions = routeOperatorOptions(provider, row.countryCode ?? '');
+        const match = nextOptions.find(option => option.operator === f.operator) ?? nextOptions[0];
+        setF(p => ({ ...p, provider, operator: match?.operator ?? '', providerOperator: match?.providerOperator ?? '' }));
+      }} data-testid={`select-route-provider-${row.id}`}>{PROVIDERS.map(p => <option key={p} value={p}>{p}</option>)}</select></Field>
       <Field label="Limite / jour (XOF)" hint="Vide = illimitée"><input type="number" min={1} value={f.dailyLimit} onChange={e => setF(p => ({ ...p, dailyLimit: e.target.value }))} data-testid={`input-route-limit-${row.id}`} /></Field>
     </div>
-    <div className="ad-route-foot"><LimitBar row={row} /><button className="ad-btn ad-btn-primary sm" disabled={!dirty || pending} onClick={() => void run({ action: 'route_update', targetId: row.id, country: row.country, countryCode: row.countryCode, operator: f.operator.trim(), providerOperator: f.providerOperator.trim(), provider: f.provider, enabled: f.enabled, dailyLimit: f.dailyLimit === '' ? null : Number(f.dailyLimit) })} data-testid={`button-route-save-${row.id}`}><Save size={13} /> Enregistrer les modifications</button></div>
+    <div className="ad-route-foot"><LimitBar row={row} /><button className="ad-btn ad-btn-primary sm" disabled={!dirty || pending || !selected} onClick={() => void run({ action: 'route_update', targetId: row.id, country: row.country, countryCode: row.countryCode, operator: f.operator, providerOperator: f.providerOperator, provider: f.provider, enabled: f.enabled, dailyLimit: f.dailyLimit === '' ? null : Number(f.dailyLimit) })} data-testid={`button-route-save-${row.id}`}><Save size={13} /> Enregistrer les modifications</button></div>
   </div>;
 }
 
 export function MaintenancePanel({ settings }: { settings: { maintenance?: boolean; maintenanceMessage?: string; payinMaintenance?: boolean; payoutMaintenance?: boolean; linksMaintenance?: boolean; apiMaintenance?: boolean } }) {
   const { run, pending: busy } = useAdminCommand();
-  const pending = busy || !useIsSuperAdmin();
+  const isSuper = useIsSuperAdmin();
+  const pending = busy || !isSuper;
   const initial = { maintenance: !!settings.maintenance, maintenanceMessage: settings.maintenanceMessage ?? '', payinMaintenance: !!settings.payinMaintenance, payoutMaintenance: !!settings.payoutMaintenance, linksMaintenance: !!settings.linksMaintenance, apiMaintenance: !!settings.apiMaintenance };
   const [f, setF] = useState(initial);
   const [confirm, setConfirm] = useState(false);

@@ -50,7 +50,56 @@ L’intégration suit la documentation officielle [DrimPay Pay-in](https://docs.
 - Pay-out : `POST /payout/initiate`; suivi : `GET /payout/:reference`. Mulapay transmet la référence interne sous `external_ref`.
 - La clé serveur doit commencer par `dp_live_sk_`. Le webhook doit avoir une URL HTTPS publique.
 - Le secret de signature webhook est distinct de la clé API et doit correspondre à cette clé DrimPay. La signature `X-DrimPay-Signature` couvre le timestamp et le corps HTTP brut avec HMAC-SHA256. Mulapay refuse les événements expirés, mal formés ou qui n’indiquent pas le mode `live`.
-- Le routage DrimPay refuse les opérateurs/pays absents du contrat documenté : TG, BJ, BF, ML, SN et CI, avec validation de l’opérateur pour chaque pays.
+- Le formulaire de routage affiche uniquement les opérateurs DrimPay disponibles pour le pays sélectionné. Le code transmis à DrimPay est généré automatiquement et reste en lecture seule :
+
+| Pays | Opérateur Mulapay | Code DrimPay exact |
+| --- | --- | --- |
+| Togo | Mixx by Yas | `tmoney` |
+| Togo | Moov Money | `moov` |
+| Bénin | MTN MoMo | `mtn` |
+| Bénin | Moov Money | `moov` |
+| Bénin | Celtiis Money | `celtiis` |
+| Côte d’Ivoire | MTN MoMo | `mtn` |
+| Côte d’Ivoire | Orange Money | `orange` |
+| Côte d’Ivoire | Wave | `wave` |
+| Côte d’Ivoire | Moov Money | `moov` |
+| Burkina Faso | Orange Money | `orange` |
+| Burkina Faso | Moov Money | `moov` |
+| Burkina Faso | Wave | `wave` |
+| Sénégal | Orange Money | `orange` |
+| Sénégal | Wave | `wave` |
+| Sénégal | Free Money | `free` |
+| Mali | Orange Money | `orange` |
+| Mali | Moov Money | `moov` |
+
+Ces couples sont ceux disponibles dans Mulapay pour les portefeuilles XOF; ils sont contrôlés de nouveau côté serveur. Un opérateur inconnu ou un code d’un autre pays est refusé.
+
+Pour AshtechPay, le champ « Code exact » affiche la valeur exacte acceptée par l’intégration :
+
+| Pays | Opérateur Mulapay | Code AshtechPay exact |
+| --- | --- | --- |
+| Togo | Moov Money | `Moov Money` |
+| Togo | Mixx by Yas | `T-Money` |
+| Bénin | Celtiis Money | `Celtiis Money` |
+| Bénin | Coris Money | `Coris Money` |
+| Bénin | Moov Money | `Moov Money` |
+| Bénin | MTN MoMo | `MTN Money` |
+| Côte d’Ivoire | Moov Money | `Moov Money` |
+| Côte d’Ivoire | MTN MoMo | `MTN Money` |
+| Côte d’Ivoire | Orange Money | `Orange (OTP)` |
+| Côte d’Ivoire | Wave | `Wave Money` |
+| Burkina Faso | Moov Money | `Moov Money` |
+| Burkina Faso | Orange Money | `Orange Money (OTP)` |
+| Burkina Faso | Wallet LigdiCash | `Wallet LigdiCash` |
+| Sénégal | E-money | `E-money` |
+| Sénégal | Free Money | `Free Money` |
+| Sénégal | Orange Money | `Orange Money (OTP)` |
+| Sénégal | Wave | `Wave Money` |
+| Mali | Moov Money | `Moov Money` |
+| Mali | Orange Money | `Orange Money` |
+| Niger | Airtel Money | `Airtel Money` |
+
+Dans l’aperçu de développement, une route peut être enregistrée pour vérifier la configuration, mais elle reste désactivée. Son activation et tout appel de paiement exigent les identifiants complets et le runtime de production.
 
 Les trois paramètres serveur requis sont `DRIMPAY_API_KEY`, `DRIMPAY_WEBHOOK_SECRET` et `DRIMPAY_WEBHOOK_URL`. Le bouton d’activation reste bloqué tant qu’ils ne sont pas tous configurés. Même avec ces valeurs, l’API DrimPay Live ne peut pas être appelée depuis l’aperçu de développement ; elle s’active uniquement en production.
 
@@ -84,6 +133,7 @@ Vérifications :
 ```sh
 pnpm run typecheck
 NODE_ENV=development pnpm --filter @workspace/scripts exec tsx --test ../artifacts/api-server/src/services/adminConsole.test.ts ../artifacts/api-server/src/services/drimpay.test.ts ../artifacts/api-server/src/lib/registrationProfile.test.ts ../artifacts/api-server/src/lib/clerkConfiguration.test.ts
+NODE_ENV=development pnpm --filter @workspace/scripts exec tsx --test ../artifacts/mulapay/src/admin/route-options.test.ts
 ```
 
 Les tests de service utilisent uniquement leurs propres comptes synthétiques et n’appellent ni PSP ni service d’e-mail. Les tests financiers et de concurrence sont nettoyés sans toucher aux comptes réels.

@@ -234,15 +234,22 @@ const landingCountries = [
   { code: 'NE', name: 'Niger', detail: 'Wallet XOF' },
 ];
 
-const mobileMoneyCountryOptions = [
+type MobileMoneyOperatorOption = { name: string; src?: string };
+const mobileMoneyCountryOptions: { code: string; country: string; flagSrc: string; dialCode: string; operators: MobileMoneyOperatorOption[] }[] = [
   { code: 'TG', country: 'Togo', flagSrc: 'togo.png', dialCode: '+228', operators: [{ name: 'Mixx by Yas', src: 'mixx_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }] },
-  { code: 'BJ', country: 'Bénin', flagSrc: 'benin.png', dialCode: '+229', operators: [{ name: 'MTN MoMo', src: 'mtn-momo_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }] },
+  { code: 'BJ', country: 'Bénin', flagSrc: 'benin.png', dialCode: '+229', operators: [{ name: 'MTN MoMo', src: 'mtn-momo_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }, { name: 'Celtiis Money' }, { name: 'Coris Money' }] },
   { code: 'CI', country: 'Côte d’Ivoire', flagSrc: 'cote-divoire.png', dialCode: '+225', operators: [{ name: 'Orange Money', src: 'orange-money_no_bg.png' }, { name: 'MTN MoMo', src: 'mtn-momo_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }, { name: 'Wave', src: 'wave_no_bg.png' }] },
-  { code: 'BF', country: 'Burkina Faso', flagSrc: 'burkina-faso.png', dialCode: '+226', operators: [{ name: 'Orange Money', src: 'orange-money_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }, { name: 'Wave', src: 'wave_no_bg.png' }] },
-  { code: 'SN', country: 'Sénégal', flagSrc: 'senegal.png', dialCode: '+221', operators: [{ name: 'Wave', src: 'wave_no_bg.png' }, { name: 'Orange Money', src: 'orange-money_no_bg.png' }] },
+  { code: 'BF', country: 'Burkina Faso', flagSrc: 'burkina-faso.png', dialCode: '+226', operators: [{ name: 'Orange Money', src: 'orange-money_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }, { name: 'Wave', src: 'wave_no_bg.png' }, { name: 'Wallet LigdiCash' }] },
+  { code: 'SN', country: 'Sénégal', flagSrc: 'senegal.png', dialCode: '+221', operators: [{ name: 'Wave', src: 'wave_no_bg.png' }, { name: 'Orange Money', src: 'orange-money_no_bg.png' }, { name: 'Free Money' }, { name: 'E-money' }] },
   { code: 'ML', country: 'Mali', flagSrc: 'mali.png', dialCode: '+223', operators: [{ name: 'Orange Money', src: 'orange-money_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }] },
-  { code: 'NE', country: 'Niger', flagSrc: 'niger.png', dialCode: '+227', operators: [{ name: 'Airtel Money', src: 'airtel-money_no_bg.png' }, { name: 'Moov Money', src: 'moov-money_no_bg.png' }, { name: 'Orange Money', src: 'orange-money_no_bg.png' }] },
+  { code: 'NE', country: 'Niger', flagSrc: 'niger.png', dialCode: '+227', operators: [{ name: 'Airtel Money', src: 'airtel-money_no_bg.png' }] },
 ];
+
+function MobileMoneyOperatorLogo({ option }: { option: MobileMoneyOperatorOption }) {
+  if (option.src) return <img src={`${import.meta.env.BASE_URL}mobile-money/${option.src}`} alt="" />;
+  const initials = option.name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase();
+  return <span className="mobile-money-logo-fallback" aria-hidden="true">{initials}</span>;
+}
 
 const landingFeatures = [
   { icon: ArrowDownLeft, eyebrow: '01', title: 'Dépôt', copy: 'Ajoutez de l’argent facilement avec les moyens de paiement disponibles.' },
@@ -677,7 +684,7 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
           <div className="mobile-money-options" role="radiogroup" aria-label="Choisir un opérateur Mobile Money">
             {selectedCountry.operators.map(option => <label className={`mobile-money-option ${operator === option.name ? 'selected' : ''}`} key={option.name}>
               <input type="radio" name="deposit-operator" value={option.name} checked={operator === option.name} onChange={event => setOperator(event.target.value)} required />
-              <img src={`${import.meta.env.BASE_URL}mobile-money/${option.src}`} alt="" />
+              <MobileMoneyOperatorLogo option={option} />
               <span>{option.name}</span>
             </label>)}
           </div>
@@ -754,7 +761,7 @@ function ProviderOperationForm({ kind }: { kind: 'deposit' | 'withdrawal' }) {
         <div className="mobile-money-options" role="radiogroup" aria-label="Choisir un opérateur Mobile Money">
           {selectedCountry.operators.map(option => <label className={`mobile-money-option ${operator === option.name ? 'selected' : ''}`} key={option.name}>
             <input type="radio" name="withdrawal-operator" value={option.name} checked={operator === option.name} onChange={event => setOperator(event.target.value)} required />
-            <img src={`${import.meta.env.BASE_URL}mobile-money/${option.src}`} alt="" />
+            <MobileMoneyOperatorLogo option={option} />
             <span>{option.name}</span>
           </label>)}
         </div>
@@ -1079,7 +1086,7 @@ function ApiPayinDocs() {
     ['walletId', 'Identifiant du wallet Mulapay du pays concerné.', 'Requis'],
     ['amount', 'Montant entier dans la devise du wallet, dans les limites minimum et maximum affichées dans vos paramètres Mulapay.', 'Requis'],
     ['method', 'Valeur attendue : mobile_money.', 'Requis'],
-    ['country', 'Pays du wallet. Le pays doit être activé pour les dépôts sur votre compte ; le Niger est actuellement indisponible pour ce flux.', 'Requis'],
+    ['country', 'Pays du wallet. Le pays et au moins une route opérateur doivent être activés dans vos paramètres Mulapay.', 'Requis'],
     ['operator', 'Opérateur Mobile Money activé pour le pays sélectionné. La disponibilité dépend du routage Mulapay.', 'Requis'],
     ['phone', 'Numéro au format international, par exemple +22890000000.', 'Requis'],
     ['operatorOtp', 'Code de confirmation demandé dans certains parcours Mobile Money.', 'Conditionnel'],
@@ -1338,8 +1345,8 @@ data = response.json()`}</pre></div></div></div>
 
         <section id="coverage" className="docs-section">
           <div className="docs-section-heading"><div><span className="docs-kicker">08 · Disponibilité</span><h2>Pays & opérateurs</h2><p>La disponibilité effective dépend des pays et opérateurs activés sur votre compte Mulapay.</p></div></div>
-          <div className="card card-pad docs-coverage-grid"><div><strong>Togo</strong><span>Mixx by Yas · Moov Money</span></div><div><strong>Bénin</strong><span>MTN MoMo · Moov Money</span></div><div><strong>Côte d’Ivoire</strong><span>Orange Money · MTN MoMo · Wave · Moov Money</span></div><div><strong>Burkina Faso</strong><span>Orange Money · Moov Money · Airtel Money</span></div><div><strong>Sénégal</strong><span>Orange Money · Wave</span></div><div><strong>Mali</strong><span>Orange Money · Moov Money · Airtel Money</span></div></div>
-          <p className="docs-inline-note"><Info size={14} /> Le Niger n’est pas encore disponible pour les dépôts API. Dans les autres pays, seuls les opérateurs activés dans le routage de votre compte peuvent être utilisés.</p>
+          <div className="card card-pad docs-coverage-grid"><div><strong>Togo</strong><span>Mixx by Yas · Moov Money</span></div><div><strong>Bénin</strong><span>MTN MoMo · Moov Money · Celtiis Money · Coris Money</span></div><div><strong>Côte d’Ivoire</strong><span>Orange Money · MTN MoMo · Wave · Moov Money</span></div><div><strong>Burkina Faso</strong><span>Orange Money · Moov Money · Wave · Wallet LigdiCash</span></div><div><strong>Sénégal</strong><span>Orange Money · Wave · Free Money · E-money</span></div><div><strong>Mali</strong><span>Orange Money · Moov Money</span></div></div>
+          <p className="docs-inline-note"><Info size={14} /> Seuls les opérateurs activés dans le routage de votre compte peuvent être utilisés. Au Niger, seule la route Airtel Money prise en charge par l’agrégateur configuré peut être activée.</p>
           <div className="docs-two-column docs-align-start" style={{ marginTop: 18 }}>
             <div className="card card-pad"><h3>Quand demander un OTP opérateur ?</h3><p className="section-note" style={{ marginTop: 8 }}>Le champ <code>operatorOtp</code> est requis pour les dépôts Orange Money dans les pays suivants :</p><div className="docs-coverage-grid" style={{ marginTop: 14 }}><div><strong>Côte d’Ivoire</strong><span>Orange Money · OTP requis</span></div><div><strong>Sénégal</strong><span>Orange Money · OTP requis</span></div><div><strong>Burkina Faso</strong><span>Orange Money · OTP requis</span></div><div><strong>Mali</strong><span>Orange Money · OTP requis</span></div></div><p className="docs-inline-note" style={{ marginTop: 14 }}><Info size={14} /> Le code est collecté auprès du client selon le parcours affiché par l’opérateur, puis envoyé dans la requête Mulapay.</p><pre className="api-code" style={{ marginTop: 14 }}>{`{
   "operator": "Orange Money",
@@ -2013,7 +2020,7 @@ function Transfer() {
         <div className="mobile-money-options" role="radiogroup" aria-label="Choisir un opérateur Mobile Money">
           {selectedCountry.operators.map(option => <label className={`mobile-money-option ${operator === option.name ? 'selected' : ''}`} key={option.name}>
             <input type="radio" name="transfer-operator" value={option.name} checked={operator === option.name} onChange={event => setOperator(event.target.value)} required />
-            <img src={`${import.meta.env.BASE_URL}mobile-money/${option.src}`} alt="" />
+            <MobileMoneyOperatorLogo option={option} />
             <span>{option.name}</span>
           </label>)}
         </div>
@@ -2594,7 +2601,7 @@ function PublicPaymentPage() {
            {link.amountType === 'CUSTOMER_CHOOSES' && <div className="field public-payment-custom-amount"><label htmlFor="public-payment-amount">Montant à payer</label><div className="input-prefix"><span>{link.currency}</span><input id="public-payment-amount" type="number" min={paymentMinAmount} max={paymentMaxAmount} step="1" value={amount} onChange={event => setAmount(event.target.value)} placeholder={String(paymentMinAmount)} required /></div><small className="field-hint">Choisissez un montant entier entre {paymentMinAmount.toLocaleString('fr-FR')} et {paymentMaxAmount.toLocaleString('fr-FR')} {link.currency}.</small></div>}
            {hasField('full_name') && <div className="field"><label htmlFor="public-payment-full-name">Nom complet</label><input id="public-payment-full-name" value={customerValues.full_name ?? ''} onChange={event => updateCustomerValue('full_name', event.target.value)} autoComplete="name" placeholder="Votre nom et prénom" required /></div>}
            {hasField('country') && <div className="field"><label htmlFor="public-payment-country">Pays du payeur</label><div className="country-select"><img src={`${import.meta.env.BASE_URL}countries/${selectedCustomerCountry.flagSrc}`} alt="" /><select id="public-payment-country" value={customerCountry} onChange={event => { setCustomerCountry(event.target.value); const next = customerCountryOptions.find(option => option.country === event.target.value); setCustomerOperator(next?.operators[0]?.name ?? ''); }} required>{customerCountryOptions.map(option => <option key={option.country} value={option.country}>{option.country} · {option.dialCode}</option>)}</select><ChevronDown className="country-select-chevron" size={16} aria-hidden="true" /></div>{link.allowedCountry ? <small className="field-hint">Ce lien accepte uniquement les paiements depuis {link.allowedCountry}.</small> : null}</div>}
-           {hasField('operator') && <div className="field"><label>Opérateur Mobile Money</label><div className="mobile-money-options" role="radiogroup" aria-label="Choisir un opérateur Mobile Money">{selectedCustomerCountry.operators.map(option => <label className={`mobile-money-option ${customerOperator === option.name ? 'selected' : ''}`} key={option.name}><input type="radio" name="public-payment-operator" value={option.name} checked={customerOperator === option.name} onChange={event => setCustomerOperator(event.target.value)} required /><img src={`${import.meta.env.BASE_URL}mobile-money/${option.src}`} alt="" /><span>{option.name}</span></label>)}</div></div>}
+           {hasField('operator') && <div className="field"><label>Opérateur Mobile Money</label><div className="mobile-money-options" role="radiogroup" aria-label="Choisir un opérateur Mobile Money">{selectedCustomerCountry.operators.map(option => <label className={`mobile-money-option ${customerOperator === option.name ? 'selected' : ''}`} key={option.name}><input type="radio" name="public-payment-operator" value={option.name} checked={customerOperator === option.name} onChange={event => setCustomerOperator(event.target.value)} required /><MobileMoneyOperatorLogo option={option} /><span>{option.name}</span></label>)}</div></div>}
            {hasField('phone') && <div className="field"><label htmlFor="public-payment-phone">Numéro de téléphone</label><div className="phone-input"><span className="phone-prefix" aria-label={`Indicatif ${selectedCustomerCountry.dialCode}`}>{selectedCustomerCountry.dialCode}</span><input id="public-payment-phone" type="tel" inputMode="numeric" value={customerValues.phone ?? ''} onChange={event => updateCustomerValue('phone', event.target.value.replace(/\D/g, ''))} placeholder="90 00 00 00" autoComplete="tel-national" required /></div><small className="field-hint">Utilisez le numéro associé à votre compte Mobile Money.</small></div>}
            {hasField('email') && <div className="field"><label htmlFor="public-payment-email">Adresse e-mail</label><input id="public-payment-email" type="email" value={customerValues.email ?? ''} onChange={event => updateCustomerValue('email', event.target.value)} placeholder="vous@exemple.com" autoComplete="email" required /></div>}
            {customerOperator === 'Orange Money' && <div className="field"><label htmlFor="public-payment-otp">Code OTP Mobile Money</label><input id="public-payment-otp" type="password" inputMode="numeric" value={operatorOtp} onChange={event => setOperatorOtp(event.target.value.replace(/\D/g, ''))} autoComplete="one-time-code" required /><small className="field-hint">Le code est demandé uniquement lorsque l’opérateur l’exige.</small></div>}

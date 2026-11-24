@@ -35,6 +35,7 @@ after(async () => {
   await db.delete(adminAudit).where(eq(adminAudit.actorId, actorId));
   await db.delete(blacklistedPhones).where(eq(blacklistedPhones.actorId, actorId));
   await db.delete(merchantMessages).where(eq(merchantMessages.actorId, actorId));
+  await db.delete(paymentProviderRoutes).where(eq(paymentProviderRoutes.operator, `${prefix}-route`));
   await db.delete(notifications).where(inArray(notifications.userId, [actorId, userId]));
   await db.delete(ledgerEntries).where(inArray(ledgerEntries.userId, [actorId, userId]));
   await db.delete(transactions).where(inArray(transactions.userId, [actorId, userId]));
@@ -73,6 +74,17 @@ test("toutes les sections exposent des réponses conformes, sans identifiants se
 });
 test("un marchand ne peut pas effectuer un ajustement administratif", async () => {
   await assert.rejects(() => executeConsoleCommand(merchant, { action: "wallet_adjust", walletId, amount: 10, direction: "credit", reason: "Test", idempotencyKey: "denied" }, "https://example.invalid"), /SUPER_ADMIN/);
+});
+test("un opérateur DrimPay valide peut être préparé en aperçu sans activer de paiement live", async () => {
+  const routeOperator = `${prefix}-route`;
+  await command({ action: "route_update", countryCode: "TG", country: "Togo", operator: routeOperator, providerOperator: "tmoney", provider: "DRIMPAY", dailyLimit: null });
+  const saved = await db.query.paymentProviderRoutes.findFirst({ where: eq(paymentProviderRoutes.operator, routeOperator) });
+  assert.ok(saved);
+  assert.equal(saved.enabled, false);
+  await assert.rejects(
+    () => command({ action: "route_update", countryCode: "TG", country: "Togo", operator: routeOperator, providerOperator: "tmoney", provider: "DRIMPAY", enabled: true }),
+    /identifiants de cet agrégateur ne sont pas configurés/,
+  );
 });
 test("un crédit rejoué simultanément ne crédite et ne journalise qu’une fois", async () => {
   const input: AdminCommandInput = { action: "wallet_adjust", walletId, amount: 1000, direction: "credit", reason: "Test synthétique idempotent", idempotencyKey: "same-request" };

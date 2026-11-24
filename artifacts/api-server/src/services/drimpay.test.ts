@@ -62,11 +62,23 @@ test("DrimPay webhook signatures validate raw bytes, timestamp, and secret", () 
 });
 
 test("DrimPay only accepts documented country/operator combinations", () => {
-  assert.equal(isDrimPayRouteSupported("TG", "Mixx by Yas"), true);
-  assert.equal(isDrimPayRouteSupported("BJ", "Celtiis"), true);
-  assert.equal(isDrimPayRouteSupported("SN", "Free"), true);
+  const documentedRoutes: Record<string, string[]> = {
+    TG: ["tmoney", "moov"],
+    BJ: ["mtn", "moov", "celtiis"],
+    CI: ["mtn", "orange", "wave", "moov"],
+    BF: ["orange", "moov", "wave"],
+    SN: ["orange", "wave", "free"],
+    ML: ["orange", "moov"],
+  };
+  for (const [country, operators] of Object.entries(documentedRoutes)) {
+    for (const operator of operators) assert.equal(isDrimPayRouteSupported(country, operator), true, `${country}/${operator}`);
+  }
   assert.equal(isDrimPayRouteSupported("NE", "Orange Money"), false);
+  assert.equal(isDrimPayRouteSupported("NE", "Airtel Money"), false);
   assert.equal(isDrimPayRouteSupported("TG", "Orange Money"), false);
+  assert.equal(isDrimPayRouteSupported("CI", "Celtiis"), false);
+  assert.equal(isDrimPayRouteSupported("SN", "Free Money"), true);
+  assert.equal(isDrimPayRouteSupported("TG", "Mixx by Yas"), true);
   assert.equal(operatorSlugForName("TMoney"), "tmoney");
   assert.equal(operatorSlugForName("tmoney"), "tmoney");
 });

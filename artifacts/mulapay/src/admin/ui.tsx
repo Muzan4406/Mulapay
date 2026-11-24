@@ -107,9 +107,18 @@ export function ConfirmDialog({ open, onOpenChange, title, description, confirmL
       {children}
       {reason && <Field label={reason.label} hint={reason.required ? 'Obligatoire, transmis au journal d’audit.' : undefined}><textarea value={text} onChange={e => setText(e.target.value)} placeholder={reason.placeholder} data-testid="input-confirm-reason" /></Field>}
       {typeToConfirm !== undefined && <Field label={`Saisissez ${typeToConfirm} pour confirmer`}><input value={typed} onChange={e => setTyped(e.target.value)} data-testid="input-confirm-type" /></Field>}
-      <DialogFooter className="ad-dialog-foot">
+      <DialogFooter className="ad-dialog-foot" data-testid="confirm-dialog-actions">
         <button className="ad-btn ad-btn-ghost" onClick={() => close(false)} disabled={busy} data-testid="button-confirm-cancel">Annuler</button>
-        <button className={`ad-btn ${tone === 'danger' ? 'ad-btn-danger' : 'ad-btn-primary'}`} disabled={!!blocked} data-testid="button-confirm-submit" onClick={async () => { setBusy(true); const ok = await onConfirm(text.trim()); setBusy(false); if (ok) { setText(''); setTyped(''); onOpenChange(false); } }}>{busy ? 'Traitement…' : confirmLabel}</button>
+        <button className={`ad-btn ${tone === 'danger' ? 'ad-btn-danger' : 'ad-btn-primary'}`} disabled={!!blocked} data-testid="button-confirm-submit" onClick={async () => {
+          if (blocked) return;
+          setBusy(true);
+          try {
+            const ok = await onConfirm(text.trim());
+            if (ok) { setText(''); setTyped(''); onOpenChange(false); }
+          } finally {
+            setBusy(false);
+          }
+        }}>{busy ? 'Traitement…' : confirmLabel}</button>
       </DialogFooter>
     </DialogContent>
   </Dialog>;

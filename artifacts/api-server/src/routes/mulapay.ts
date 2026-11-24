@@ -2985,15 +2985,20 @@ router.put("/v1/admin/payment-provider-routes", requireAdmin, async (req, res) =
     res.status(400).json({ error: "Fournisseur de paiement inconnu." });
     return;
   }
-  if (input.provider === "DRIMPAY" && !isDrimPayConfigured()) {
+  if (countryCodeForName(input.country) !== input.countryCode) {
+    res.status(400).json({ error: "Le nom du pays et son code ne correspondent pas." });
+    return;
+  }
+  const enabled = input.enabled ?? false;
+  if (enabled && input.provider === "DRIMPAY" && !isDrimPayConfigured()) {
     res.status(503).json({ error: "DrimPay ne peut pas être sélectionné tant que ses secrets serveur ne sont pas configurés." });
     return;
   }
-  if (input.provider === "DRIMPAY" && !operatorSlugForName(input.providerOperator.trim())) {
-    res.status(400).json({ error: "Cet opérateur n’est pas reconnu par DrimPay." });
+  if (input.provider === "DRIMPAY" && !isDrimPayRouteSupported(input.countryCode, input.providerOperator.trim())) {
+    res.status(400).json({ error: "Choisissez un code opérateur DrimPay autorisé pour le pays sélectionné." });
     return;
   }
-  if (input.provider === "ASHTECHPAY" && !isAshtechPayConfigured()) {
+  if (enabled && input.provider === "ASHTECHPAY" && !isAshtechPayConfigured()) {
     res.status(503).json({ error: "AshtechPay ne peut pas être sélectionné tant que ses secrets serveur ne sont pas configurés." });
     return;
   }
@@ -3008,7 +3013,7 @@ router.put("/v1/admin/payment-provider-routes", requireAdmin, async (req, res) =
     operator: input.operator,
     providerOperator: input.providerOperator,
     provider: input.provider,
-    enabled: input.enabled ?? true,
+    enabled,
     updatedAt: new Date(),
   }).onConflictDoUpdate({
     target: [paymentProviderRoutes.countryCode, paymentProviderRoutes.operator],
@@ -3016,7 +3021,7 @@ router.put("/v1/admin/payment-provider-routes", requireAdmin, async (req, res) =
       country: input.country,
       providerOperator: input.providerOperator,
       provider: input.provider,
-      enabled: input.enabled ?? true,
+      enabled,
       updatedAt: new Date(),
     },
   }).returning();

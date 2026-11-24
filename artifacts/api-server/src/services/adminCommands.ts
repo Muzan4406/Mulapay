@@ -148,12 +148,13 @@ export async function executeConsoleCommand(actor: MulapayUser, input: AdminComm
     const providerOperator = text(input.providerOperator, "Opérateur fournisseur", 80);
     if (!country || input.country !== country.country || !input.provider) throw new OperationalError("Association pays/code/agrégateur invalide.", 400);
     if (input.provider === "DRIMPAY" && !isDrimPayRouteSupported(countryCode, providerOperator)) {
-      throw new OperationalError("Cet opérateur n’est pas pris en charge par DrimPay dans le pays sélectionné.", 400);
+      throw new OperationalError("Choisissez un code opérateur DrimPay autorisé pour le pays sélectionné.", 400);
     }
     if (input.dailyLimit != null && (!Number.isSafeInteger(input.dailyLimit) || input.dailyLimit < 1 || input.dailyLimit > 2_000_000_000)) throw new OperationalError("Plafond journalier invalide.", 400);
     if (input.provider === "DRIMPAY" && !operatorSlugForName(providerOperator) || input.provider === "ASHTECHPAY" && !isAshtechPayOperatorSupported(countryCode, providerOperator)) throw new OperationalError("Opérateur non pris en charge par cet agrégateur pour ce pays.", 400);
-    if (input.enabled && !(input.provider === "DRIMPAY" ? isDrimPayConfigured() : isAshtechPayConfigured())) throw new OperationalError("Les identifiants de cet agrégateur ne sont pas configurés.", 503);
-    const data = { countryCode, country: country.country, operator, providerOperator, provider: input.provider, enabled: input.enabled ?? true, dailyLimit: input.dailyLimit ?? null, updatedAt: new Date() };
+    const enabled = input.enabled ?? false;
+    if (enabled && !(input.provider === "DRIMPAY" ? isDrimPayConfigured() : isAshtechPayConfigured())) throw new OperationalError("Les identifiants de cet agrégateur ne sont pas configurés.", 503);
+    const data = { countryCode, country: country.country, operator, providerOperator, provider: input.provider, enabled, dailyLimit: input.dailyLimit ?? null, updatedAt: new Date() };
     if (target) {
       const updated = await db.update(paymentProviderRoutes).set(data).where(eq(paymentProviderRoutes.id, target)).returning({ id: paymentProviderRoutes.id });
       if (!updated.length) throw new OperationalError("Route introuvable.", 404);

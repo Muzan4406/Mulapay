@@ -76,7 +76,8 @@ export function AdminNotifications() {
 
 function SettingsSection({ title, note, fields, settings }: { title: string; note: string; fields: { key: keyof AdminConfiguration; label: string; type?: string; hint?: string }[]; settings: AdminConfiguration }) {
   const { run, pending: busy } = useAdminCommand();
-  const pending = busy || !useIsSuperAdmin();
+  const isSuper = useIsSuperAdmin();
+  const pending = busy || !isSuper;
   const [values, setValues] = useState<Record<string, string>>(() => Object.fromEntries(fields.map(f => [f.key, settings[f.key] == null ? '' : String(settings[f.key])])));
   const save = () => {
     const out: Record<string, unknown> = {};
@@ -92,7 +93,8 @@ function SettingsSection({ title, note, fields, settings }: { title: string; not
 
 function TelegramPanel({ configured }: { configured: boolean }) {
   const { run, pending: busy } = useAdminCommand();
-  const pending = busy || !useIsSuperAdmin();
+  const isSuper = useIsSuperAdmin();
+  const pending = busy || !isSuper;
   const [token, setToken] = useState('');
   const [chatId, setChatId] = useState('');
   return <Panel title="Bot Telegram" note="Notifications automatiques de la plateforme." action={<StatusPill status={configured ? 'active' : 'inactive'} testId="status-telegram" />}>
