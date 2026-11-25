@@ -74,4 +74,21 @@ run_pnpm install --frozen-lockfile
 run_pnpm --filter @workspace/mulapay run build
 run_pnpm --filter @workspace/api-server run build
 
+API_BUNDLE="$ROOT_DIR/artifacts/api-server/dist/index.mjs"
+if [ ! -s "$API_BUNDLE" ]; then
+  echo "The API build did not produce artifacts/api-server/dist/index.mjs." >&2
+  exit 1
+fi
+
+if ! grep -Fq "Key values are not logged." "$API_BUNDLE"; then
+  echo "The API bundle is missing the current Clerk runtime diagnostic. The deployed source or build output is stale." >&2
+  exit 1
+fi
+
+if grep -Fq "Configure the matching Clerk" "$API_BUNDLE"; then
+  echo "The API bundle still contains the old Clerk startup error." >&2
+  exit 1
+fi
+
+echo "Verified the current Clerk diagnostic in the API bundle."
 echo "Plesk build complete. Restart the Node.js application to serve the new release."
