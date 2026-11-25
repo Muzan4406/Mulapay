@@ -29,5 +29,15 @@ test("preview cannot fall back to production credentials", () => {
 });
 
 test("production rejects test credentials", () => {
-  assert.throws(() => resolveClerkConfiguration({ ...env, NODE_ENV: "production", CLERK_SECRET_KEY: env.CLERK_DEV_SECRET_KEY }));
+  assert.throws(
+    () => resolveClerkConfiguration({ ...env, NODE_ENV: "production", CLERK_SECRET_KEY: env.CLERK_DEV_SECRET_KEY }),
+    /CLERK_SECRET_KEY must start with sk_live_/,
+  );
+});
+
+test("production reports a missing runtime publishable key without exposing values", () => {
+  assert.throws(
+    () => resolveClerkConfiguration({ ...env, NODE_ENV: "production", CLERK_PUBLISHABLE_KEY: undefined }),
+    /CLERK_PUBLISHABLE_KEY must start with pk_live_/,
+  );
 });
