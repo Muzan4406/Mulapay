@@ -67,6 +67,8 @@ esac
 export BASE_PATH=/
 # Vite's config validates PORT at build time; this is not the runtime listener port.
 export PORT="${PORT:-3000}"
+# Plesk runs deployment commands without a TTY; pnpm needs CI to replace stale modules noninteractively.
+export CI=true
 
 run_pnpm install --frozen-lockfile
 run_pnpm --filter @workspace/mulapay run build
