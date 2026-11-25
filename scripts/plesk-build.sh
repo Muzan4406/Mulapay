@@ -5,10 +5,10 @@ ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$ROOT_DIR"
 
 run_pnpm() {
-  if command -v corepack >/dev/null 2>&1; then
-    corepack pnpm "$@"
-  elif command -v pnpm >/dev/null 2>&1; then
+  if command -v pnpm >/dev/null 2>&1; then
     pnpm "$@"
+  elif command -v corepack >/dev/null 2>&1; then
+    corepack pnpm "$@"
   else
     echo "pnpm 10 is required. Install pnpm in this Plesk Node.js environment first." >&2
     exit 1

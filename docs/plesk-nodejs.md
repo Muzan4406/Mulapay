@@ -14,7 +14,7 @@ sh scripts/plesk-build.sh
 
 Le script installe les dépendances du workspace avec pnpm, construit le client Mulapay et l’API, et s’arrête avec une erreur explicite si la clé publique Clerk de production n’est pas disponible pendant le build. Le workspace approuve explicitement les scripts d’installation de `@clerk/shared` et `esbuild`, dont pnpm a besoin pour préparer Clerk et construire le serveur.
 
-Installez pnpm 10 pour l’utilisateur du site si Plesk ne fournit pas déjà `pnpm` ou Corepack. Le projet utilise pnpm et son installation racine refuse volontairement npm/yarn.
+Utilisez le gestionnaire `pnpm` de Plesk. Le script privilégie la commande `pnpm` et ne passe par Corepack qu’en secours, car certains environnements Plesk/nodenv n’installent pas le shim Corepack pour toutes les versions de Node.js. Le projet refuse volontairement npm/yarn à la racine.
 
 ## 2. Paramètres Node.js
 
